@@ -22,11 +22,74 @@ export type WritingGoals = {
   dailyBaselineWordCount: number
 }
 
+export type TrimPresetId = 'kdp_6x9' | 'kdp_5x8' | 'kdp_5_5x8_5'
+
+export type TrimPreset = {
+  id: TrimPresetId
+  label: string
+  /** Inches */
+  widthIn: number
+  /** Inches */
+  heightIn: number
+}
+
+export const TRIM_PRESETS: Record<TrimPresetId, TrimPreset> = {
+  kdp_6x9: { id: 'kdp_6x9', label: 'KDP • 6" × 9"', widthIn: 6, heightIn: 9 },
+  kdp_5x8: { id: 'kdp_5x8', label: 'KDP • 5" × 8"', widthIn: 5, heightIn: 8 },
+  kdp_5_5x8_5: { id: 'kdp_5_5x8_5', label: 'KDP • 5.5" × 8.5"', widthIn: 5.5, heightIn: 8.5 },
+}
+
+export function trimLabel(id: TrimPresetId): string {
+  return TRIM_PRESETS[id]?.label ?? id
+}
+
+export type PrintTheme = {
+  trimPreset: TrimPresetId
+  /** Inches */
+  marginTopIn: number
+  marginBottomIn: number
+  marginInnerIn: number
+  marginOuterIn: number
+  /** Additional inside margin for binding */
+  gutterIn: number
+  fontFamily: 'serif'
+  fontSizePt: number
+  lineHeight: number
+  hyphenation: boolean
+  pageNumbers: 'footerCenter' | 'none'
+  chapterStartsOn: 'either' | 'right'
+}
+
+export type EbookTheme = {
+  fontFamily: 'serif'
+  baseFontSizePx: number
+  lineHeight: number
+}
+
+export type Theme = {
+  print: PrintTheme
+  ebook: EbookTheme
+}
+
+export type ProjectMeta = {
+  id: string
+  title: string
+  updatedAt: number
+  createdAt: number
+}
+
+export type ProjectIndex = {
+  version: 1
+  projects: ProjectMeta[]
+}
+
 export type InkwellProject = {
-  version: 2
+  version: 3
+  id: string
   book: BookMeta
   goals: WritingGoals
   chapters: Manuscript[]
+  theme: Theme
 }
 
 export function defaultBookMeta(): BookMeta {
@@ -44,5 +107,29 @@ export function defaultWritingGoals(): WritingGoals {
     dailyWordGoal: null,
     dailyProgressDate: '',
     dailyBaselineWordCount: 0,
+  }
+}
+
+export function defaultTheme(): Theme {
+  return {
+    print: {
+      trimPreset: 'kdp_6x9',
+      marginTopIn: 0.75,
+      marginBottomIn: 0.75,
+      marginInnerIn: 0.875,
+      marginOuterIn: 0.625,
+      gutterIn: 0.125,
+      fontFamily: 'serif',
+      fontSizePt: 11,
+      lineHeight: 1.5,
+      hyphenation: true,
+      pageNumbers: 'footerCenter',
+      chapterStartsOn: 'right',
+    },
+    ebook: {
+      fontFamily: 'serif',
+      baseFontSizePx: 18,
+      lineHeight: 1.7,
+    },
   }
 }

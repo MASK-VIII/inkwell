@@ -10,10 +10,12 @@ import {
   List,
   ListOrdered,
   Quote,
+  Scissors,
   Strikethrough,
   Underline as UnderlineIcon,
 } from 'lucide-react'
 import { useEffect, useState, type MutableRefObject } from 'react'
+import { PageBreak } from '../lib/tiptap/extensions/PageBreak'
 
 const HEADINGS = [
   { value: '', label: 'Normal text' },
@@ -54,6 +56,7 @@ export function ManuscriptEditor({
           heading: { levels: [1, 2, 3] },
         }),
         Underline,
+        PageBreak,
         CharacterCount.configure({
           limit: null,
         }),
@@ -198,6 +201,16 @@ export function ManuscriptEditor({
         </button>
 
         <div className="min-w-[1rem] flex-1" />
+
+        <button
+          type="button"
+          className="flex items-center gap-2 rounded-2xl px-3 py-2 text-sm font-medium text-ink transition-colors hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50 sm:px-4"
+          title="Insert page break (Ctrl/Cmd+Enter)"
+          onClick={() => editor?.chain().focus().insertPageBreak().run()}
+        >
+          <Scissors className="h-4 w-4" strokeWidth={2.25} />
+          <span className="hidden sm:inline">Page break</span>
+        </button>
 
         <div
           className={`flex items-center gap-2 text-xs font-medium text-ink dark:text-ink-dark sm:text-sm ${
