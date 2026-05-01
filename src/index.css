@@ -1,0 +1,117 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-serif: 'Playfair Display', Georgia, serif;
+  --color-ink: #2c241f;
+  --color-parchment: #f8f1e3;
+  --color-cream: #e8d5b7;
+  --color-walnut: #8b4513;
+  --color-dust: #d4c3a8;
+  --color-panel-dark: #1c1814;
+  --color-border-dark: #3a3228;
+  --color-ink-dark: #e8d5b7;
+  --color-accent-warm: #d4a57f;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* TipTap surface */
+.inkwell-editor-shell {
+  background: var(--color-parchment);
+  box-shadow:
+    inset 0 0 60px -15px rgba(139, 69, 19, 0.18),
+    0 10px 30px -10px rgba(0, 0, 0, 0.1);
+}
+
+.dark .inkwell-editor-shell {
+  background: var(--color-panel-dark);
+  box-shadow:
+    inset 0 0 60px -15px rgba(139, 69, 19, 0.35),
+    0 10px 30px -10px rgba(0, 0, 0, 0.3);
+}
+
+.tiptap.ProseMirror {
+  outline: none;
+  min-height: calc(100vh - 14rem);
+  max-width: 720px;
+  margin-inline: auto;
+  font-family: var(--font-serif);
+  font-size: 1.2rem;
+  line-height: 1.95;
+  color: var(--color-ink);
+}
+
+.dark .tiptap.ProseMirror {
+  color: var(--color-ink-dark);
+}
+
+.tiptap.ProseMirror p {
+  margin: 0 0 1em;
+}
+
+.tiptap.ProseMirror h1,
+.tiptap.ProseMirror h2,
+.tiptap.ProseMirror h3 {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  line-height: 1.2;
+  margin: 1.25em 0 0.5em;
+}
+
+.tiptap.ProseMirror h1 {
+  font-size: 2rem;
+}
+
+.tiptap.ProseMirror h2 {
+  font-size: 1.5rem;
+}
+
+.tiptap.ProseMirror h3 {
+  font-size: 1.25rem;
+}
+
+.tiptap.ProseMirror ul,
+.tiptap.ProseMirror ol {
+  padding-left: 1.5rem;
+  margin: 0 0 1em;
+}
+
+.tiptap.ProseMirror blockquote {
+  margin: 0 0 1em;
+  padding-left: 1rem;
+  border-left: 3px solid var(--color-walnut);
+  opacity: 0.95;
+}
+
+.tiptap.ProseMirror a {
+  color: var(--color-walnut);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.dark .tiptap.ProseMirror a {
+  color: var(--color-accent-warm);
+}
+
+.tiptap.ProseMirror::selection {
+  background: var(--color-ink);
+  color: var(--color-parchment);
+}
+
+.dark .tiptap.ProseMirror::selection {
+  background: var(--color-cream);
+  color: var(--color-ink);
+}
