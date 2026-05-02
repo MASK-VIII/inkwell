@@ -673,6 +673,14 @@ export function buildInkwellUrlForProject(projectId: string): string {
   }
 }
 
+/** Open a book/note in a new tab (same origin; project data is read from localStorage there). */
+export function openInkwellProjectInNewTab(projectId: string): void {
+  if (typeof window === 'undefined') return
+  const href = buildInkwellUrlForProject(projectId)
+  if (!href) return
+  window.open(href, '_blank', 'noopener,noreferrer')
+}
+
 function loadLastChapterMap(): Record<string, number> {
   try {
     const raw = localStorage.getItem(STORAGE_LAST_CHAPTER_BY_PROJECT)

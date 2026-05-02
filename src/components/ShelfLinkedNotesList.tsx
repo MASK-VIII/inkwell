@@ -1,5 +1,4 @@
 import { Pin, PinOff, Trash2 } from 'lucide-react'
-import { OpenProjectInNewTabLink } from './OpenProjectInNewTabLink'
 import type { Dispatch, DragEvent, MutableRefObject, ReactNode, SetStateAction } from 'react'
 import type { ProjectMeta } from '../types'
 import {
@@ -82,6 +81,7 @@ export function ShelfLinkedNotesList({
     return (
       <li
         key={n.id}
+        data-inkwell-shelf-project={n.id}
         onDragOver={(e) => {
           const dragId = readShelfDragNoteId(e.dataTransfer) ?? shelfDraggingNoteIdRef.current
           if (!dragId || dragId === n.id) return
@@ -145,7 +145,7 @@ export function ShelfLinkedNotesList({
         }}
         className={`rounded-2xl ${dropHint === 'before' ? 'border-t-2 border-walnut dark:border-accent-warm' : ''} ${dropHint === 'after' ? 'border-b-2 border-walnut dark:border-accent-warm' : ''}`}
       >
-        <div className="flex items-stretch gap-1 rounded-2xl pr-1 outline-none hover:bg-dust/35 dark:hover:bg-border-dark/45 focus-within:ring-2 focus-within:ring-walnut focus-within:ring-offset-2 focus-within:ring-offset-white dark:focus-within:ring-cream dark:focus-within:ring-offset-panel-dark">
+        <div className="flex items-stretch gap-1 rounded-2xl pr-1 outline-none hover:bg-dust/35 dark:hover:bg-border-dark/45 focus-within:ring-2 focus-within:ring-cream focus-within:ring-offset-2 focus-within:ring-offset-white dark:focus-within:ring-cream dark:focus-within:ring-offset-panel-dark">
           <div
             draggable
             title={
@@ -181,11 +181,6 @@ export function ShelfLinkedNotesList({
               Updated {new Date(n.updatedAt).toLocaleString()}
             </span>
           </div>
-          <OpenProjectInNewTabLink
-            projectId={n.id}
-            label="Open note in new tab"
-            className="min-h-0 h-9 w-9 rounded-xl"
-          />
           <button
             type="button"
             title={pinnedInProject ? unpinTitle : pinTitle}

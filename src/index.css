@@ -740,9 +740,9 @@ body {
 
 .inkwell-bookshelf button:not(:disabled):hover {
   box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--color-walnut) 34%, transparent),
-    0 8px 26px -6px color-mix(in srgb, var(--color-walnut) 52%, transparent),
-    0 0 36px -14px color-mix(in srgb, var(--color-walnut) 28%, transparent);
+    0 0 0 1px color-mix(in srgb, var(--color-accent-warm) 34%, transparent),
+    0 8px 26px -6px color-mix(in srgb, var(--color-accent-warm) 50%, transparent),
+    0 0 36px -14px color-mix(in srgb, var(--color-accent-warm) 26%, transparent);
 }
 
 .dark .inkwell-bookshelf button:not(:disabled):hover {
@@ -760,11 +760,13 @@ body {
     background-color 200ms ease;
 }
 
+/* Light shelf cards: match dark gold stack; faint ink underneath for separation on parchment. */
 .inkwell-bookshelf .inkwell-shelf-card:not(.inkwell-shelf-drop-target):hover {
   box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--color-walnut) 38%, transparent),
-    0 12px 34px -8px color-mix(in srgb, var(--color-walnut) 55%, transparent),
-    0 0 48px -12px color-mix(in srgb, var(--color-walnut) 34%, transparent);
+    0 0 0 1px color-mix(in srgb, var(--color-accent-warm) 42%, transparent),
+    0 14px 38px -8px color-mix(in srgb, var(--color-accent-warm) 58%, transparent),
+    0 0 52px -10px color-mix(in srgb, var(--color-accent-warm) 36%, transparent),
+    0 20px 48px -14px color-mix(in srgb, var(--color-ink) 9%, transparent);
 }
 
 .dark .inkwell-bookshelf .inkwell-shelf-card:not(.inkwell-shelf-drop-target):hover {
@@ -777,8 +779,8 @@ body {
 .inkwell-bookshelf button:focus-visible {
   outline: none;
   box-shadow:
-    0 0 0 2px var(--color-walnut),
-    0 0 0 4px color-mix(in srgb, var(--color-walnut) 25%, transparent);
+    0 0 0 2px var(--color-accent-warm),
+    0 0 0 4px color-mix(in srgb, var(--color-accent-warm) 25%, transparent);
 }
 
 .dark .inkwell-bookshelf button:focus-visible {
@@ -797,9 +799,9 @@ body {
 
 .inkwell-header-brand:hover {
   box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--color-walnut) 34%, transparent),
-    0 8px 26px -6px color-mix(in srgb, var(--color-walnut) 52%, transparent),
-    0 0 36px -14px color-mix(in srgb, var(--color-walnut) 28%, transparent);
+    0 0 0 1px color-mix(in srgb, var(--color-accent-warm) 34%, transparent),
+    0 8px 26px -6px color-mix(in srgb, var(--color-accent-warm) 50%, transparent),
+    0 0 36px -14px color-mix(in srgb, var(--color-accent-warm) 26%, transparent);
   transform: translateY(-1px);
 }
 
@@ -813,8 +815,8 @@ body {
 .inkwell-header-brand:focus-visible {
   outline: none;
   box-shadow:
-    0 0 0 2px var(--color-walnut),
-    0 0 0 4px color-mix(in srgb, var(--color-walnut) 25%, transparent);
+    0 0 0 2px var(--color-accent-warm),
+    0 0 0 4px color-mix(in srgb, var(--color-accent-warm) 25%, transparent);
 }
 
 .dark .inkwell-header-brand:focus-visible {

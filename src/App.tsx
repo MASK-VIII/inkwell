@@ -8,7 +8,6 @@ import {
   MoreVertical,
   PenLine,
   Plus,
-  StickyNote,
   Sun,
   Trash2,
 } from 'lucide-react'
@@ -20,10 +19,10 @@ import {
   useMemo,
   useRef,
   useState,
+  type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from 'react'
 import { BookTools } from './components/BookTools'
-import { OpenProjectInNewTabLink } from './components/OpenProjectInNewTabLink'
 import { ShelfLinkedNotesList } from './components/ShelfLinkedNotesList'
 import { StickyNotePopout } from './components/book-tools/StickyNotePopout'
 import { EbookReview } from './components/EbookReview'
@@ -50,6 +49,7 @@ import {
   migrateProjectChildPins,
   nextManuscriptId,
   noteHasChildren,
+  openInkwellProjectInNewTab,
   isProjectNotePinned,
   pinProjectNote,
   clearProjectChildPins,
@@ -140,8 +140,6 @@ export default function App() {
   const [currentId, setCurrentId] = useState<number | null>(() => boot.currentId)
   const [ebookEditOpen, setEbookEditOpen] = useState(false)
   const [bookToolsOpen, setBookToolsOpen] = useState(false)
-  const [linkedNotesMenuOpen, setLinkedNotesMenuOpen] = useState(false)
-  const linkedNotesMenuRef = useRef<HTMLDivElement | null>(null)
   const [stickyNotePopoutId, setStickyNotePopoutId] = useState<string | null>(null)
   const [toast, setToast] = useState<{ node: ReactNode; ms: number } | null>(null)
   const [darkMode, setDarkMode] = useState(readInitialDarkMode)
@@ -153,6 +151,12 @@ export default function App() {
   const [stickNoteId, setStickNoteId] = useState<string | null>(null)
   const [stickSelectParentId, setStickSelectParentId] = useState<string>('')
   const [openNoteMenuId, setOpenNoteMenuId] = useState<string | null>(null)
+  const [shelfContextMenu, setShelfContextMenu] = useState<{
+    x: number
+    y: number
+    projectId: string
+  } | null>(null)
+  const shelfContextMenuRef = useRef<HTMLDivElement | null>(null)
   const [shelfDropHoverAttachId, setShelfDropHoverAttachId] = useState<string | null>(null)
   const [shelfDropHoverNotesSection, setShelfDropHoverNotesSection] = useState(false)
   const [shelfDropHoverProjectsSection, setShelfDropHoverProjectsSection] = useState(false)
@@ -183,13 +187,6 @@ export default function App() {
   const prevProjectIdForEditorRef = useRef(project.id)
 
   const chapters = project.chapters
-  const linkedNotesUnderWorkspace = useMemo(
-    () =>
-      project.kind === 'book' || project.kind === 'note'
-        ? listLinkedNotesForBookInShelfOrder(project.id)
-        : [],
-    [project.kind, project.id],
-  )
 
   /** Shelf parent for linked notes: book/note id that owns the current project’s note cluster. */
   const shelfParentIdForLinkedNotes = useMemo(() => {
@@ -322,23 +319,6 @@ export default function App() {
   }, [newProjectMenuOpen])
 
   useEffect(() => {
-    if (!linkedNotesMenuOpen) return
-    const onDocMouseDown = (e: MouseEvent) => {
-      const el = linkedNotesMenuRef.current
-      if (el && !el.contains(e.target as Node)) setLinkedNotesMenuOpen(false)
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setLinkedNotesMenuOpen(false)
-    }
-    document.addEventListener('mousedown', onDocMouseDown)
-    window.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onDocMouseDown)
-      window.removeEventListener('keydown', onKey)
-    }
-  }, [linkedNotesMenuOpen])
-
-  useEffect(() => {
     if (route !== 'bookshelf') {
       if (openNoteMenuId) setOpenNoteMenuId(null)
       return
@@ -361,8 +341,26 @@ export default function App() {
   }, [openNoteMenuId, route])
 
   useEffect(() => {
-    if (route !== 'write') setLinkedNotesMenuOpen(false)
+    if (route !== 'bookshelf') setShelfContextMenu(null)
   }, [route])
+
+  useEffect(() => {
+    if (!shelfContextMenu) return
+    const onDocMouseDown = (e: globalThis.MouseEvent) => {
+      const el = shelfContextMenuRef.current
+      if (el && el.contains(e.target as Node)) return
+      setShelfContextMenu(null)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShelfContextMenu(null)
+    }
+    document.addEventListener('mousedown', onDocMouseDown)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDocMouseDown)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [shelfContextMenu])
 
   const bumpHistory = useCallback(() => setHistoryRev((n) => (n + 1) % 1_000_000), [])
 
@@ -385,7 +383,6 @@ export default function App() {
     (noteId: string) => {
       syncPersistedState()
       setStickyNotePopoutId(noteId)
-      setLinkedNotesMenuOpen(false)
       setBookToolsOpen(false)
     },
     [syncPersistedState],
@@ -1049,6 +1046,28 @@ export default function App() {
     [openProject],
   )
 
+  const handleBookshelfContextMenu = useCallback((e: ReactMouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement | null
+    const host = target?.closest('[data-inkwell-shelf-project]') as HTMLElement | null
+    const id = host?.getAttribute('data-inkwell-shelf-project')?.trim()
+    if (!id) {
+      setShelfContextMenu(null)
+      return
+    }
+    e.preventDefault()
+    setShelfContextMenu({ x: e.clientX, y: e.clientY, projectId: id })
+  }, [])
+
+  const shelfContextMenuPosition = useMemo(() => {
+    if (!shelfContextMenu || typeof window === 'undefined') return null
+    const pad = 8
+    const mw = 200
+    const mh = 52
+    const x = Math.min(Math.max(pad, shelfContextMenu.x), window.innerWidth - mw - pad)
+    const y = Math.min(Math.max(pad, shelfContextMenu.y), window.innerHeight - mh - pad)
+    return { x, y }
+  }, [shelfContextMenu])
+
   const shelfNoteDragStart = useCallback((e: React.DragEvent, noteId: string, previewTitle: string) => {
     setOpenNoteMenuId(null)
     shelfDraggingNoteIdRef.current = noteId
@@ -1288,7 +1307,10 @@ export default function App() {
   return (
     <div className="flex h-full min-h-0 flex-col bg-parchment text-ink transition-colors dark:bg-panel-dark dark:text-ink-dark">
       {route === 'bookshelf' ? (
-        <div className="inkwell-bookshelf mx-auto flex w-full max-w-screen-2xl flex-1 flex-col px-4 py-6 sm:px-8 sm:py-10">
+        <div
+          className="inkwell-bookshelf mx-auto flex w-full max-w-screen-2xl flex-1 flex-col px-4 py-6 sm:px-8 sm:py-10"
+          onContextMenu={handleBookshelfContextMenu}
+        >
           <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
             <div className="flex min-w-0 items-center gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-ink text-parchment dark:bg-cream dark:text-ink">
@@ -1453,13 +1475,14 @@ export default function App() {
                 return (
                   <div
                     key={p.id}
+                    data-inkwell-shelf-project={p.id}
                     onDragEnter={(e) => shelfAttachTargetDragOver(e, p.id)}
                     onDragOver={(e) => shelfAttachTargetDragOver(e, p.id)}
                     onDragLeave={(e) => shelfAttachTargetDragLeave(e, p.id)}
                     onDrop={(e) => shelfAttachNoteDrop(e, p.id)}
                     className={`inkwell-shelf-card flex flex-col rounded-3xl border border-dust bg-white/70 text-left ease-out hover:-translate-y-px hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:hover:bg-panel-dark/90 ${
                       shelfDropHoverAttachId === p.id
-                        ? 'inkwell-shelf-drop-target z-10 scale-[1.02] shadow-xl ring-2 ring-walnut ring-offset-2 ring-offset-parchment dark:ring-accent-warm dark:ring-offset-panel-dark'
+                        ? 'inkwell-shelf-drop-target z-10 scale-[1.02] shadow-xl ring-2 ring-cream ring-offset-2 ring-offset-parchment dark:ring-accent-warm dark:ring-offset-panel-dark'
                         : ''
                     }`}
                   >
@@ -1483,7 +1506,7 @@ export default function App() {
                             openProject(p.id)
                           }
                         }}
-                        className="min-w-0 flex-1 cursor-pointer rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-walnut focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark"
+                        className="min-w-0 flex-1 cursor-pointer rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-cream focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark"
                       >
                         <div className="flex items-start gap-3">
                           <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-dust/60 text-walnut dark:bg-border-dark/60 dark:text-accent-warm">
@@ -1542,6 +1565,7 @@ export default function App() {
                           <div
                             role="button"
                             tabIndex={0}
+                            data-inkwell-shelf-project={p.id}
                             onClick={() => {
                               openProject(p.id)
                               setExpandedShelfParentId(null)
@@ -1552,7 +1576,7 @@ export default function App() {
                               openProject(p.id)
                               setExpandedShelfParentId(null)
                             }}
-                            className="w-full cursor-pointer rounded-2xl border border-dust bg-white/70 px-4 py-3 text-left outline-none transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:hover:bg-panel-dark/90 focus-visible:ring-2 focus-visible:ring-walnut focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark"
+                            className="w-full cursor-pointer rounded-2xl border border-dust bg-white/70 px-4 py-3 text-left outline-none transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:hover:bg-panel-dark/90 focus-visible:ring-2 focus-visible:ring-cream focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark"
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0 flex-1">
@@ -1608,11 +1632,15 @@ export default function App() {
                           e.preventDefault()
                           setExpandedShelfParentId((cur) => (cur === p.id ? null : p.id))
                         }}
-                        className="cursor-pointer border-t border-dust px-5 pb-4 pt-3 text-left outline-none hover:bg-dust/20 dark:border-border-dark dark:hover:bg-border-dark/35 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-walnut dark:focus-visible:ring-cream"
+                        className="cursor-pointer border-t border-dust px-5 pb-4 pt-3 text-left outline-none hover:bg-dust/20 dark:border-border-dark dark:hover:bg-border-dark/35 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cream dark:focus-visible:ring-cream"
                       >
                         <div className="space-y-1">
                           {top.map((n) => (
-                            <div key={n.id} className="truncate text-xs text-ink/55 dark:text-ink-dark/55">
+                            <div
+                              key={n.id}
+                              data-inkwell-shelf-project={n.id}
+                              className="truncate text-xs text-ink/55 dark:text-ink-dark/55"
+                            >
                               {n.title || 'Untitled note'}
                             </div>
                           ))}
@@ -1628,7 +1656,7 @@ export default function App() {
           <section
             className={`mt-10 space-y-3 rounded-3xl transition-[transform,box-shadow] duration-300 ease-out ${
               shelfDropHoverProjectsSection
-                ? 'inkwell-shelf-drop-target scale-[1.01] shadow-lg ring-2 ring-walnut ring-offset-2 ring-offset-parchment dark:ring-accent-warm dark:ring-offset-panel-dark'
+                ? 'inkwell-shelf-drop-target scale-[1.01] shadow-lg ring-2 ring-cream ring-offset-2 ring-offset-parchment dark:ring-accent-warm dark:ring-offset-panel-dark'
                 : ''
             }`}
             onDragOver={shelfProjectsSectionDragOver}
@@ -1672,13 +1700,14 @@ export default function App() {
                 return (
                   <div
                     key={p.id}
+                    data-inkwell-shelf-project={p.id}
                     onDragEnter={(e) => shelfAttachTargetDragOver(e, p.id)}
                     onDragOver={(e) => shelfAttachTargetDragOver(e, p.id)}
                     onDragLeave={(e) => shelfAttachTargetDragLeave(e, p.id)}
                     onDrop={(e) => shelfAttachNoteDrop(e, p.id)}
                     className={`inkwell-shelf-card flex flex-col rounded-3xl border border-dust bg-white/70 text-left ease-out hover:-translate-y-px hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:hover:bg-panel-dark/90 ${
                       shelfDropHoverAttachId === p.id
-                        ? 'inkwell-shelf-drop-target z-10 scale-[1.02] shadow-xl ring-2 ring-walnut ring-offset-2 ring-offset-parchment dark:ring-accent-warm dark:ring-offset-panel-dark'
+                        ? 'inkwell-shelf-drop-target z-10 scale-[1.02] shadow-xl ring-2 ring-cream ring-offset-2 ring-offset-parchment dark:ring-accent-warm dark:ring-offset-panel-dark'
                         : ''
                     }`}
                   >
@@ -1692,7 +1721,7 @@ export default function App() {
                           e.preventDefault()
                           setExpandedShelfParentId((cur) => (cur === p.id ? null : p.id))
                         }}
-                        className="min-w-0 flex-1 cursor-pointer rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-walnut focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark"
+                        className="min-w-0 flex-1 cursor-pointer rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-cream focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark"
                       >
                         <div className="flex items-start gap-3">
                           <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-dust/60 text-walnut dark:bg-border-dark/60 dark:text-accent-warm">
@@ -1747,11 +1776,12 @@ export default function App() {
                         <div className="px-2 pb-2">
                           <div
                             draggable
+                            data-inkwell-shelf-project={p.id}
                             title="Drag onto a book, project, note, or into Notes"
                             aria-label={`Master note: ${p.title || 'Untitled note'}. Drag to move, or activate to open.`}
                             onDragStart={(e) => shelfNoteDragStart(e, p.id, p.title || 'Untitled note')}
                             onDragEnd={shelfNoteDragEnd}
-                            className="w-full cursor-grab rounded-2xl border border-dust bg-white/70 px-4 py-3 text-left outline-none transition-colors hover:bg-white active:cursor-grabbing dark:border-border-dark dark:bg-panel-dark/70 dark:hover:bg-panel-dark/90 focus-visible:ring-2 focus-visible:ring-walnut focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark"
+                            className="w-full cursor-grab rounded-2xl border border-dust bg-white/70 px-4 py-3 text-left outline-none transition-colors hover:bg-white active:cursor-grabbing dark:border-border-dark dark:bg-panel-dark/70 dark:hover:bg-panel-dark/90 focus-visible:ring-2 focus-visible:ring-cream focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark"
                             role="button"
                             tabIndex={0}
                             onClick={() => {
@@ -1814,7 +1844,11 @@ export default function App() {
                       <div className="border-t border-dust px-5 pb-4 pt-3 dark:border-border-dark">
                         <div className="space-y-1">
                           {top.map((n) => (
-                            <div key={n.id} className="truncate text-xs text-ink/55 dark:text-ink-dark/55">
+                            <div
+                              key={n.id}
+                              data-inkwell-shelf-project={n.id}
+                              className="truncate text-xs text-ink/55 dark:text-ink-dark/55"
+                            >
                               {n.title || 'Untitled note'}
                             </div>
                           ))}
@@ -1830,7 +1864,7 @@ export default function App() {
           <section
             className={`mt-10 space-y-3 rounded-3xl transition-[transform,box-shadow] duration-300 ease-out ${
               shelfDropHoverNotesSection
-                ? 'inkwell-shelf-drop-target scale-[1.01] shadow-lg ring-2 ring-walnut ring-offset-2 ring-offset-parchment dark:ring-accent-warm dark:ring-offset-panel-dark'
+                ? 'inkwell-shelf-drop-target scale-[1.01] shadow-lg ring-2 ring-cream ring-offset-2 ring-offset-parchment dark:ring-accent-warm dark:ring-offset-panel-dark'
                 : ''
             }`}
             onDragEnter={shelfNotesSectionDragOver}
@@ -1882,13 +1916,14 @@ export default function App() {
                 return (
                   <div
                     key={p.id}
+                    data-inkwell-shelf-project={p.id}
                     onDragEnter={(e) => shelfAttachTargetDragOver(e, p.id)}
                     onDragOver={(e) => shelfAttachTargetDragOver(e, p.id)}
                     onDragLeave={(e) => shelfAttachTargetDragLeave(e, p.id)}
                     onDrop={(e) => shelfAttachNoteDrop(e, p.id)}
                     className={`inkwell-shelf-card flex flex-col rounded-3xl border border-dust bg-white/70 text-left ease-out hover:-translate-y-px hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:hover:bg-panel-dark/90 ${
                       shelfDropHoverAttachId === p.id
-                        ? 'inkwell-shelf-drop-target z-10 scale-[1.02] shadow-xl ring-2 ring-walnut ring-offset-2 ring-offset-parchment dark:ring-accent-warm dark:ring-offset-panel-dark'
+                        ? 'inkwell-shelf-drop-target z-10 scale-[1.02] shadow-xl ring-2 ring-cream ring-offset-2 ring-offset-parchment dark:ring-accent-warm dark:ring-offset-panel-dark'
                         : ''
                     }`}
                   >
@@ -1899,7 +1934,7 @@ export default function App() {
                         aria-label={`Note: ${p.title || 'Untitled note'}. Drag to move, or activate to open.`}
                         onDragStart={(e) => shelfNoteDragStart(e, p.id, p.title || 'Untitled note')}
                         onDragEnd={shelfNoteDragEnd}
-                        className="group min-w-0 flex-1 cursor-grab rounded-xl text-left outline-none active:cursor-grabbing focus-visible:ring-2 focus-visible:ring-walnut focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark"
+                        className="group min-w-0 flex-1 cursor-grab rounded-xl text-left outline-none active:cursor-grabbing focus-visible:ring-2 focus-visible:ring-cream focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark"
                         role="button"
                         tabIndex={0}
                         onClick={() => tryOpenShelfNote(p.id)}
@@ -1917,15 +1952,10 @@ export default function App() {
                       </div>
 
                       <div
-                        className="flex shrink-0 flex-col items-end gap-1"
+                        className="flex shrink-0 items-start gap-1"
                         onClick={(e) => e.stopPropagation()}
                         onKeyDown={(e) => e.stopPropagation()}
                       >
-                        <OpenProjectInNewTabLink
-                          projectId={p.id}
-                          label="Open note in new tab"
-                          className="min-h-0 h-9 w-9 rounded-xl"
-                        />
                         <button
                           type="button"
                           title="Delete note"
@@ -2042,6 +2072,29 @@ export default function App() {
             </div>
           ) : null}
 
+          {shelfContextMenu && shelfContextMenuPosition ? (
+            <div
+              ref={shelfContextMenuRef}
+              role="menu"
+              aria-label="Bookshelf"
+              className="fixed z-[260] min-w-[12rem] rounded-xl border border-dust bg-white py-1 shadow-xl dark:border-border-dark dark:bg-panel-dark"
+              style={{ left: shelfContextMenuPosition.x, top: shelfContextMenuPosition.y }}
+              onContextMenu={(e) => e.preventDefault()}
+            >
+              <button
+                type="button"
+                role="menuitem"
+                className="block w-full px-4 py-2.5 text-left text-sm font-medium text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
+                onClick={() => {
+                  openInkwellProjectInNewTab(shelfContextMenu.projectId)
+                  setShelfContextMenu(null)
+                }}
+              >
+                Open in new tab
+              </button>
+            </div>
+          ) : null}
+
           <div className="pointer-events-none fixed bottom-4 right-4 z-[250] sm:bottom-6 sm:right-6">
             <div
               ref={trashDropRef}
@@ -2105,7 +2158,7 @@ export default function App() {
                 aria-label="Back to Bookshelf"
                 title="Bookshelf"
               >
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-ink text-lg text-parchment transition-colors group-hover:bg-walnut dark:bg-cream dark:text-ink dark:group-hover:bg-accent-warm sm:text-xl">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-ink text-lg text-parchment transition-colors group-hover:bg-cream dark:bg-cream dark:text-ink dark:group-hover:bg-accent-warm sm:text-xl">
                   🪶
                 </div>
                 <span className="hidden font-serif text-xl font-semibold tracking-tight sm:block sm:text-2xl">
@@ -2121,7 +2174,7 @@ export default function App() {
                     disabled={!current || route !== 'write'}
                     onChange={(e) => updateCurrentTitle(e.target.value)}
                     placeholder="Note title"
-                    className="w-[min(44rem,calc(100vw-10rem))] min-w-0 rounded-2xl border border-transparent bg-transparent px-3 py-2 text-center text-base font-medium focus:border-walnut focus:outline-none dark:focus:border-cream sm:px-4 sm:text-lg"
+                    className="w-[min(44rem,calc(100vw-10rem))] min-w-0 rounded-2xl border border-transparent bg-transparent px-3 py-2 text-center text-base font-medium focus:border-cream focus:outline-none dark:focus:border-cream sm:px-4 sm:text-lg"
                   />
                 ) : route === 'write' ? (
                   <div
@@ -2137,60 +2190,13 @@ export default function App() {
                     disabled={!current}
                     onChange={(e) => updateCurrentTitle(e.target.value)}
                     placeholder="Chapter title"
-                    className="w-[min(44rem,calc(100vw-10rem))] min-w-0 rounded-2xl border border-transparent bg-transparent px-3 py-2 text-center text-base font-medium focus:border-walnut focus:outline-none dark:focus:border-cream sm:px-4 sm:text-lg disabled:opacity-80"
+                    className="w-[min(44rem,calc(100vw-10rem))] min-w-0 rounded-2xl border border-transparent bg-transparent px-3 py-2 text-center text-base font-medium focus:border-cream focus:outline-none dark:focus:border-cream sm:px-4 sm:text-lg disabled:opacity-80"
                   />
                 )}
               </div>
 
               <div className="flex items-center justify-end gap-1 sm:gap-2">
                 <div className="flex items-center gap-0 sm:gap-0.5">
-                  {linkedNotesUnderWorkspace.length > 0 && route === 'write' ? (
-                    <div className="relative" ref={linkedNotesMenuRef}>
-                      <button
-                        type="button"
-                        onClick={() => setLinkedNotesMenuOpen((o) => !o)}
-                        className={`flex h-10 w-10 items-center justify-center rounded-2xl text-ink transition-colors hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50 ${
-                          linkedNotesMenuOpen ? 'bg-dust/40 dark:bg-border-dark/45' : ''
-                        }`}
-                        aria-label="Linked notes — open in floating editor"
-                        title="Linked notes — open in floating editor"
-                      >
-                        <StickyNote className="h-5 w-5" strokeWidth={2} />
-                      </button>
-                      {linkedNotesMenuOpen ? (
-                        <div
-                          role="menu"
-                          className="absolute right-0 top-full z-[60] mt-2 max-h-[min(70vh,22rem)] w-[min(calc(100vw-2rem),17rem)] overflow-auto rounded-2xl border border-dust bg-white py-2 shadow-xl dark:border-border-dark dark:bg-panel-dark"
-                        >
-                          <div className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-walnut dark:text-accent-warm">
-                            Linked notes
-                          </div>
-                          <ul className="px-1">
-                            {linkedNotesUnderWorkspace.map((n) => (
-                              <li key={n.id} className="flex items-stretch gap-1 pr-1">
-                                <button
-                                  type="button"
-                                  role="menuitem"
-                                  className="min-w-0 flex-1 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-ink hover:bg-dust/35 dark:text-ink-dark dark:hover:bg-border-dark/50"
-                                  onClick={() => openLinkedNotePopout(n.id)}
-                                >
-                                  <span className="block truncate">{n.title || 'Untitled note'}</span>
-                                  <span className="mt-0.5 block text-[11px] font-normal text-ink/45 dark:text-ink-dark/45">
-                                    Floating editor
-                                  </span>
-                                </button>
-                                <OpenProjectInNewTabLink
-                                  projectId={n.id}
-                                  label="Open note in new tab"
-                                  className="h-full min-h-0 w-9 shrink-0 rounded-xl"
-                                />
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : null}
                   <button
                     type="button"
                     onClick={() => {

@@ -1,12 +1,11 @@
 import { X } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import type { BookMeta, EbookTheme, PrintTheme, ProjectMeta, Theme, WritingGoals } from '../types'
-import type { ProjectHistoryEntry } from '../lib/manuscripts'
+import { openInkwellProjectInNewTab, type ProjectHistoryEntry } from '../lib/manuscripts'
 import { EbookThemeForm } from './book-tools/EbookThemeForm'
 import { HistoryPanel } from './book-tools/HistoryPanel'
 import { PrintThemeForm } from './book-tools/PrintThemeForm'
 import { ProgressBar } from './book-tools/ProgressBar'
-import { OpenProjectInNewTabLink } from './OpenProjectInNewTabLink'
 
 /** Book or note that owns this project’s linked notes; always listed first under “Notes in this project”. */
 export type NotesProjectMasterRow = {
@@ -88,6 +87,49 @@ export function BookTools({
   const [phase, setPhase] = useState<'entering' | 'open' | 'closing'>(() =>
     open ? 'entering' : 'closing',
   )
+  const [linkedListMenu, setLinkedListMenu] = useState<{
+    x: number
+    y: number
+    projectId: string
+  } | null>(null)
+  const linkedListMenuRef = useRef<HTMLDivElement | null>(null)
+
+  const linkedListMenuPosition = useMemo(() => {
+    if (!linkedListMenu || typeof window === 'undefined') return null
+    const pad = 8
+    const mw = 200
+    const mh = 52
+    const x = Math.min(Math.max(pad, linkedListMenu.x), window.innerWidth - mw - pad)
+    const y = Math.min(Math.max(pad, linkedListMenu.y), window.innerHeight - mh - pad)
+    return { x, y }
+  }, [linkedListMenu])
+
+  const onLinkedListContextMenu = (e: ReactMouseEvent, projectId: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setLinkedListMenu({ x: e.clientX, y: e.clientY, projectId })
+  }
+
+  useEffect(() => {
+    if (!open) setLinkedListMenu(null)
+  }, [open])
+
+  useEffect(() => {
+    if (!linkedListMenu) return
+    const onDocMouseDown = (e: MouseEvent) => {
+      const el = linkedListMenuRef.current
+      if (el && !el.contains(e.target as Node)) setLinkedListMenu(null)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setLinkedListMenu(null)
+    }
+    document.addEventListener('mousedown', onDocMouseDown)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDocMouseDown)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [linkedListMenu])
 
   useEffect(() => {
     if (open) {
@@ -235,62 +277,53 @@ export function BookTools({
                             <span className="mt-1 block">Linked project not found on this device.</span>
                           </div>
                         ) : notesProjectMaster.isCurrent ? (
-                          <div className="flex gap-2 items-stretch">
-                            <div className="min-w-0 flex-1 rounded-2xl border-2 border-walnut/35 bg-parchment/90 px-4 py-3 dark:border-accent-warm/40 dark:bg-panel-dark/90">
-                              <span className="text-[11px] font-semibold uppercase tracking-wide text-walnut dark:text-accent-warm">
-                                Master · {notesProjectMaster.kind === 'book' ? 'Book' : 'Note'}
-                              </span>
-                              <span className="mt-1 block truncate font-medium text-ink dark:text-ink-dark">
-                                {notesProjectMaster.title || 'Untitled'}
-                              </span>
-                              <span className="mt-0.5 block text-[11px] text-ink/45 dark:text-ink-dark/45">
-                                Current workspace
-                              </span>
-                            </div>
-                            <OpenProjectInNewTabLink
-                              projectId={notesProjectMaster.id}
-                              label="Open master in new tab"
-                              className="h-full self-stretch"
-                            />
+                          <div
+                            className="rounded-2xl border-2 border-walnut/35 bg-parchment/90 px-4 py-3 dark:border-accent-warm/40 dark:bg-panel-dark/90"
+                            onContextMenu={(e) => onLinkedListContextMenu(e, notesProjectMaster.id)}
+                          >
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-walnut dark:text-accent-warm">
+                              Master · {notesProjectMaster.kind === 'book' ? 'Book' : 'Note'}
+                            </span>
+                            <span className="mt-1 block truncate font-medium text-ink dark:text-ink-dark">
+                              {notesProjectMaster.title || 'Untitled'}
+                            </span>
+                            <span className="mt-0.5 block text-[11px] text-ink/45 dark:text-ink-dark/45">
+                              Current workspace
+                            </span>
                           </div>
                         ) : (
-                          <div className="flex gap-2 items-stretch">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                onOpenProjectInMain?.(notesProjectMaster.id)
-                                onClose()
-                              }}
-                              className="min-w-0 flex-1 rounded-2xl border-2 border-walnut/35 bg-white/70 px-4 py-3 text-left transition-colors hover:border-walnut/55 hover:bg-white dark:border-accent-warm/40 dark:bg-panel-dark/70 dark:hover:border-accent-warm/60 dark:hover:bg-panel-dark/90"
-                            >
-                              <span className="text-[11px] font-semibold uppercase tracking-wide text-walnut dark:text-accent-warm">
-                                Master · {notesProjectMaster.kind === 'book' ? 'Book' : 'Note'}
-                              </span>
-                              <span className="mt-1 block truncate font-medium text-ink dark:text-ink-dark">
-                                {notesProjectMaster.title || 'Untitled'}
-                              </span>
-                              <span className="mt-0.5 block text-[11px] text-ink/45 dark:text-ink-dark/45">
-                                Open in main editor
-                              </span>
-                            </button>
-                            <OpenProjectInNewTabLink
-                              projectId={notesProjectMaster.id}
-                              label="Open master in new tab"
-                              className="h-full self-stretch"
-                            />
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onOpenProjectInMain?.(notesProjectMaster.id)
+                              onClose()
+                            }}
+                            onContextMenu={(e) => onLinkedListContextMenu(e, notesProjectMaster.id)}
+                            className="w-full rounded-2xl border-2 border-walnut/35 bg-white/70 px-4 py-3 text-left transition-colors hover:border-walnut/55 hover:bg-white dark:border-accent-warm/40 dark:bg-panel-dark/70 dark:hover:border-accent-warm/60 dark:hover:bg-panel-dark/90"
+                          >
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-walnut dark:text-accent-warm">
+                              Master · {notesProjectMaster.kind === 'book' ? 'Book' : 'Note'}
+                            </span>
+                            <span className="mt-1 block truncate font-medium text-ink dark:text-ink-dark">
+                              {notesProjectMaster.title || 'Untitled'}
+                            </span>
+                            <span className="mt-0.5 block text-[11px] text-ink/45 dark:text-ink-dark/45">
+                              Open in main editor
+                            </span>
+                          </button>
                         )}
                       </li>
                     ) : null}
                     {linkedNotesForBook.map((n) => (
-                      <li key={n.id} className="flex gap-2 items-stretch">
+                      <li key={n.id}>
                         <button
                           type="button"
                           onClick={() => {
                             onPopoutLinkedNote?.(n.id)
                             onClose()
                           }}
-                          className="min-w-0 flex-1 rounded-2xl border border-dust bg-white/70 px-4 py-3 text-left transition-colors hover:border-walnut/40 hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:hover:border-accent-warm/35 dark:hover:bg-panel-dark/90"
+                          onContextMenu={(e) => onLinkedListContextMenu(e, n.id)}
+                          className="w-full rounded-2xl border border-dust bg-white/70 px-4 py-3 text-left transition-colors hover:border-walnut/40 hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:hover:border-accent-warm/35 dark:hover:bg-panel-dark/90"
                         >
                           <span className="block truncate font-medium text-ink dark:text-ink-dark">
                             {n.title || 'Untitled note'}
@@ -299,11 +332,6 @@ export function BookTools({
                             Open floating editor
                           </span>
                         </button>
-                        <OpenProjectInNewTabLink
-                          projectId={n.id}
-                          label="Open note in new tab"
-                          className="h-full self-stretch"
-                        />
                       </li>
                     ))}
                   </ul>
@@ -544,6 +572,28 @@ export function BookTools({
         </div>
       </aside>
 
+      {linkedListMenu && linkedListMenuPosition ? (
+        <div
+          ref={linkedListMenuRef}
+          role="menu"
+          aria-label="Linked note"
+          className="fixed z-[260] min-w-[12rem] rounded-xl border border-dust bg-white py-1 shadow-xl dark:border-border-dark dark:bg-panel-dark"
+          style={{ left: linkedListMenuPosition.x, top: linkedListMenuPosition.y }}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            className="block w-full px-4 py-2.5 text-left text-sm font-medium text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
+            onClick={() => {
+              openInkwellProjectInNewTab(linkedListMenu.projectId)
+              setLinkedListMenu(null)
+            }}
+          >
+            Open in new tab
+          </button>
+        </div>
+      ) : null}
     </>
   )
 }
