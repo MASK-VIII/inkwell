@@ -1,5 +1,5 @@
 import DOMPurify from 'dompurify'
-import { startTransition, useEffect, useMemo, useRef, useState } from 'react'
+import { startTransition, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { EbookTheme, Manuscript } from '../types'
 import { ebookCss } from '../lib/ebook/ebookCss'
 import { nextWorkerRev, onWorkerMessage, sendWorker } from '../lib/workerClient'
@@ -10,9 +10,18 @@ type Props = {
   activeChapterId: number | null
   onPrevChapter?: () => void
   onNextChapter?: () => void
+  /** Ebook / Print toggle (centered). */
+  formatModeBar?: ReactNode
 }
 
-export function EbookReview({ chapters, theme, activeChapterId, onPrevChapter, onNextChapter }: Props) {
+export function EbookReview({
+  chapters,
+  theme,
+  activeChapterId,
+  onPrevChapter,
+  onNextChapter,
+  formatModeBar,
+}: Props) {
   const [device, setDevice] = useState<'phone' | 'tablet' | 'ereader'>(() => 'ereader')
   const viewportEl = useRef<HTMLDivElement | null>(null)
   const revRef = useRef(0)
@@ -111,11 +120,10 @@ export function EbookReview({ chapters, theme, activeChapterId, onPrevChapter, o
 
   return (
     <div className="inkwell-ebook-review-scroll flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overscroll-y-contain">
-      <div className="sticky top-0 z-10 flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-dust bg-white/90 px-4 py-3 backdrop-blur-md dark:border-border-dark dark:bg-panel-dark/90 sm:px-8">
-        <div className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
-          Review: Ebook
-        </div>
-        <div className="flex items-center gap-2">
+      <div className="sticky top-0 z-10 flex shrink-0 items-center gap-3 border-b border-dust bg-white/90 px-4 py-3 backdrop-blur-sm dark:border-border-dark dark:bg-panel-dark/90 sm:px-8">
+        <div className="min-w-0 flex-1" aria-hidden />
+        <div className="flex shrink-0 justify-center">{formatModeBar}</div>
+        <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
           <label className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
             Device
           </label>

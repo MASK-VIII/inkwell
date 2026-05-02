@@ -1,10 +1,16 @@
 import { X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
-import type { BookMeta, EbookTheme, PrintTheme, ProjectMeta, Theme, WritingGoals } from '../types'
+import type {
+  BookAssembly,
+  BookMeta,
+  ChapterNumberMode,
+  ProjectMeta,
+  SeriesBibleEntry,
+  WritingGoals,
+} from '../types'
 import { openInkwellProjectInNewTab, type ProjectHistoryEntry } from '../lib/manuscripts'
-import { EbookThemeForm } from './book-tools/EbookThemeForm'
+import { CollapsibleSection } from './book-tools/CollapsibleSection'
 import { HistoryPanel } from './book-tools/HistoryPanel'
-import { PrintThemeForm } from './book-tools/PrintThemeForm'
 import { ProgressBar } from './book-tools/ProgressBar'
 
 /** Book or note that owns this project’s linked notes; always listed first under “Notes in this project”. */
@@ -18,23 +24,21 @@ export type NotesProjectMasterRow = {
   missing: boolean
 }
 
+export type WorkspaceRoute = 'write' | 'format_print' | 'format_ebook' | 'publish'
+
 type Props = {
   open: boolean
   onClose: () => void
   projectId: string
   variant?: 'book' | 'note'
-  mode: 'write' | 'review_print' | 'review_ebook'
-  onSetMode: (mode: 'write' | 'review_print' | 'review_ebook') => void
+  workspaceRoute: WorkspaceRoute
+  onSetWorkspaceRoute: (route: WorkspaceRoute) => void
   book: BookMeta
   onBookChange: (patch: Partial<BookMeta>) => void
   goals: WritingGoals
   onGoalsChange: (patch: Partial<WritingGoals>) => void
-  theme: Theme
-  onThemeChange: (patch: { print?: Partial<PrintTheme>; ebook?: Partial<EbookTheme> }) => void
   totalBookWords: number
   wordsWrittenToday: number
-  onOpenPrintReview: () => void
-  onOpenEbookReview: () => void
   onExportPdfKdp: () => void
   onExportEpub: () => void
   onImportDocx: (file: File) => void
@@ -51,6 +55,14 @@ type Props = {
   notesProjectMaster?: NotesProjectMasterRow | null
   /** Open a book or note in the main editor (used for the master row). */
   onOpenProjectInMain?: (projectId: string) => void
+  assembly?: BookAssembly
+  onAssemblyChange?: (patch: Partial<BookAssembly>) => void
+  seriesBible?: SeriesBibleEntry[]
+  onSeriesBibleChange?: (rows: SeriesBibleEntry[]) => void
+  onExportProjectArchive?: () => void
+  onExportLibraryArchive?: () => void
+  onImportProjectArchive?: (file: File) => void
+  onExportTxt?: () => void
 }
 
 export function BookTools({
@@ -58,18 +70,14 @@ export function BookTools({
   onClose,
   projectId,
   variant = 'book',
-  mode,
-  onSetMode,
+  workspaceRoute,
+  onSetWorkspaceRoute,
   book,
   onBookChange,
   goals,
   onGoalsChange,
-  theme,
-  onThemeChange,
   totalBookWords,
   wordsWrittenToday,
-  onOpenPrintReview,
-  onOpenEbookReview,
   onExportPdfKdp,
   onExportEpub,
   onImportDocx,
@@ -81,8 +89,17 @@ export function BookTools({
   onPopoutLinkedNote,
   notesProjectMaster = null,
   onOpenProjectInMain,
+  assembly,
+  onAssemblyChange,
+  seriesBible = [],
+  onSeriesBibleChange,
+  onExportProjectArchive,
+  onExportLibraryArchive,
+  onImportProjectArchive,
+  onExportTxt,
 }: Props) {
   const isNote = variant === 'note'
+  const isFormat = workspaceRoute === 'format_print' || workspaceRoute === 'format_ebook'
   const [present, setPresent] = useState(open)
   const [phase, setPhase] = useState<'entering' | 'open' | 'closing'>(() =>
     open ? 'entering' : 'closing',
@@ -203,56 +220,63 @@ export function BookTools({
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6 space-y-10">
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6 space-y-3">
           {!isNote ? (
-            <section className="space-y-4">
-              <h3 className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
-                Workspace
-              </h3>
-              <div className="rounded-2xl border border-dust bg-parchment/80 p-2 dark:border-border-dark dark:bg-panel-dark/80">
+            <CollapsibleSection
+              title="Workspace"
+              description="Draft in Write, tune layout in Format, then export from Publish."
+              defaultOpen={false}
+            >
+              <div className="space-y-2 rounded-xl bg-parchment/60 p-2 dark:bg-panel-dark/50">
                 <div className="flex flex-wrap gap-1">
-                  <button type="button" className={modeBtn(mode === 'write')} onClick={() => onSetMode('write')}>
+                  <button
+                    type="button"
+                    className={modeBtn(workspaceRoute === 'write')}
+                    onClick={() => onSetWorkspaceRoute('write')}
+                  >
                     Write
                   </button>
                   <button
                     type="button"
-                    className={modeBtn(mode === 'review_print')}
-                    onClick={() => onSetMode('review_print')}
-                    title="Review: Print"
+                    className={modeBtn(isFormat)}
+                    onClick={() => onSetWorkspaceRoute('format_ebook')}
+                    title="Format: ebook and print previews"
                   >
-                    Review: Print
+                    Format
                   </button>
                   <button
                     type="button"
-                    className={modeBtn(mode === 'review_ebook')}
-                    onClick={() => onSetMode('review_ebook')}
-                    title="Review: Ebook"
+                    className={modeBtn(workspaceRoute === 'publish')}
+                    onClick={() => onSetWorkspaceRoute('publish')}
                   >
-                    Review: Ebook
+                    Publish
                   </button>
                 </div>
               </div>
-            </section>
+            </CollapsibleSection>
           ) : (
-            <section className="space-y-4">
-              <h3 className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
-                Workspace
-              </h3>
-              <div className="rounded-2xl border border-dust bg-parchment/80 p-2 dark:border-border-dark dark:bg-panel-dark/80">
+            <CollapsibleSection title="Workspace" description="Writing mode." defaultOpen={false}>
+              <div className="rounded-xl bg-parchment/60 p-2 dark:bg-panel-dark/50">
                 <div className="flex flex-wrap gap-1">
-                  <button type="button" className={modeBtn(mode === 'write')} onClick={() => onSetMode('write')}>
+                  <button
+                    type="button"
+                    className={modeBtn(workspaceRoute === 'write')}
+                    onClick={() => onSetWorkspaceRoute('write')}
+                  >
                     Write
                   </button>
                 </div>
               </div>
-            </section>
+            </CollapsibleSection>
           )}
 
-          {onNewNoteForBook != null || linkedNotesForBook.length > 0 || notesProjectMaster != null ? (
-            <section className="space-y-4">
-              <h3 className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
-                {isNote ? 'Notes in this project' : 'Linked notes'}
-              </h3>
+          {isNote || workspaceRoute !== 'publish' ?
+            onNewNoteForBook != null || linkedNotesForBook.length > 0 || notesProjectMaster != null ?
+              <CollapsibleSection
+                title={isNote ? 'Notes in this project' : 'Linked notes'}
+                description="Notes attached to this book or master project."
+                defaultOpen={false}
+              >
               {onNewNoteForBook ? (
                 <button
                   type="button"
@@ -357,13 +381,22 @@ export function BookTools({
                   </p>
                 ) : null}
               </div>
-            </section>
-          ) : null}
+            </CollapsibleSection>
+          : null
+          : null}
 
-          <section className="space-y-4">
-            <h3 className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
-              {isNote ? 'Details' : 'Book details'}
-            </h3>
+          {isNote || workspaceRoute === 'write' || workspaceRoute === 'publish' ? (
+            <CollapsibleSection
+              title={isNote ? 'Details' : 'Book details'}
+              description={
+                isNote ?
+                  'Title and optional export label.'
+                : workspaceRoute === 'publish' ?
+                  'Title, author, and EPUB fields used by KDP and readers.'
+                : 'Metadata for exports and the shelf.'
+              }
+              defaultOpen={workspaceRoute === 'publish'}
+            >
             <div className="space-y-3">
               <label className="block space-y-1">
                 <span className="text-xs font-medium text-ink/70 dark:text-ink-dark/70">
@@ -409,26 +442,180 @@ export function BookTools({
                       className="w-full rounded-2xl border border-dust bg-parchment px-4 py-2.5 text-sm focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:focus:border-cream"
                     />
                   </label>
+                  <label className="block space-y-1">
+                    <span className="text-xs font-medium text-ink/70 dark:text-ink-dark/70">Language (EPUB)</span>
+                    <input
+                      type="text"
+                      value={book.language ?? ''}
+                      onChange={(e) => onBookChange({ language: e.target.value || undefined })}
+                      placeholder="en"
+                      className="w-full rounded-2xl border border-dust bg-parchment px-4 py-2.5 text-sm focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:focus:border-cream"
+                    />
+                  </label>
+                  <label className="block space-y-1">
+                    <span className="text-xs font-medium text-ink/70 dark:text-ink-dark/70">ISBN (optional)</span>
+                    <input
+                      type="text"
+                      value={book.isbn ?? ''}
+                      onChange={(e) => onBookChange({ isbn: e.target.value || undefined })}
+                      placeholder="978…"
+                      className="w-full rounded-2xl border border-dust bg-parchment px-4 py-2.5 text-sm focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:focus:border-cream"
+                    />
+                  </label>
+                  <label className="block space-y-1">
+                    <span className="text-xs font-medium text-ink/70 dark:text-ink-dark/70">Series #</span>
+                    <input
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={book.seriesIndex ?? ''}
+                      onChange={(e) => {
+                        const raw = e.target.value
+                        onBookChange({
+                          seriesIndex: raw === '' ? null : Math.max(0, Number(raw) || 0),
+                        })
+                      }}
+                      placeholder="Optional"
+                      className="w-full rounded-2xl border border-dust bg-parchment px-4 py-2.5 text-sm focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:focus:border-cream"
+                    />
+                  </label>
+                  <label className="block space-y-1">
+                    <span className="text-xs font-medium text-ink/70 dark:text-ink-dark/70">Description</span>
+                    <textarea
+                      value={book.description ?? ''}
+                      onChange={(e) => onBookChange({ description: e.target.value || undefined })}
+                      placeholder="Short synopsis for EPUB metadata"
+                      rows={3}
+                      className="w-full resize-y rounded-2xl border border-dust bg-parchment px-4 py-2.5 text-sm focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:focus:border-cream"
+                    />
+                  </label>
+                  <label className="block space-y-1">
+                    <span className="text-xs font-medium text-ink/70 dark:text-ink-dark/70">Publisher</span>
+                    <input
+                      type="text"
+                      value={book.publisher ?? ''}
+                      onChange={(e) => onBookChange({ publisher: e.target.value || undefined })}
+                      placeholder="Optional"
+                      className="w-full rounded-2xl border border-dust bg-parchment px-4 py-2.5 text-sm focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:focus:border-cream"
+                    />
+                  </label>
                 </>
               ) : null}
             </div>
-          </section>
-
-          {!isNote ? (
-            <section className="space-y-4">
-              <h3 className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
-                Theme
-              </h3>
-              <PrintThemeForm theme={theme} onThemeChange={onThemeChange} />
-              <EbookThemeForm theme={theme} onThemeChange={onThemeChange} />
-            </section>
+          </CollapsibleSection>
           ) : null}
 
-          <section className="space-y-4">
-            <h3 className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
-              Goals & stats
-            </h3>
-            <div className="rounded-2xl border border-dust bg-parchment/80 p-4 dark:border-border-dark dark:bg-panel-dark/80">
+          {!isNote && isFormat && assembly && onAssemblyChange ? (
+            <CollapsibleSection
+              title="Book structure"
+              description="Print TOC and how chapter titles appear in exports."
+              defaultOpen={false}
+            >
+              <div className="space-y-3 rounded-xl bg-parchment/60 p-4 dark:bg-panel-dark/50">
+                <label className="flex items-center justify-between gap-3">
+                  <span className="text-sm text-ink dark:text-ink-dark">Printable table of contents</span>
+                  <input
+                    type="checkbox"
+                    checked={assembly.includePrintToc}
+                    onChange={(e) => onAssemblyChange({ includePrintToc: e.target.checked })}
+                    className="h-4 w-4 accent-ink dark:accent-cream"
+                  />
+                </label>
+                <label className="block space-y-1">
+                  <span className="text-xs font-medium text-ink/70 dark:text-ink-dark/70">TOC title</span>
+                  <input
+                    type="text"
+                    value={assembly.printTocTitle}
+                    onChange={(e) => onAssemblyChange({ printTocTitle: e.target.value })}
+                    className="w-full rounded-xl border border-dust bg-parchment px-3 py-2 text-sm dark:border-border-dark dark:bg-panel-dark"
+                  />
+                </label>
+                <label className="block space-y-1">
+                  <span className="text-xs font-medium text-ink/70 dark:text-ink-dark/70">Chapter labels in exports</span>
+                  <select
+                    value={assembly.chapterNumberMode}
+                    onChange={(e) =>
+                      onAssemblyChange({ chapterNumberMode: e.target.value as ChapterNumberMode })
+                    }
+                    className="w-full rounded-xl border border-dust bg-parchment px-3 py-2 text-sm dark:border-border-dark dark:bg-panel-dark"
+                  >
+                    <option value="title_only">Title only</option>
+                    <option value="chapter_n">Chapter N + title</option>
+                  </select>
+                </label>
+                <p className="text-[11px] text-ink/55 dark:text-ink-dark/55">
+                  Front matter exports before body chapters when sections carry role metadata; print TOC uses page
+                  numbers from the PDF layout.
+                </p>
+              </div>
+            </CollapsibleSection>
+          ) : null}
+
+          {!isNote && workspaceRoute === 'write' && onSeriesBibleChange ? (
+            <CollapsibleSection
+              title="Series bible (lite)"
+              description="Characters, places, and story threads."
+              defaultOpen={false}
+            >
+              <div className="space-y-2 rounded-xl bg-parchment/60 p-4 dark:bg-panel-dark/50">
+                {seriesBible.length === 0 ? (
+                  <p className="text-sm text-ink/60 dark:text-ink-dark/60">Track characters, places, and threads.</p>
+                ) : (
+                  <ul className="max-h-48 space-y-2 overflow-y-auto">
+                    {seriesBible.map((row) => (
+                      <li
+                        key={row.id}
+                        className="flex items-start justify-between gap-2 rounded-xl border border-dust/80 bg-white/60 px-3 py-2 text-sm dark:border-border-dark dark:bg-panel-dark/60"
+                      >
+                        <div className="min-w-0">
+                          <span className="font-medium text-ink dark:text-ink-dark">{row.name}</span>
+                          <span className="ml-2 text-[10px] uppercase text-walnut dark:text-accent-warm">
+                            {row.kind}
+                          </span>
+                          {row.notes ? (
+                            <p className="mt-0.5 line-clamp-2 text-xs text-ink/65 dark:text-ink-dark/65">
+                              {row.notes}
+                            </p>
+                          ) : null}
+                        </div>
+                        <button
+                          type="button"
+                          className="shrink-0 text-xs text-red-600 hover:underline dark:text-red-400"
+                          onClick={() => onSeriesBibleChange(seriesBible.filter((r) => r.id !== row.id))}
+                        >
+                          Remove
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <button
+                  type="button"
+                  className="w-full rounded-xl border border-dashed border-dust py-2 text-sm font-semibold text-ink/80 hover:bg-white/50 dark:border-border-dark dark:text-ink-dark/80 dark:hover:bg-panel-dark/80"
+                  onClick={() => {
+                    const id =
+                      typeof crypto !== 'undefined' && 'randomUUID' in crypto ?
+                        crypto.randomUUID()
+                      : `b_${Date.now()}`
+                    onSeriesBibleChange([
+                      ...seriesBible,
+                      { id, kind: 'character', name: 'New entry', notes: '' },
+                    ])
+                  }}
+                >
+                  Add entry
+                </button>
+              </div>
+            </CollapsibleSection>
+          ) : null}
+
+          {isNote || workspaceRoute !== 'publish' ? (
+            <CollapsibleSection
+              title="Goals & stats"
+              description="Word counts and daily targets."
+              defaultOpen={false}
+            >
+            <div className="rounded-xl bg-parchment/60 p-4 dark:bg-panel-dark/50">
               <dl className="grid grid-cols-2 gap-3 text-sm">
                 <div>
                   <dt className="text-xs text-walnut dark:text-accent-warm">Book words</dt>
@@ -492,28 +679,16 @@ export function BookTools({
             {goals.dailyWordGoal != null && goals.dailyWordGoal > 0 && (
               <ProgressBar label="Today's progress" current={wordsWrittenToday} target={goals.dailyWordGoal} />
             )}
-          </section>
+          </CollapsibleSection>
+          ) : null}
 
-          {!isNote ? (
-            <section className="space-y-4">
-              <h3 className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
-                Review & export
-              </h3>
-              <div className="rounded-2xl border border-dust bg-parchment/80 p-4 dark:border-border-dark dark:bg-panel-dark/80 space-y-3">
-                <button
-                  type="button"
-                  onClick={onOpenPrintReview}
-                  className="w-full rounded-2xl bg-ink px-4 py-3 text-sm font-semibold text-parchment transition-colors hover:bg-walnut dark:bg-cream dark:text-ink dark:hover:bg-accent-warm"
-                >
-                  Open Print Review
-                </button>
-                <button
-                  type="button"
-                  onClick={onOpenEbookReview}
-                  className="w-full rounded-2xl border border-dust bg-white/70 px-4 py-3 text-sm font-semibold text-ink transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
-                >
-                  Open Ebook Review
-                </button>
+          {!isNote && workspaceRoute === 'publish' ? (
+            <CollapsibleSection
+              title="Publish"
+              description="Exports, imports, and library backups."
+              defaultOpen
+            >
+              <div className="space-y-3 rounded-xl bg-parchment/60 p-4 dark:bg-panel-dark/50">
                 <button
                   type="button"
                   onClick={onExportPdfKdp}
@@ -544,31 +719,72 @@ export function BookTools({
                     Import DOCX…
                   </span>
                 </label>
+                {onExportTxt ? (
+                  <button
+                    type="button"
+                    onClick={onExportTxt}
+                    className="w-full rounded-2xl border border-dust bg-white/70 px-4 py-3 text-sm font-semibold text-ink transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
+                  >
+                    Export plain text (.txt)
+                  </button>
+                ) : null}
+                {onExportProjectArchive ? (
+                  <button
+                    type="button"
+                    onClick={onExportProjectArchive}
+                    className="w-full rounded-2xl border border-dust bg-white/70 px-4 py-3 text-sm font-semibold text-ink transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
+                  >
+                    Export book backup (.inkwell.zip)
+                  </button>
+                ) : null}
+                {onExportLibraryArchive ? (
+                  <button
+                    type="button"
+                    onClick={onExportLibraryArchive}
+                    className="w-full rounded-2xl border border-dust bg-white/70 px-4 py-3 text-sm font-semibold text-ink transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
+                  >
+                    Export full library (.zip)
+                  </button>
+                ) : null}
+                {onImportProjectArchive ? (
+                  <label className="block">
+                    <input
+                      type="file"
+                      accept=".zip,application/zip"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0] ?? null
+                        e.currentTarget.value = ''
+                        if (!f) return
+                        onImportProjectArchive(f)
+                      }}
+                    />
+                    <span className="block w-full cursor-pointer rounded-2xl border border-dashed border-dust bg-white/40 px-4 py-3 text-center text-sm font-semibold text-ink/80 transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/40 dark:text-ink-dark/80 dark:hover:bg-panel-dark/70">
+                      Import backup (.zip)
+                    </span>
+                  </label>
+                ) : null}
                 <div className="text-xs text-ink/60 dark:text-ink-dark/60">
-                  Print export uses trim, margins, and manual page breaks. EPUB uses ebook theme and reflow.
+                  Print export uses trim, margins, and manual page breaks. EPUB uses ebook theme and reflow. PDF adds a
+                  printable TOC when enabled in Book structure.
                 </div>
               </div>
-            </section>
+            </CollapsibleSection>
           ) : null}
 
-          <section className="space-y-4">
-            <h3 className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
-              Recovery
-            </h3>
+          <CollapsibleSection
+            title="Recovery"
+            description="Snapshot history and restore points."
+            defaultOpen={false}
+          >
             <HistoryPanel
               projectId={projectId}
               historyEntries={historyEntries}
               onRestoreHistory={onRestoreHistory}
               onClearHistory={onClearHistory}
             />
-          </section>
+          </CollapsibleSection>
 
-          <section className="rounded-2xl border border-dashed border-dust p-4 text-sm text-ink/55 dark:border-border-dark dark:text-ink-dark/55">
-            <p className="font-medium text-ink/70 dark:text-ink-dark/70">Coming next</p>
-            <p className="mt-1">
-              Outline, find & replace, front matter, and more export options will live here as they ship.
-            </p>
-          </section>
         </div>
       </aside>
 

@@ -4,8 +4,9 @@ import { ebookCss } from '../lib/ebook/ebookCss'
 import { tiptapDocToXhtmlBody } from '../lib/ebook/tiptapRender'
 import { escapeHtml } from '../lib/escapeHtml'
 import { hashStringDjb2 } from '../lib/hash'
+import { layoutProfileForManuscript } from '../lib/bookAssembly'
 import { getPrintFontForMeasurement } from '../lib/print/fonts'
-import { paginateChapterWithFont, type PrintPage } from '../lib/print/paginate'
+import { paginateChapterWithFont, type PrintLayoutKind, type PrintPage } from '../lib/print/paginate'
 
 type RenderEbookJob = {
   kind: 'renderEbook'
@@ -22,6 +23,8 @@ type PaginatePrintChapterJob = {
   theme: Theme
   meta: { bookTitle: string; authorName: string }
   startPageNumber: number
+  layoutKind?: PrintLayoutKind
+  chapterOrdinalForOpener?: number
 }
 
 type BuildPdfJob = {
@@ -115,6 +118,8 @@ self.onmessage = async (ev: MessageEvent<WorkerRequest>) => {
     }
 
     if (req.kind === 'paginatePrintChapter') {
+      const layout = req.layoutKind ?? layoutProfileForManuscript(req.chapter)
+      const ordinal = req.chapterOrdinalForOpener ?? req.chapterIndex + 1
       const cacheKey = hashStringDjb2(
         safeStringify({
           chapterContent: req.chapter.content,
@@ -124,6 +129,8 @@ self.onmessage = async (ev: MessageEvent<WorkerRequest>) => {
           theme: req.theme,
           startPageNumber: req.startPageNumber,
           meta: req.meta,
+          layout,
+          ordinal,
         }),
       )
       let cached = printChapterCache.get(cacheKey)
@@ -139,6 +146,8 @@ self.onmessage = async (ev: MessageEvent<WorkerRequest>) => {
             bookTitle: req.meta.bookTitle,
             authorName: req.meta.authorName,
           },
+          layout,
+          ordinal,
         )
         cached = { pages: res.pages, nextPageNumber: res.nextPageNumber }
         printChapterCache.set(cacheKey, cached)

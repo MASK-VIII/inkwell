@@ -6,9 +6,11 @@ import type {
   ProjectIndex,
   ProjectKind,
   ProjectMeta,
+  SeriesBibleEntry,
   WritingGoals,
 } from '../types'
-import { defaultBookMeta, defaultTheme, defaultWritingGoals } from '../types'
+import { defaultBookAssembly, defaultBookMeta, defaultTheme, defaultWritingGoals } from '../types'
+import { idbDelete, idbGet, idbSet, isIndexedDbAvailable } from './storage/projectIdb'
 import { hashStringDjb2 } from './hash'
 import { countWordsInDoc, todayLocalISODate } from './wordCount'
 
@@ -53,12 +55,88 @@ function decodeFromStorage(raw: string): unknown {
   return JSON.parse(raw)
 }
 
-function projectKey(id: string): string {
+export function projectStorageKey(id: string): string {
   return `${STORAGE_PROJECT_PREFIX}${id}`
 }
 
-function historyKey(id: string): string {
+function projectKey(id: string): string {
+  return projectStorageKey(id)
+}
+
+export function historyStorageKey(id: string): string {
   return `${STORAGE_HISTORY_PREFIX}${id}`
+}
+
+function historyKey(id: string): string {
+  return historyStorageKey(id)
+}
+
+/** In-memory mirror of encoded project payloads after IndexedDB hydrate. */
+const projectPayloadCache = new Map<string, string>()
+const historyPayloadCache = new Map<string, string>()
+
+export async function hydrateInkwellStorage(): Promise<void> {
+  if (!isIndexedDbAvailable()) {
+    return
+  }
+  const idx = loadIndex()
+  for (const p of idx.projects) {
+    const key = projectKey(p.id)
+    let blob = await idbGet(key)
+    if (blob === undefined) {
+      try {
+        const ls = localStorage.getItem(key)
+        if (ls) {
+          await idbSet(key, ls)
+          blob = ls
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    if (blob !== undefined) projectPayloadCache.set(p.id, blob)
+  }
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i)
+      if (!k?.startsWith(STORAGE_PROJECT_PREFIX)) continue
+      const id = k.slice(STORAGE_PROJECT_PREFIX.length)
+      if (projectPayloadCache.has(id)) continue
+      const ls = localStorage.getItem(k)
+      if (ls) {
+        projectPayloadCache.set(id, ls)
+        await idbSet(k, ls)
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  for (const p of idx.projects) {
+    const hk = historyKey(p.id)
+    let hb = await idbGet(hk)
+    if (hb === undefined) {
+      try {
+        const ls = localStorage.getItem(hk)
+        if (ls) {
+          await idbSet(hk, ls)
+          hb = ls
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    if (hb !== undefined) historyPayloadCache.set(p.id, hb)
+  }
+}
+
+function cacheProjectPayload(id: string, payload: string): void {
+  projectPayloadCache.set(id, payload)
+  void idbSet(projectKey(id), payload).catch(() => {})
+  try {
+    localStorage.setItem(projectKey(id), payload)
+  } catch {
+    /* IndexedDB remains primary */
+  }
 }
 
 function newId(): string {
@@ -142,6 +220,8 @@ function seedBookProject(id: string): InkwellProject {
     goals: defaultWritingGoals(),
     chapters: seedChapters(),
     theme: defaultTheme(),
+    assembly: defaultBookAssembly(),
+    seriesBible: [],
   })
 }
 
@@ -179,6 +259,8 @@ function migrateV1Array(id: string, parsed: Manuscript[]): InkwellProject {
     goals: defaultWritingGoals(),
     chapters,
     theme: defaultTheme(),
+    assembly: defaultBookAssembly(),
+    seriesBible: [],
   })
 }
 
@@ -187,6 +269,26 @@ type LegacyV2 = {
   book: unknown
   goals: unknown
   chapters: Manuscript[]
+}
+
+function normalizeSeriesBible(raw: unknown): SeriesBibleEntry[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((row) => {
+      if (!row || typeof row !== 'object') return null
+      const o = row as Record<string, unknown>
+      const id = typeof o.id === 'string' ? o.id : ''
+      const name = typeof o.name === 'string' ? o.name : ''
+      const notes = typeof o.notes === 'string' ? o.notes : ''
+      const kindRaw = o.kind
+      const kind: SeriesBibleEntry['kind'] =
+        kindRaw === 'character' || kindRaw === 'place' || kindRaw === 'thread' || kindRaw === 'other' ?
+          kindRaw
+        : 'other'
+      if (!id || !name) return null
+      return { id, kind, name, notes }
+    })
+    .filter((x): x is SeriesBibleEntry => x != null)
 }
 
 function normalizeProjectV3(parsed: Partial<InkwellProject>, id: string): InkwellProject {
@@ -206,6 +308,9 @@ function normalizeProjectV3(parsed: Partial<InkwellProject>, id: string): Inkwel
       ? null
       : String(parsed.linkedBookId)
 
+  const assemblyDefaults = defaultBookAssembly()
+  const parsedAssembly = (parsed.assembly ?? {}) as Partial<InkwellProject['assembly']>
+
   return withAlignedGoals({
     version: 3,
     id,
@@ -215,7 +320,18 @@ function normalizeProjectV3(parsed: Partial<InkwellProject>, id: string): Inkwel
     goals: { ...defaultWritingGoals(), ...(parsed.goals ?? {}) } as WritingGoals,
     chapters,
     theme: normalizedTheme,
+    assembly: {
+      ...assemblyDefaults,
+      ...parsedAssembly,
+    },
+    seriesBible: normalizeSeriesBible(parsed.seriesBible),
+    exportExtras: parsed.exportExtras && typeof parsed.exportExtras === 'object' ? parsed.exportExtras : undefined,
   })
+}
+
+/** Import / archive normalization (public alias). */
+export function normalizeImportedProject(parsed: Partial<InkwellProject>, id: string): InkwellProject {
+  return normalizeProjectV3(parsed, id)
 }
 
 function migrateV2ToV3(id: string, parsed: LegacyV2): InkwellProject {
@@ -229,6 +345,8 @@ function migrateV2ToV3(id: string, parsed: LegacyV2): InkwellProject {
     goals: { ...defaultWritingGoals(), ...(parsed.goals as object) } as WritingGoals,
     chapters,
     theme: defaultTheme(),
+    assembly: defaultBookAssembly(),
+    seriesBible: [],
   })
 }
 
@@ -254,6 +372,14 @@ function loadIndex(): ProjectIndex {
 function saveIndex(idx: ProjectIndex): ProjectIndex {
   localStorage.setItem(STORAGE_INDEX, JSON.stringify(idx))
   return idx
+}
+
+export function loadProjectIndex(): ProjectIndex {
+  return loadIndex()
+}
+
+export function saveProjectIndex(idx: ProjectIndex): void {
+  saveIndex(idx)
 }
 
 export function listProjects(): ProjectMeta[] {
@@ -431,7 +557,7 @@ export function resolveUnpinnedChildOrder(masterId: string, unpinnedKids: Projec
     saveProjectChildUnpinnedOrderMap(um)
     dirty = false
   }
-  let ordered = stored.filter((id) => validIds.has(id))
+  const ordered = stored.filter((id) => validIds.has(id))
   if (ordered.length !== stored.length) dirty = true
   for (const k of unpinnedKids) {
     if (!ordered.includes(k.id)) {
@@ -735,8 +861,17 @@ export function resolveResumeChapterId(project: InkwellProject): number | null {
 
 export function loadProject(id: string): InkwellProject | null {
   try {
-    const raw = localStorage.getItem(projectKey(id))
+    const raw =
+      projectPayloadCache.get(id) ??
+      (() => {
+        try {
+          return localStorage.getItem(projectKey(id))
+        } catch {
+          return null
+        }
+      })()
     if (!raw) return null
+    if (!projectPayloadCache.has(id)) projectPayloadCache.set(id, raw)
     const parsed = decodeFromStorage(raw) as Partial<InkwellProject>
     if (parsed && parsed.version === 3) return normalizeProjectV3(parsed, id)
   } catch {
@@ -745,26 +880,25 @@ export function loadProject(id: string): InkwellProject | null {
   return null
 }
 
-function trimOneHistorySnapshot(projectId: string): boolean {
-  const h = loadHistoryRaw(projectId)
-  if (h.entries.length === 0) return false
-  const removed = h.entries.pop()!
-  delete h.snapshotsById[removed.id]
-  persistHistoryBlob(projectId, h)
-  return true
-}
-
 /** Writes history; on quota, drops oldest snapshots until it fits or history is empty. */
 function persistHistoryBlob(projectId: string, next: StoredHistory): void {
   let working = next
   for (let attempt = 0; attempt < 250; attempt++) {
     const payload = encodeForStorage(working)
     try {
+      historyPayloadCache.set(projectId, payload)
+      void idbSet(historyKey(projectId), payload)
       localStorage.setItem(historyKey(projectId), payload)
       return
     } catch (e) {
-      if (!isQuotaExceeded(e)) throw e
+      if (!isQuotaExceeded(e)) {
+        historyPayloadCache.set(projectId, payload)
+        void idbSet(historyKey(projectId), payload)
+        return
+      }
       if (working.entries.length <= 0) {
+        historyPayloadCache.delete(projectId)
+        void idbDelete(historyKey(projectId))
         try {
           localStorage.removeItem(historyKey(projectId))
         } catch {
@@ -780,18 +914,10 @@ function persistHistoryBlob(projectId: string, next: StoredHistory): void {
   }
 }
 
-/** Writes the project blob; on quota, trims this book's history (oldest first) and retries. */
+/** Writes the project blob; IndexedDB + cache always; localStorage best-effort. */
 function persistProjectBlob(projectId: string, normalized: InkwellProject): void {
-  for (let attempt = 0; attempt < 250; attempt++) {
-    const payload = encodeForStorage(normalized)
-    try {
-      localStorage.setItem(projectKey(projectId), payload)
-      return
-    } catch (e) {
-      if (!isQuotaExceeded(e)) throw e
-      if (!trimOneHistorySnapshot(projectId)) throw e
-    }
-  }
+  const payload = encodeForStorage(normalized)
+  cacheProjectPayload(projectId, payload)
 }
 
 export function saveProject(project: InkwellProject): InkwellProject {
@@ -850,8 +976,17 @@ type StoredHistory = {
 
 function loadHistoryRaw(projectId: string): StoredHistory {
   try {
-    const raw = localStorage.getItem(historyKey(projectId))
+    const raw =
+      historyPayloadCache.get(projectId) ??
+      (() => {
+        try {
+          return localStorage.getItem(historyKey(projectId))
+        } catch {
+          return null
+        }
+      })()
     if (!raw) return { version: 1, entries: [], snapshotsById: {} }
+    if (!historyPayloadCache.has(projectId)) historyPayloadCache.set(projectId, raw)
     const parsed = decodeFromStorage(raw) as Partial<StoredHistory>
     if (parsed && parsed.version === 1 && Array.isArray(parsed.entries) && parsed.snapshotsById) {
       return {
@@ -883,6 +1018,8 @@ export function loadProjectSnapshot(projectId: string, snapshotId: string): Inkw
 }
 
 export function clearProjectHistory(projectId: string): void {
+  historyPayloadCache.delete(projectId)
+  void idbDelete(historyKey(projectId))
   try {
     localStorage.removeItem(historyKey(projectId))
   } catch {
@@ -995,6 +1132,8 @@ export function createNoteProject(options?: {
       },
     ],
     theme: defaultTheme(),
+    assembly: defaultBookAssembly(),
+    seriesBible: [],
   })
   saveProject(project)
   if (linked) registerNoteAttachedUnderMaster(linked, id)
@@ -1022,6 +1161,8 @@ export function createChildNoteProject(parentId: string): InkwellProject | null 
       },
     ],
     theme: defaultTheme(),
+    assembly: defaultBookAssembly(),
+    seriesBible: [],
   })
   saveProject(project)
   registerNoteAttachedUnderMaster(parentId, id)
@@ -1029,6 +1170,10 @@ export function createChildNoteProject(parentId: string): InkwellProject | null 
 }
 
 export function deleteProject(id: string): void {
+  projectPayloadCache.delete(id)
+  historyPayloadCache.delete(id)
+  void idbDelete(projectKey(id))
+  void idbDelete(historyKey(id))
   try {
     localStorage.removeItem(projectKey(id))
   } catch {

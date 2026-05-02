@@ -1,5 +1,6 @@
 import type { JSONContent } from '@tiptap/core'
 import type {
+  InkwellProject,
   Manuscript,
   PrintChapterOpener,
   PrintHeaderFooterSlots,
@@ -8,6 +9,14 @@ import type {
   Theme,
 } from '../../types'
 import { TRIM_PRESETS } from '../../types'
+import {
+  buildPrintTocManuscript,
+  insertPrintTocInSpine,
+  layoutProfileForManuscript,
+  manuscriptsForPrint,
+  printContentWidthPt,
+  stripSyntheticToc,
+} from '../bookAssembly'
 import { extractPrintBlocks, type PrintBlock } from './extractBlocks'
 import { getEnglishHypher } from './hyphen'
 import { getPrintFontForMeasurement } from './fonts'
@@ -283,6 +292,21 @@ export type PrintLayoutContext = {
   authorName?: string
 }
 
+export type PrintLayoutKind = 'chapter' | 'matter' | 'part' | 'toc'
+
+function firstPageByChapterId(pages: PrintPage[], spine: Manuscript[]): Map<number, number> {
+  const map = new Map<number, number>()
+  const want = new Set(spine.map((m) => m.id))
+  for (const p of pages) {
+    for (const line of p.lines) {
+      if (line.kind !== 'body') continue
+      if (!want.has(line.chapterId)) continue
+      if (!map.has(line.chapterId)) map.set(line.chapterId, p.pageNumber)
+    }
+  }
+  return map
+}
+
 export type ChapterPaginationResult = {
   chapterId: number
   chapterIndex: number
@@ -405,6 +429,8 @@ export async function paginateChapterWithFont(
   font: FontMeasurer,
   startPageNumber: number,
   ctx?: PrintLayoutContext,
+  layoutKind: PrintLayoutKind = layoutProfileForManuscript(chapter),
+  chapterOrdinalForOpener: number = chapterIndex + 1,
 ): Promise<ChapterPaginationResult> {
   const print = theme.print
   const headerReservePt = print.header.enabled ? print.header.fontSizePt * 1.8 : 0
@@ -440,22 +466,35 @@ export async function paginateChapterWithFont(
 
   ensurePage()
 
-  if (print.chapterStartsOn === 'right' && pageNumber % 2 === 0) {
+  const forceRight = layoutKind === 'chapter' || layoutKind === 'part'
+  if (forceRight && print.chapterStartsOn === 'right' && pageNumber % 2 === 0) {
     pages[pages.length - 1]!.isBlank = true
     nextPage(false)
   }
 
   const boxStart = contentBoxForPage(print, pageNumber, boxOpts)
   const chapterTitle = chapter.title?.trim() ?? ''
-  const openerBlocks = buildChapterOpenerBlocks(
-    print.chapterOpener,
-    chapterTitle,
-    chapterIndex + 1,
-    run.blocks,
-    boxStart.contentWidthPt,
-    print,
-    font,
-  )
+  const openerBlocks: PrintBlock[] =
+    layoutKind === 'matter' || layoutKind === 'toc'
+      ? []
+      : layoutKind === 'part'
+        ? [
+            {
+              type: 'heading',
+              level: 1,
+              text: chapterTitle || `Part ${chapterOrdinalForOpener}`,
+              printRole: 'chapterBanner',
+            },
+          ]
+        : buildChapterOpenerBlocks(
+            print.chapterOpener,
+            chapterTitle,
+            chapterOrdinalForOpener,
+            run.blocks,
+            boxStart.contentWidthPt,
+            print,
+            font,
+          )
   const blocksToLayout = [...openerBlocks, ...run.blocks]
 
   for (const block of blocksToLayout) {
@@ -469,22 +508,26 @@ export async function paginateChapterWithFont(
     const page = pages[pages.length - 1]!
 
     const isChapterBanner = block.type === 'heading' && block.printRole === 'chapterBanner'
+    const isSceneBreak = block.type === 'heading' && block.printRole === 'sceneBreak'
 
     const fontSizePt =
       block.type === 'heading'
         ? isChapterBanner
           ? print.fontSizePt * 2.5
-          : block.level === 1
+          : isSceneBreak
+            ? print.fontSizePt * 1.08
+            : block.level === 1
             ? print.fontSizePt * 1.55
             : block.level === 2
               ? print.fontSizePt * 1.3
               : print.fontSizePt * 1.15
         : print.fontSizePt
 
-    const blockLineHeightPt = isChapterBanner ? fontSizePt * 1.18 : fontSizePt * print.lineHeight
+    const blockLineHeightPt =
+      isChapterBanner ? fontSizePt * 1.18 : isSceneBreak ? fontSizePt * 1.35 : fontSizePt * print.lineHeight
     const lines = wrapText(block.text, box.contentWidthPt, fontSizePt, font, {
-      hyphenate: !isChapterBanner && print.hyphenation,
-      hypher: isChapterBanner ? null : hypher,
+      hyphenate: !isChapterBanner && !isSceneBreak && print.hyphenation,
+      hypher: isChapterBanner || isSceneBreak ? null : hypher,
     })
 
     const yStartPt =
@@ -558,8 +601,8 @@ export async function paginateChapterWithFont(
   }
 }
 
-export async function paginateWithFont(
-  chapters: Manuscript[],
+export async function paginateSpineWithFont(
+  spine: Manuscript[],
   theme: Theme,
   font: FontMeasurer,
   ctx?: PrintLayoutContext,
@@ -571,9 +614,14 @@ export async function paginateWithFont(
 
   const pages: PrintPage[] = []
   let nextStart = 1
+  let bodyOrd = 0
 
-  for (let i = 0; i < chapters.length; i++) {
-    const res = await paginateChapterWithFont(chapters[i]!, i, theme, font, nextStart, ctx)
+  for (let i = 0; i < spine.length; i++) {
+    const ch = spine[i]!
+    const layout = layoutProfileForManuscript(ch)
+    if (layout === 'chapter') bodyOrd += 1
+    const ordinal = layout === 'chapter' ? bodyOrd : Math.max(1, bodyOrd)
+    const res = await paginateChapterWithFont(ch, i, theme, font, nextStart, ctx, layout, ordinal)
     pages.push(...res.pages)
     nextStart = res.nextPageNumber
   }
@@ -600,5 +648,45 @@ export async function paginateWithFont(
   }
 
   return pages
+}
+
+export async function paginateWithFont(
+  chapters: Manuscript[],
+  theme: Theme,
+  font: FontMeasurer,
+  ctx?: PrintLayoutContext,
+): Promise<PrintPage[]> {
+  return paginateSpineWithFont(chapters, theme, font, ctx)
+}
+
+/** Full book for KDP PDF: optional printable TOC with page numbers (iterative layout). */
+export async function paginateProjectForPrintExport(
+  project: InkwellProject,
+  font: FontMeasurer,
+  ctx?: PrintLayoutContext,
+): Promise<PrintPage[]> {
+  const theme = project.theme
+  const spine = stripSyntheticToc(manuscriptsForPrint(project))
+  if (!project.assembly.includePrintToc) {
+    return paginateSpineWithFont(spine, theme, font, ctx)
+  }
+
+  const cw = printContentWidthPt(theme.print)
+  const fs = theme.print.fontSizePt
+  let tocMs: Manuscript | null = null
+
+  for (let iter = 0; iter < 12; iter++) {
+    const withToc =
+      tocMs != null ? insertPrintTocInSpine(project, spine, tocMs) : spine
+    const pages = await paginateSpineWithFont(withToc, theme, font, ctx)
+    const starts = firstPageByChapterId(pages, withToc)
+    const nextToc = buildPrintTocManuscript(project, starts, cw, font, fs)
+    const prevSig = tocMs ? JSON.stringify(tocMs.content) : ''
+    const nextSig = JSON.stringify(nextToc.content)
+    if (prevSig === nextSig) return pages
+    tocMs = nextToc
+  }
+  const finalSpine = tocMs != null ? insertPrintTocInSpine(project, spine, tocMs) : spine
+  return paginateSpineWithFont(finalSpine, theme, font, ctx)
 }
 

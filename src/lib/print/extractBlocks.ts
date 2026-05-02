@@ -3,7 +3,7 @@ import type { JSONContent } from '@tiptap/core'
 export type PrintBlock =
   | { type: 'paragraph'; text: string }
   /** printRole: synthetic chapter opener title — larger centered type in paginate */
-  | { type: 'heading'; level: 1 | 2 | 3; text: string; printRole?: 'chapterBanner' }
+  | { type: 'heading'; level: 1 | 2 | 3; text: string; printRole?: 'chapterBanner' | 'sceneBreak' }
   | { type: 'pageBreak' }
 
 function textFromNode(node: JSONContent | null | undefined): string {
@@ -24,6 +24,13 @@ function textFromNode(node: JSONContent | null | undefined): string {
 function visit(node: JSONContent, out: PrintBlock[]) {
   if (node.type === 'pageBreak') {
     out.push({ type: 'pageBreak' })
+    return
+  }
+
+  if (node.type === 'horizontalRule') {
+    const orn = String((node.attrs as { ornament?: string } | undefined)?.ornament ?? '').trim()
+    const text = orn || '✦'
+    out.push({ type: 'heading', level: 3, text, printRole: 'sceneBreak' })
     return
   }
 

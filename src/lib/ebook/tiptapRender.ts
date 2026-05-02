@@ -11,6 +11,7 @@ function esc(s: string): string {
 type UrlKind = 'link' | 'image'
 
 function sanitizeUrl(raw: string, kind: UrlKind): string | null {
+  // eslint-disable-next-line no-control-regex -- strip control chars from pasted URLs
   const s = raw.trim().replace(/[\u0000-\u001F\u007F\s]+/g, '')
   if (!s) return null
 
@@ -151,8 +152,13 @@ function renderNode(node: JSONContent, footnoteById: Map<string, string>): strin
       const st = blockTextAlignAttr(node.attrs as Record<string, unknown> | undefined)
       return `<blockquote${st}>${renderChildren(node.content, footnoteById)}</blockquote>`
     }
-    case 'horizontalRule':
+    case 'horizontalRule': {
+      const orn = String((node.attrs as { ornament?: string } | undefined)?.ornament ?? '').trim()
+      if (orn) {
+        return `<p class="inkwell-scene-break" style="text-align:center;margin:1.35em 0">${esc(orn)}</p>`
+      }
       return `<hr />`
+    }
     case 'pageBreak':
       return ''
     case 'image': {

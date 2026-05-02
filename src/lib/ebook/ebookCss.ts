@@ -73,6 +73,12 @@ export function ebookCss(theme: EbookTheme): string {
 .inkwell-ebook-preview ol { margin: 0.75em 0 0.75em 1.25em; padding: 0; }
 .inkwell-ebook-preview li { margin: 0.25em 0; }
 .inkwell-ebook-preview hr { border: 0; border-top: 1px solid #c8bdb7; margin: 1.25em 0; }
+.inkwell-ebook-preview .inkwell-scene-break {
+  text-align: center;
+  font-size: 1.05em;
+  letter-spacing: 0.04em;
+  margin: 1.35em 0;
+}
 .inkwell-ebook-preview .inkwell-figure { margin: 1em auto; text-align: center; max-width: 100%; }
 .inkwell-ebook-preview .inkwell-figure img { max-width: 100%; height: auto; }
 .inkwell-ebook-preview .inkwell-export-comment {

@@ -1,6 +1,8 @@
 import {
   BookOpen,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Download,
   Folders,
   Library,
@@ -8,6 +10,7 @@ import {
   MoreVertical,
   PenLine,
   Plus,
+  Search,
   Sun,
   Trash2,
 } from 'lucide-react'
@@ -23,11 +26,15 @@ import {
   type ReactNode,
 } from 'react'
 import { BookTools } from './components/BookTools'
+import { PublishHub } from './components/PublishHub'
+import { FindReplaceModal } from './components/FindReplaceModal'
 import { ShelfLinkedNotesList } from './components/ShelfLinkedNotesList'
 import { StickyNotePopout } from './components/book-tools/StickyNotePopout'
 import { EbookReview } from './components/EbookReview'
 import { ManuscriptEditor } from './components/ManuscriptEditor'
 import { ManuscriptRow } from './components/ManuscriptRow'
+import { FormatPreviewModeBar } from './components/FormatPreviewModeBar'
+import { FormatThemeSidebar } from './components/FormatThemeSidebar'
 import { PrintReview } from './components/PrintReview'
 import { attachInkwellDragGhost } from './lib/dragGhost'
 import { NOTE_DRAG_MIME, NOTE_DRAG_TEXT_PREFIX, readShelfDragNoteId } from './lib/shelfDrag'
@@ -39,6 +46,7 @@ import {
   deleteProject,
   deriveNoteMetaTitle,
   ensureAtLeastOneProject,
+  hydrateInkwellStorage,
   listBookMetas,
   listLinkedNotesForBook,
   listLinkedNotesForBookInShelfOrder,
@@ -69,20 +77,36 @@ import {
   totalWordsInChapters,
   wouldCreateNoteAttachmentCycle,
 } from './lib/manuscripts'
+import { buildPlaintextExport } from './lib/export/plaintext'
 import { buildKdpPdf } from './lib/export/pdfKdp'
 import { buildEpub, epubFilename } from './lib/export/epub'
 import { importDocxToChapters } from './lib/import/docx'
-import type { BookMeta, EbookTheme, InkwellProject, Manuscript, PrintTheme, WritingGoals } from './types'
+import { exportLibraryZip, exportProjectZip, importInkwellArchive } from './lib/projectArchive'
+import { mergeDocContents, splitDocAtTopLevelIndex } from './lib/chapterSplit'
+import { applyThemePreset, type ThemePresetId } from './lib/themePresets'
+import { countWordsInDoc } from './lib/wordCount'
+import type {
+  BookAssembly,
+  BookMeta,
+  EbookTheme,
+  InkwellProject,
+  Manuscript,
+  PrintTheme,
+  SeriesBibleEntry,
+  WritingGoals,
+} from './types'
 import type { MentionItem } from './lib/tiptap/mentionUi'
 import type { Editor, JSONContent } from '@tiptap/core'
 
 const THEME_KEY = 'inkwell-theme'
+const CHAPTERS_ASIDE_COLLAPSED_KEY = 'inkwell-chapters-aside-collapsed'
+const FORMAT_THEME_ASIDE_COLLAPSED_KEY = 'inkwell-format-theme-aside-collapsed'
 /** Delay before writing the open book to localStorage after typing stops (keystrokes only update React state). */
 const PERSIST_IDLE_MS = 450
 
 type DeletedSnapshot = Manuscript & { originalIndex: number }
 
-type Route = 'bookshelf' | 'write' | 'review_print' | 'review_ebook'
+type Route = 'bookshelf' | 'write' | 'format_print' | 'format_ebook' | 'publish'
 
 function readInitialDarkMode(): boolean {
   if (typeof window === 'undefined') return false
@@ -94,8 +118,10 @@ function readInitialDarkMode(): boolean {
 function readRouteFromHash(): Route {
   const hash = (typeof window === 'undefined' ? '' : window.location.hash).replace(/^#/, '')
   if (hash === 'bookshelf') return 'bookshelf'
-  if (hash === 'review/print') return 'review_print'
-  if (hash === 'review/ebook') return 'review_ebook'
+  if (hash === 'format/print' || hash === 'review/print') return 'format_print'
+  if (hash === 'format/ebook' || hash === 'review/ebook') return 'format_ebook'
+  if (hash === 'publish') return 'publish'
+  if (hash === 'write' || hash === '') return 'write'
   return 'write'
 }
 
@@ -103,10 +129,12 @@ function routeToHash(route: Route): string {
   switch (route) {
     case 'bookshelf':
       return '#bookshelf'
-    case 'review_print':
-      return '#review/print'
-    case 'review_ebook':
-      return '#review/ebook'
+    case 'format_print':
+      return '#format/print'
+    case 'format_ebook':
+      return '#format/ebook'
+    case 'publish':
+      return '#publish'
     case 'write':
     default:
       return '#write'
@@ -140,6 +168,23 @@ export default function App() {
   const [currentId, setCurrentId] = useState<number | null>(() => boot.currentId)
   const [ebookEditOpen, setEbookEditOpen] = useState(false)
   const [bookToolsOpen, setBookToolsOpen] = useState(false)
+  const [chaptersAsideCollapsed, setChaptersAsideCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false
+    try {
+      return localStorage.getItem(CHAPTERS_ASIDE_COLLAPSED_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
+  const [formatThemeAsideCollapsed, setFormatThemeAsideCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false
+    try {
+      return localStorage.getItem(FORMAT_THEME_ASIDE_COLLAPSED_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
+  const [findReplaceOpen, setFindReplaceOpen] = useState(false)
   const [stickyNotePopoutId, setStickyNotePopoutId] = useState<string | null>(null)
   const [toast, setToast] = useState<{ node: ReactNode; ms: number } | null>(null)
   const [darkMode, setDarkMode] = useState(readInitialDarkMode)
@@ -292,6 +337,24 @@ export default function App() {
     setRouteState(next)
     if (typeof window !== 'undefined') {
       window.location.hash = routeToHash(next)
+    }
+  }, [])
+
+  const setChaptersAsideCollapsedPersisted = useCallback((collapsed: boolean) => {
+    setChaptersAsideCollapsed(collapsed)
+    try {
+      localStorage.setItem(CHAPTERS_ASIDE_COLLAPSED_KEY, collapsed ? '1' : '0')
+    } catch {
+      /* ignore */
+    }
+  }, [])
+
+  const setFormatThemeAsideCollapsedPersisted = useCallback((collapsed: boolean) => {
+    setFormatThemeAsideCollapsed(collapsed)
+    try {
+      localStorage.setItem(FORMAT_THEME_ASIDE_COLLAPSED_KEY, collapsed ? '1' : '0')
+    } catch {
+      /* ignore */
     }
   }, [])
 
@@ -525,6 +588,38 @@ export default function App() {
     [recordHistorySoon],
   )
 
+  const patchAssembly = useCallback(
+    (patch: Partial<BookAssembly>) => {
+      setProject((prev) => saveProject({ ...prev, assembly: { ...prev.assembly, ...patch } }))
+      recordHistorySoon('Auto')
+    },
+    [recordHistorySoon],
+  )
+
+  const patchSeriesBible = useCallback(
+    (rows: SeriesBibleEntry[]) => {
+      setProject((prev) => saveProject({ ...prev, seriesBible: rows }))
+      recordHistorySoon('Auto')
+    },
+    [recordHistorySoon],
+  )
+
+  const applyInteriorPreset = useCallback(
+    (id: ThemePresetId) => {
+      setProject((prev) => saveProject({ ...prev, theme: applyThemePreset(prev.theme, id) }))
+      recordHistorySoon('Auto')
+    },
+    [recordHistorySoon],
+  )
+
+  useEffect(() => {
+    void hydrateInkwellStorage().then(() => {
+      const next = readInitialEditorSession()
+      setProject(next.project)
+      setCurrentId(next.currentId)
+    })
+  }, [])
+
   useEffect(
     () => () => {
       if (toastTimeoutRef.current != null) window.clearTimeout(toastTimeoutRef.current)
@@ -586,7 +681,7 @@ export default function App() {
   const selectChapter = useCallback(
     (id: number) => {
       setCurrentId(id)
-      if (route === 'review_ebook' && !ebookEditOpen) {
+      if (route === 'format_ebook' && !ebookEditOpen) {
         setEbookEditOpen(false)
       }
     },
@@ -718,6 +813,146 @@ export default function App() {
       showToast('EPUB export failed')
     }
   }
+
+  const exportTxt = useCallback(() => {
+    try {
+      const text = buildPlaintextExport(project)
+      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${slugDownload(project.book.title.trim() || chapters[0]?.title || 'book')}.txt`
+      a.click()
+      URL.revokeObjectURL(url)
+      showToast('Exported plain text')
+    } catch {
+      showToast('Text export failed')
+    }
+  }, [project, chapters, showToast])
+
+  const exportBookArchive = useCallback(async () => {
+    try {
+      const blob = await exportProjectZip(project)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${slugDownload(project.book.title.trim() || 'book')}.inkwell.zip`
+      a.click()
+      URL.revokeObjectURL(url)
+      showToast('Book backup downloaded')
+    } catch {
+      showToast('Backup export failed')
+    }
+  }, [project, showToast])
+
+  const exportFullLibrary = useCallback(async () => {
+    try {
+      const blob = await exportLibraryZip()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'inkwell-library-backup.zip'
+      a.click()
+      URL.revokeObjectURL(url)
+      showToast('Library backup downloaded')
+    } catch {
+      showToast('Library export failed')
+    }
+  }, [showToast])
+
+  const importArchiveFile = useCallback(
+    async (file: File) => {
+      try {
+        const res = await importInkwellArchive(file)
+        if (!res.ok) {
+          showToast(res.error)
+          return
+        }
+        if (res.mode === 'single') {
+          syncPersistedState()
+          setProject(res.project)
+          setCurrentId(resolveResumeChapterId(res.project))
+          setActiveProjectId(res.project.id)
+          setEditorEpoch((e) => e + 1)
+          showToast('Imported book')
+        } else {
+          showToast(`Imported ${res.imported} projects`)
+        }
+      } catch {
+        showToast('Import failed')
+      }
+    },
+    [showToast, syncPersistedState],
+  )
+
+  const applyGlobalReplace = useCallback(
+    (next: Manuscript[]) => {
+      setProject((prev) => saveProject({ ...prev, chapters: next }))
+      recordHistorySoon('Find & replace')
+    },
+    [recordHistorySoon],
+  )
+
+  const splitChapterAtCursor = useCallback(
+    (targetId: number) => {
+      if (currentId !== targetId) {
+        showToast('Open this section, place the cursor where the next section should start, then tap Split.')
+        return
+      }
+      const ed = editorRef.current
+      if (!ed) return
+      const idx = ed.state.selection.$from.index(0)
+      const split = splitDocAtTopLevelIndex(ed.getJSON() as JSONContent, idx)
+      if (!split) {
+        showToast('Place the cursor below the first block to split.')
+        return
+      }
+      const [leftDoc, rightDoc] = split
+      clearPersistIdleTimer()
+      const newId = nextManuscriptId(projectRef.current.chapters)
+      setProject((prev) => {
+        const ix = prev.chapters.findIndex((c) => c.id === targetId)
+        if (ix < 0) return prev
+        const ch = prev.chapters[ix]!
+        const rightCh: Manuscript = {
+          id: newId,
+          title: `${ch.title} (continued)`,
+          content: rightDoc,
+          sectionRole: ch.sectionRole,
+        }
+        const nextChapters = [...prev.chapters]
+        nextChapters[ix] = { ...ch, content: leftDoc }
+        nextChapters.splice(ix + 1, 0, rightCh)
+        return saveProject({ ...prev, chapters: nextChapters })
+      })
+      setCurrentId(newId)
+      setEditorEpoch((e) => e + 1)
+      recordHistorySoon('Split chapter')
+      showToast('Section split')
+    },
+    [currentId, clearPersistIdleTimer, recordHistorySoon, showToast],
+  )
+
+  const mergeChapterWithNext = useCallback(
+    (id: number) => {
+      const prevP = projectRef.current
+      const ix = prevP.chapters.findIndex((c) => c.id === id)
+      if (ix < 0 || ix >= prevP.chapters.length - 1) return
+      clearPersistIdleTimer()
+      const a = prevP.chapters[ix]!
+      const b = prevP.chapters[ix + 1]!
+      const mergedContent = mergeDocContents(a.content, b.content)
+      const nextChapters = [
+        ...prevP.chapters.slice(0, ix),
+        { ...a, content: mergedContent },
+        ...prevP.chapters.slice(ix + 2),
+      ]
+      setProject(saveProject({ ...prevP, chapters: nextChapters }))
+      recordHistorySoon('Merged sections')
+      showToast('Sections merged')
+    },
+    [clearPersistIdleTimer, recordHistorySoon, showToast],
+  )
 
   const importDocxIntoProject = useCallback(
     async (file: File, baseProject: InkwellProject, confirmMessage: string) => {
@@ -2176,7 +2411,7 @@ export default function App() {
                     placeholder="Note title"
                     className="w-[min(44rem,calc(100vw-10rem))] min-w-0 rounded-2xl border border-transparent bg-transparent px-3 py-2 text-center text-base font-medium focus:border-cream focus:outline-none dark:focus:border-cream sm:px-4 sm:text-lg"
                   />
-                ) : route === 'write' ? (
+                ) : route === 'write' || route === 'publish' ? (
                   <div
                     className="mx-auto max-w-[min(44rem,calc(100vw-10rem))] truncate text-center font-serif text-sm font-semibold text-ink/80 dark:text-ink-dark/80 sm:text-base"
                     title={project.book.title.trim() || 'Untitled book'}
@@ -2220,15 +2455,25 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => {
-                    if (route === 'review_ebook') setEbookEditOpen((v) => !v)
+                    if (route === 'format_ebook') setEbookEditOpen((v) => !v)
                   }}
                   className={`items-center gap-2 rounded-3xl border border-dust bg-white/70 px-3 py-2 text-sm font-medium text-ink transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90 ${
-                    route === 'review_ebook' ? 'hidden sm:flex' : 'hidden'
+                    route === 'format_ebook' ? 'hidden sm:flex' : 'hidden'
                   }`}
                   title="Toggle editor for ebook review"
                 >
                   <BookOpen className="h-4 w-4 shrink-0" />
                   <span>{ebookEditOpen ? 'Hide editor' : 'Edit'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFindReplaceOpen(true)}
+                  disabled={route !== 'write'}
+                  className="flex items-center gap-2 rounded-3xl border border-dust bg-white/80 px-3 py-2 text-sm font-medium text-ink transition-colors hover:bg-white disabled:opacity-40 dark:border-border-dark dark:bg-panel-dark/80 dark:text-ink-dark dark:hover:bg-panel-dark sm:px-4 sm:py-2.5"
+                  title="Find and replace across all sections"
+                >
+                  <Search className="h-4 w-4 shrink-0" />
+                  <span className="hidden sm:inline">Find</span>
                 </button>
                 <button
                   type="button"
@@ -2244,55 +2489,103 @@ export default function App() {
           </header>
 
           <div className="mx-auto flex min-h-0 w-full max-w-screen-2xl flex-1">
-            {!isNote ? (
-              <aside className="flex w-56 shrink-0 flex-col border-r border-dust bg-white/70 p-3 dark:border-border-dark dark:bg-panel-dark/70 sm:w-64 sm:p-5">
-                <div className="mb-3 flex items-center justify-between sm:mb-5">
-                  <h2 className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
-                    Chapters
-                  </h2>
+            {!isNote ?
+              chaptersAsideCollapsed ?
+                <aside className="flex w-11 shrink-0 flex-col items-center gap-2 border-r border-dust bg-white/70 py-3 dark:border-border-dark dark:bg-panel-dark/70 sm:w-12 sm:py-4">
+                  <button
+                    type="button"
+                    onClick={() => setChaptersAsideCollapsedPersisted(false)}
+                    className="flex h-9 w-9 items-center justify-center rounded-2xl text-ink transition-colors hover:bg-dust/40 dark:text-ink-dark dark:hover:bg-border-dark/50"
+                    aria-label="Expand chapters list"
+                    title="Show chapters"
+                  >
+                    <ChevronRight className="h-4 w-4" strokeWidth={2.25} />
+                  </button>
                   <button
                     type="button"
                     onClick={createManuscript}
-                    className="flex h-8 w-8 items-center justify-center rounded-2xl bg-ink text-parchment transition-transform hover:scale-105 dark:bg-cream dark:text-ink"
+                    className="flex h-9 w-9 items-center justify-center rounded-2xl bg-ink text-parchment transition-transform hover:scale-105 dark:bg-cream dark:text-ink"
                     aria-label="New chapter"
+                    title="New chapter"
                   >
                     <Plus className="h-4 w-4" strokeWidth={2.5} />
                   </button>
-                </div>
-                <div className="min-h-0 flex-1 space-y-1 overflow-auto">
-                  {chapters.map((ms) => (
-                    <ManuscriptRow
-                      key={ms.id}
-                      manuscript={ms}
-                      active={ms.id === currentId}
-                      onSelectChapter={selectChapter}
-                      onDeleteChapter={deleteChapter}
-                      onDropReorder={onReorder}
-                    />
-                  ))}
-                </div>
-                <p className="mt-auto border-t border-dust pt-3 text-[11px] leading-snug opacity-60 dark:border-border-dark">
-                  Drag chapters to reorder
-                </p>
-              </aside>
-            ) : null}
+                </aside>
+              : <aside className="flex w-[15.5rem] shrink-0 flex-col border-r border-dust bg-white/70 p-3 dark:border-border-dark dark:bg-panel-dark/70 sm:w-72 sm:p-5">
+                  <div className="mb-3 flex items-center gap-1.5 sm:mb-5 sm:gap-2">
+                    <div className="flex min-w-0 flex-1 items-center gap-1 sm:gap-1.5">
+                      <h2 className="min-w-0 truncate text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
+                        Chapters
+                      </h2>
+                      <button
+                        type="button"
+                        onClick={createManuscript}
+                        className="flex h-8 w-8 shrink-0 -translate-x-px items-center justify-center rounded-2xl bg-ink text-parchment transition-transform hover:scale-105 dark:bg-cream dark:text-ink sm:translate-x-0"
+                        aria-label="New chapter"
+                        title="New chapter"
+                      >
+                        <Plus className="h-4 w-4" strokeWidth={2.5} />
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setChaptersAsideCollapsedPersisted(true)}
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl text-ink transition-colors hover:bg-dust/40 dark:text-ink-dark dark:hover:bg-border-dark/50"
+                      aria-label="Collapse chapters list"
+                      title="Collapse chapters"
+                    >
+                      <ChevronLeft className="h-4 w-4" strokeWidth={2.25} />
+                    </button>
+                  </div>
+                  <div className="min-h-0 flex-1 space-y-1 overflow-auto">
+                    {chapters.map((ms, i) => (
+                      <ManuscriptRow
+                        key={ms.id}
+                        manuscript={ms}
+                        active={ms.id === currentId}
+                        onSelectChapter={selectChapter}
+                        onDeleteChapter={deleteChapter}
+                        onDropReorder={onReorder}
+                        wordCount={countWordsInDoc(ms.content)}
+                        onSplitChapter={splitChapterAtCursor}
+                        onMergeWithNext={mergeChapterWithNext}
+                        canMergeWithNext={i < chapters.length - 1}
+                      />
+                    ))}
+                  </div>
+                  <p className="mt-auto border-t border-dust pt-3 text-[11px] leading-snug opacity-60 dark:border-border-dark">
+                    Drag a section by its book icon. Split uses the cursor position in the open section.
+                  </p>
+                </aside>
+            : null}
 
             <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-parchment/40 dark:bg-panel-dark/40">
-              {route === 'review_print' ? (
+              {route === 'format_print' ? (
                 <PrintReview
                   chapters={chapters}
                   theme={project.theme}
                   book={project.book}
                   scrollToChapterId={currentId}
                   onChapterSelect={setCurrentId}
-                  onPrevChapter={prevChapter}
-                  onNextChapter={nextChapter}
+                  formatModeBar={
+                    <FormatPreviewModeBar
+                      mode="print"
+                      onSelectEbook={() => {
+                        setEbookEditOpen(false)
+                        setRoute('format_ebook')
+                      }}
+                      onSelectPrint={() => {
+                        setEbookEditOpen(false)
+                        setRoute('format_print')
+                      }}
+                    />
+                  }
                   onJumpToChapter={(id) => {
                     setCurrentId(id)
                     setRoute('write')
                   }}
                 />
-              ) : route === 'review_ebook' ? (
+              ) : route === 'format_ebook' ? (
                 <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
                   {ebookEditOpen && (
                     <div className="min-h-0 flex-1">
@@ -2303,6 +2596,7 @@ export default function App() {
                           content={current.content}
                           onDocumentChange={updateCurrentContent}
                           editorRef={editorRef}
+                          toolbarVariant="full"
                           compactFooterStats
                           chapterTitle={current.title}
                           onChapterTitleChange={updateCurrentTitle}
@@ -2327,11 +2621,41 @@ export default function App() {
                       chapters={chapters}
                       theme={project.theme}
                       activeChapterId={currentId}
+                      formatModeBar={
+                        <FormatPreviewModeBar
+                          mode="ebook"
+                          onSelectEbook={() => {
+                            setEbookEditOpen(false)
+                            setRoute('format_ebook')
+                          }}
+                          onSelectPrint={() => {
+                            setEbookEditOpen(false)
+                            setRoute('format_print')
+                          }}
+                        />
+                      }
                       onPrevChapter={prevChapter}
                       onNextChapter={nextChapter}
                     />
                   </div>
                 </div>
+              ) : route === 'publish' && !isNote ? (
+                <PublishHub
+                  book={project.book}
+                  onOpenBookTools={() => setBookToolsOpen(true)}
+                  onExportPdfKdp={() => void exportPdfKdp()}
+                  onExportEpub={() => void exportEpub()}
+                  onImportDocx={(file) => void importDocx(file)}
+                  onExportTxt={exportTxt}
+                  onExportProjectArchive={() => void exportBookArchive()}
+                  onExportLibraryArchive={() => void exportFullLibrary()}
+                  onImportProjectArchive={(file) => void importArchiveFile(file)}
+                  onOpenFormatPrint={() => setRoute('format_print')}
+                  onOpenFormatEbook={() => {
+                    setEbookEditOpen(false)
+                    setRoute('format_ebook')
+                  }}
+                />
               ) : current ? (
                 <ManuscriptEditor
                   key={`${current.id}-${editorEpoch}`}
@@ -2339,6 +2663,7 @@ export default function App() {
                   content={current.content}
                   onDocumentChange={updateCurrentContent}
                   editorRef={editorRef}
+                  toolbarVariant={route === 'write' ? 'writeMinimal' : 'full'}
                   compactFooterStats
                   chapterTitle={current.title}
                   onChapterTitleChange={updateCurrentTitle}
@@ -2355,6 +2680,15 @@ export default function App() {
                 </div>
               )}
             </main>
+            {!isNote && (route === 'format_print' || route === 'format_ebook') ? (
+              <FormatThemeSidebar
+                theme={project.theme}
+                onThemeChange={patchTheme}
+                onApplyThemePreset={applyInteriorPreset}
+                collapsed={formatThemeAsideCollapsed}
+                onSetCollapsed={setFormatThemeAsideCollapsedPersisted}
+              />
+            ) : null}
           </div>
 
           <BookTools
@@ -2362,25 +2696,20 @@ export default function App() {
             onClose={() => setBookToolsOpen(false)}
             projectId={project.id}
             variant={isNote ? 'note' : 'book'}
-            mode={route === 'write' ? 'write' : route === 'review_print' ? 'review_print' : 'review_ebook'}
-            onSetMode={(next) => setRoute(next)}
+            workspaceRoute={
+              isNote ? 'write'
+              : route === 'format_print' ? 'format_print'
+              : route === 'format_ebook' ? 'format_ebook'
+              : route === 'publish' ? 'publish'
+              : 'write'
+            }
+            onSetWorkspaceRoute={(next) => setRoute(next)}
             book={project.book}
             onBookChange={patchBook}
             goals={project.goals}
             onGoalsChange={patchGoals}
-            theme={project.theme}
-            onThemeChange={patchTheme}
             totalBookWords={totalBookWords}
             wordsWrittenToday={wordsWrittenToday}
-            onOpenPrintReview={() => {
-              setRoute('review_print')
-              setBookToolsOpen(false)
-            }}
-            onOpenEbookReview={() => {
-              setRoute('review_ebook')
-              setEbookEditOpen(false)
-              setBookToolsOpen(false)
-            }}
             onExportPdfKdp={() => {
               void exportPdfKdp()
               setBookToolsOpen(false)
@@ -2420,6 +2749,33 @@ export default function App() {
               openProject(id)
               setBookToolsOpen(false)
             }}
+            assembly={project.assembly}
+            onAssemblyChange={patchAssembly}
+            seriesBible={project.seriesBible}
+            onSeriesBibleChange={patchSeriesBible}
+            onExportProjectArchive={() => {
+              void exportBookArchive()
+              setBookToolsOpen(false)
+            }}
+            onExportLibraryArchive={() => {
+              void exportFullLibrary()
+              setBookToolsOpen(false)
+            }}
+            onImportProjectArchive={(file) => {
+              void importArchiveFile(file)
+              setBookToolsOpen(false)
+            }}
+            onExportTxt={() => {
+              exportTxt()
+              setBookToolsOpen(false)
+            }}
+          />
+
+          <FindReplaceModal
+            open={findReplaceOpen}
+            onClose={() => setFindReplaceOpen(false)}
+            chapters={chapters}
+            onApply={applyGlobalReplace}
           />
 
           {stickyNotePopoutId && (project.kind === 'book' || project.kind === 'note') ? (

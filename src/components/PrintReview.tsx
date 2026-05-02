@@ -5,10 +5,12 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
 } from 'react'
 import type { BookMeta, Manuscript, Theme } from '../types'
 import { TRIM_PRESETS } from '../types'
-import type { PrintPage } from '../lib/print/paginate'
+import { layoutProfileForManuscript } from '../lib/bookAssembly'
+import type { PrintLayoutKind, PrintPage } from '../lib/print/paginate'
 import { hashStringDjb2 } from '../lib/hash'
 import {
   nextWorkerRev,
@@ -31,18 +33,30 @@ type Props = {
   onJumpToChapter?: (chapterId: number) => void
   /** Stay in print review and switch chapter (e.g. header dropdown) */
   onChapterSelect?: (chapterId: number) => void
-  onPrevChapter?: () => void
-  onNextChapter?: () => void
+  /** Ebook / Print toggle, centered between preview chrome and page controls. */
+  formatModeBar?: ReactNode
+}
+
+function openerOrdinalForIndex(chapters: Manuscript[], index: number): { layout: PrintLayoutKind; ordinal: number } {
+  let bodyBefore = 0
+  for (let j = 0; j < index; j++) {
+    if (layoutProfileForManuscript(chapters[j]!) === 'chapter') bodyBefore++
+  }
+  const layout = layoutProfileForManuscript(chapters[index]!)
+  const ordinal = layout === 'chapter' ? bodyBefore + 1 : Math.max(1, bodyBefore)
+  return { layout, ordinal }
 }
 
 function printChapterPromise(
   pending: Map<number, (msg: PrintChapterResultMsg | WorkerErrorMsg) => void>,
   chapterIndex: number,
   chapter: Manuscript,
+  chapters: Manuscript[],
   theme: Theme,
   meta: { bookTitle: string; authorName: string },
   startPageNumber: number,
 ): Promise<PrintChapterResultMsg> {
+  const { layout, ordinal } = openerOrdinalForIndex(chapters, chapterIndex)
   const rev = nextWorkerRev()
   return new Promise((resolve, reject) => {
     pending.set(rev, (msg) => {
@@ -60,6 +74,8 @@ function printChapterPromise(
       theme,
       meta,
       startPageNumber,
+      layoutKind: layout,
+      chapterOrdinalForOpener: ordinal,
     })
   })
 }
@@ -71,8 +87,7 @@ export function PrintReview({
   scrollToChapterId,
   onJumpToChapter,
   onChapterSelect,
-  onPrevChapter,
-  onNextChapter,
+  formatModeBar,
 }: Props) {
   const [err, setErr] = useState<string | null>(null)
   const [chapterPages, setChapterPages] = useState<Map<number, PrintPage[]>>(() => new Map())
@@ -96,10 +111,6 @@ export function PrintReview({
   }, [scrollToChapterId])
 
   const activeChapterId = localChapterId ?? scrollToChapterId ?? chapters[0]?.id ?? null
-  const activeChapterIndex = useMemo(() => {
-    if (activeChapterId == null) return -1
-    return chapters.findIndex((c) => c.id === activeChapterId)
-  }, [chapters, activeChapterId])
 
   const meta = useMemo(
     () => ({ bookTitle: book.title, authorName: book.authorName }),
@@ -183,6 +194,7 @@ export function PrintReview({
               pendingHandlers.current,
               pidx,
               pch,
+              chapters,
               theme,
               meta,
               1,
@@ -204,7 +216,7 @@ export function PrintReview({
           pushInflight()
           let msg: PrintChapterResultMsg
           try {
-            msg = await printChapterPromise(pendingHandlers.current, i, ch, theme, meta, start)
+            msg = await printChapterPromise(pendingHandlers.current, i, ch, chapters, theme, meta, start)
           } finally {
             inflightLocal.delete(ch.id)
             pushInflight()
@@ -303,23 +315,6 @@ export function PrintReview({
     })
   }, [activePages?.length])
 
-  const goPrevChapter = useCallback(() => {
-    if (activeChapterIndex <= 0) return
-    const prev = chapters[activeChapterIndex - 1]!
-    const prevLen = chapterPages.get(prev.id)?.length ?? 0
-    pendingPageIndexRef.current = Math.max(0, prevLen - 1)
-    if (onPrevChapter) onPrevChapter()
-    else setLocalChapterId(prev.id)
-  }, [activeChapterIndex, chapters, chapterPages, onPrevChapter])
-
-  const goNextChapter = useCallback(() => {
-    if (activeChapterIndex < 0 || activeChapterIndex >= chapters.length - 1) return
-    const next = chapters[activeChapterIndex + 1]!
-    pendingPageIndexRef.current = 0
-    if (onNextChapter) onNextChapter()
-    else setLocalChapterId(next.id)
-  }, [activeChapterIndex, chapters, onNextChapter])
-
   const applyJump = useCallback(() => {
     const raw = jumpDraft.trim()
     if (!raw) return
@@ -383,56 +378,12 @@ export function PrintReview({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col outline-none" tabIndex={0}>
-      <div className="shrink-0 border-b border-dust px-4 py-3 dark:border-border-dark">
-        <div className="mx-auto flex max-w-[min(64rem,100%)] flex-wrap items-center gap-3">
-          <div className="font-serif text-lg font-semibold tracking-tight sm:text-xl">Review: Print</div>
+      <div className="shrink-0 border-b border-dust bg-white/90 px-4 py-3 backdrop-blur-sm dark:border-border-dark dark:bg-panel-dark/90">
+        <div className="mx-auto flex w-full max-w-[min(64rem,100%)] items-center gap-3">
+          <div className="min-w-0 flex-1" aria-hidden />
+          <div className="flex shrink-0 justify-center">{formatModeBar}</div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="sr-only" htmlFor="print-review-chapter">
-              Chapter
-            </label>
-            <select
-              id="print-review-chapter"
-              className="max-w-[12rem] rounded-lg border border-dust bg-white px-2 py-1.5 text-xs font-medium text-ink shadow-sm dark:border-border-dark dark:bg-panel-dark dark:text-ink-dark sm:max-w-xs sm:text-sm"
-              value={activeChapterId ?? ''}
-              onChange={(e) => {
-                const id = Number(e.target.value)
-                if (!Number.isFinite(id)) return
-                if (onChapterSelect) onChapterSelect(id)
-                else {
-                  setLocalChapterId(id)
-                  setPageIndexInChapter(0)
-                }
-              }}
-            >
-              {chapters.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.title?.trim() || `Chapter ${c.id}`}
-                </option>
-              ))}
-            </select>
-
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                className="rounded-lg border border-dust px-2 py-1 text-xs font-medium text-ink hover:bg-dust/30 disabled:opacity-40 dark:border-border-dark dark:text-ink-dark dark:hover:bg-border-dark/40"
-                disabled={activeChapterIndex <= 0}
-                onClick={goPrevChapter}
-              >
-                Chapter ‹
-              </button>
-              <button
-                type="button"
-                className="rounded-lg border border-dust px-2 py-1 text-xs font-medium text-ink hover:bg-dust/30 disabled:opacity-40 dark:border-border-dark dark:text-ink-dark dark:hover:bg-border-dark/40"
-                disabled={activeChapterIndex < 0 || activeChapterIndex >= chapters.length - 1}
-                onClick={goNextChapter}
-              >
-                Chapter ›
-              </button>
-            </div>
-          </div>
-
-          <div className="ml-auto flex flex-wrap items-center gap-2">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
             <span className="text-xs text-ink/65 dark:text-ink-dark/65 sm:text-sm">
               Page {bookPageLabel}
               {!sequentialPrefixComplete

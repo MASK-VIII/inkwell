@@ -1,5 +1,10 @@
 import JSZip from 'jszip'
 import type { InkwellProject } from '../../types'
+import {
+  displayChapterLabel,
+  effectiveSectionRole,
+  manuscriptsForEpub,
+} from '../bookAssembly'
 import { ebookCss } from '../ebook/ebookCss'
 import { tiptapDocToXhtmlBody } from '../ebook/tiptapRender'
 
@@ -43,7 +48,8 @@ export async function buildEpub(project: InkwellProject): Promise<Uint8Array> {
 
   const title = project.book.title?.trim() || project.chapters[0]?.title || 'Untitled'
   const author = project.book.authorName?.trim() || 'Unknown'
-  const bookId = `urn:uuid:${project.id}`
+  const lang = project.book.language?.trim() || 'en'
+  const bookId = project.book.isbn?.trim() || `urn:uuid:${project.id}`
 
   const manifestItems: string[] = [
     `<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>`,
@@ -52,16 +58,23 @@ export async function buildEpub(project: InkwellProject): Promise<Uint8Array> {
   const spineItems: string[] = []
   const navLi: string[] = []
 
-  project.chapters.forEach((ch, i) => {
+  const epubChapters = manuscriptsForEpub(project)
+  let bodyChapterCount = 0
+  epubChapters.forEach((ch, i) => {
     const n = i + 1
     const id = `c${n}`
     const href = `chapters/${id}.xhtml`
-    const chapterTitle = ch.title?.trim() || `Chapter ${n}`
+    const role = effectiveSectionRole(ch)
+    if (role === 'chapter') bodyChapterCount += 1
+    const chapterTitle =
+      role === 'chapter'
+        ? displayChapterLabel(project, ch, bodyChapterCount)
+        : ch.title?.trim() || `Section ${n}`
 
     const body = tiptapDocToXhtmlBody(ch.content)
     const xhtml = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="${escXml(lang)}" lang="${escXml(lang)}">
   <head>
     <meta charset="utf-8" />
     <title>${escXml(chapterTitle)}</title>
@@ -83,7 +96,7 @@ export async function buildEpub(project: InkwellProject): Promise<Uint8Array> {
 
   const nav = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="${escXml(lang)}" lang="${escXml(lang)}">
   <head>
     <meta charset="utf-8" />
     <title>Table of Contents</title>
@@ -100,13 +113,31 @@ export async function buildEpub(project: InkwellProject): Promise<Uint8Array> {
 </html>`
   oebps.file('nav.xhtml', nav)
 
+  const seriesBlock = (() => {
+    if (!project.book.series?.trim()) return ''
+    const s = escXml(project.book.series.trim())
+    let b = `\n    <meta property="belongs-to-collection" id="cid">${s}</meta>`
+    if (project.book.seriesIndex != null && Number.isFinite(project.book.seriesIndex)) {
+      b += `\n    <meta refines="#cid" property="collection-type">series</meta>\n    <meta refines="#cid" property="group-position">${escXml(String(project.book.seriesIndex))}</meta>`
+    }
+    return b
+  })()
+  const desc =
+    project.book.description?.trim() ?
+      `\n    <dc:description>${escXml(project.book.description.trim())}</dc:description>`
+    : ''
+  const pub =
+    project.book.publisher?.trim() ?
+      `\n    <dc:publisher>${escXml(project.book.publisher.trim())}</dc:publisher>`
+    : ''
+
   const contentOpf = `<?xml version="1.0" encoding="UTF-8"?>
-<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid" xml:lang="en">
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid" xml:lang="${escXml(lang)}">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
     <dc:identifier id="bookid">${escXml(bookId)}</dc:identifier>
     <dc:title>${escXml(title)}</dc:title>
-    <dc:language>en</dc:language>
-    <dc:creator>${escXml(author)}</dc:creator>
+    <dc:language>${escXml(lang)}</dc:language>
+    <dc:creator>${escXml(author)}</dc:creator>${desc}${pub}${seriesBlock}
     <meta property="dcterms:modified">2000-01-01T00:00:00Z</meta>
   </metadata>
   <manifest>

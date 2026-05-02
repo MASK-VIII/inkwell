@@ -1,4 +1,4 @@
-import type { PrintChapterOpener, PrintTheme, Theme, TrimPresetId } from '../../types'
+import type { PrintBinding, PrintChapterOpener, PrintTheme, Theme, TrimPresetId } from '../../types'
 import { TRIM_PRESETS } from '../../types'
 import { clampNumber } from './clamp'
 import { CollapsibleSection } from './CollapsibleSection'
@@ -21,7 +21,7 @@ export function PrintThemeForm({ theme, onThemeChange }: Props) {
       <CollapsibleSection
         title="Layout & body text"
         description={`Trim ${printPreset.widthIn}" × ${printPreset.heightIn}" · margins & typography`}
-        defaultOpen
+        defaultOpen={false}
       >
         <label className="mb-4 block space-y-1">
           <span className="text-[11px] font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
@@ -285,6 +285,56 @@ export function PrintThemeForm({ theme, onThemeChange }: Props) {
           value={theme.print.footer.even}
           onChange={(next) => onThemeChange({ print: { footer: { ...theme.print.footer, even: next } } })}
         />
+      </CollapsibleSection>
+
+      <CollapsibleSection title="KDP PDF export" description="Bleed, binding, font embedding notes." defaultOpen={false}>
+        <label className="block space-y-1">
+          <span className="text-xs font-medium text-ink/70 dark:text-ink-dark/70">Bleed (inches)</span>
+          <input
+            type="number"
+            step={0.005}
+            min={0}
+            max={0.25}
+            value={theme.print.bleedIn ?? 0}
+            onChange={(e) =>
+              onThemeChange({
+                print: { bleedIn: clampNumber(e.target.value, theme.print.bleedIn ?? 0, 0, 0.25) },
+              })
+            }
+            className="w-full rounded-2xl border border-dust bg-parchment px-4 py-2.5 text-sm dark:border-border-dark dark:bg-panel-dark"
+          />
+          <span className="block text-[11px] text-ink/55 dark:text-ink-dark/55">
+            Expands the PDF page; keep 0 for no-bleed interiors.
+          </span>
+        </label>
+        <label className="mt-3 block space-y-1">
+          <span className="text-xs font-medium text-ink/70 dark:text-ink-dark/70">Binding (metadata)</span>
+          <select
+            value={theme.print.binding ?? 'paperback'}
+            onChange={(e) => onThemeChange({ print: { binding: e.target.value as PrintBinding } })}
+            className="w-full rounded-2xl border border-dust bg-parchment px-3 py-2 text-sm dark:border-border-dark dark:bg-panel-dark"
+          >
+            <option value="paperback">Paperback</option>
+            <option value="hardcover">Hardcover</option>
+          </select>
+        </label>
+        <label className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-dust bg-parchment px-4 py-3 text-sm dark:border-border-dark dark:bg-panel-dark">
+          <span className="text-sm font-medium text-ink/80 dark:text-ink-dark/80">
+            Remind about font embedding (KDP)
+          </span>
+          <input
+            type="checkbox"
+            checked={theme.print.showEmbedFontNote !== false}
+            onChange={(e) => onThemeChange({ print: { showEmbedFontNote: e.target.checked } })}
+            className="h-4 w-4 accent-ink dark:accent-cream"
+          />
+        </label>
+        {theme.print.showEmbedFontNote !== false ? (
+          <p className="mt-2 text-[11px] text-ink/60 dark:text-ink-dark/60">
+            Inkwell embeds DejaVu for PDF. If you switch to a system font KDP cannot access, embed fonts in KDP or
+            flatten to outlines per their checklist.
+          </p>
+        ) : null}
       </CollapsibleSection>
     </div>
   )

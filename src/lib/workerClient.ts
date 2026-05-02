@@ -1,6 +1,6 @@
 import type { JSONContent } from '@tiptap/core'
 import type { EbookTheme, InkwellProject, Manuscript, Theme } from '../types'
-import type { PrintPage } from './print/paginate'
+import type { PrintLayoutKind, PrintPage } from './print/paginate'
 
 let workerRevSeq = 0
 
@@ -24,6 +24,8 @@ type PaginatePrintChapterReq = {
   theme: Theme
   meta: { bookTitle: string; authorName: string }
   startPageNumber: number
+  layoutKind?: PrintLayoutKind
+  chapterOrdinalForOpener?: number
 }
 
 type BuildPdfReq = {

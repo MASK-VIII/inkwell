@@ -1,9 +1,52 @@
 import type { JSONContent } from '@tiptap/core'
 
+export type ManuscriptSectionRole =
+  | 'chapter'
+  | 'part'
+  | 'title_page'
+  | 'copyright'
+  | 'dedication'
+  | 'epigraph'
+  | 'foreword'
+  | 'preface'
+  | 'introduction'
+  | 'toc'
+  | 'acknowledgments'
+  | 'about_author'
+  | 'also_by'
+  | 'appendix'
+  | 'other_front'
+  | 'other_back'
+
+export type ChapterNumberMode = 'title_only' | 'chapter_n'
+
 export type Manuscript = {
   id: number
   title: string
   content: JSONContent
+  /** Spine / export role; default chapter */
+  sectionRole?: ManuscriptSectionRole
+  includeInPrintToc?: boolean
+  includeInEpub?: boolean
+  includeInPrint?: boolean
+}
+
+export type SeriesBibleEntry = {
+  id: string
+  kind: 'character' | 'place' | 'thread' | 'other'
+  name: string
+  notes: string
+}
+
+export type BookAssembly = {
+  includePrintToc: boolean
+  printTocTitle: string
+  chapterNumberMode: ChapterNumberMode
+}
+
+export type ExportExtras = {
+  /** Plain text fallback bundled in export zip if enabled */
+  includeTxtExport?: boolean
 }
 
 export type BookMeta = {
@@ -11,6 +54,13 @@ export type BookMeta = {
   subtitle: string
   authorName: string
   series: string
+  /** BCP-47 language tag for EPUB/metadata */
+  language?: string
+  isbn?: string
+  /** Series installment number for EPUB calibre-style meta */
+  seriesIndex?: number | null
+  description?: string
+  publisher?: string
 }
 
 export type WritingGoals = {
@@ -46,6 +96,8 @@ export function trimLabel(id: TrimPresetId): string {
 /** Synthetic chapter opening lines in print layout (see paginate). */
 export type PrintChapterOpener = 'off' | 'titleOnly' | 'numberRuleTitle'
 
+export type PrintBinding = 'paperback' | 'hardcover'
+
 export type PrintTheme = {
   trimPreset: TrimPresetId
   /** Inches */
@@ -55,6 +107,11 @@ export type PrintTheme = {
   marginOuterIn: number
   /** Additional inside margin for binding */
   gutterIn: number
+  /** Extra trim for print bleed (KDP); added to width/height in PDF export when > 0 */
+  bleedIn: number
+  binding: PrintBinding
+  /** Shown after export: DejaVu is embedded; KDP may require embedding for custom fonts */
+  showEmbedFontNote: boolean
   fontFamily: 'serif'
   fontSizePt: number
   lineHeight: number
@@ -128,6 +185,9 @@ export type InkwellProject = {
   goals: WritingGoals
   chapters: Manuscript[]
   theme: Theme
+  assembly: BookAssembly
+  seriesBible: SeriesBibleEntry[]
+  exportExtras?: ExportExtras
 }
 
 export function defaultBookMeta(): BookMeta {
@@ -136,6 +196,15 @@ export function defaultBookMeta(): BookMeta {
     subtitle: '',
     authorName: '',
     series: '',
+    language: 'en',
+  }
+}
+
+export function defaultBookAssembly(): BookAssembly {
+  return {
+    includePrintToc: true,
+    printTocTitle: 'Contents',
+    chapterNumberMode: 'title_only',
   }
 }
 
@@ -157,6 +226,9 @@ export function defaultTheme(): Theme {
       marginInnerIn: 0.875,
       marginOuterIn: 0.625,
       gutterIn: 0.125,
+      bleedIn: 0,
+      binding: 'paperback',
+      showEmbedFontNote: true,
       fontFamily: 'serif',
       fontSizePt: 11,
       lineHeight: 1.5,

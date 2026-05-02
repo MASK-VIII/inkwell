@@ -5,6 +5,7 @@ import TextAlign from '@tiptap/extension-text-align'
 import Underline from '@tiptap/extension-underline'
 import type { MentionItem } from './mentionUi'
 import { PageBreak } from './extensions/PageBreak'
+import { InkwellSceneBreak } from './extensions/InkwellSceneBreak'
 import { WriterComment } from './extensions/WriterComment'
 import { WriterFootnote } from './extensions/WriterFootnote'
 import { inkwellMentionExtension } from './inkwellMention'
@@ -17,11 +18,13 @@ export function createManuscriptTipTapExtensions(opts: {
   return [
     StarterKit.configure({
       heading: { levels: [1, 2, 3] },
+      horizontalRule: false,
       link: {
         openOnClick: false,
         autolink: false,
       },
     }),
+    InkwellSceneBreak,
     Underline,
     TextAlign.configure({
       types: ['heading', 'paragraph', 'blockquote'],
