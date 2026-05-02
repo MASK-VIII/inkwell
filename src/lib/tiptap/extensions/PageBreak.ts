@@ -33,12 +33,6 @@ export const PageBreak = Node.create({
     ]
   },
 
-  addKeyboardShortcuts() {
-    return {
-      'Mod-Enter': () => this.editor.commands.insertPageBreak(),
-    }
-  },
-
   addCommands() {
     return {
       insertPageBreak:

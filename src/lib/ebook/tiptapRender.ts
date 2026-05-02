@@ -62,14 +62,25 @@ function renderInlineChildren(nodes: JSONContent[] | undefined): string {
   return nodes.map((n) => renderInline(n)).join('')
 }
 
+function blockTextAlignAttr(attrs: Record<string, unknown> | undefined | null): string {
+  const ta = attrs?.textAlign
+  if (ta === 'left' || ta === 'center' || ta === 'right' || ta === 'justify') {
+    return ` style="text-align: ${ta}"`
+  }
+  return ''
+}
+
 function renderNode(node: JSONContent): string {
   switch (node.type) {
-    case 'paragraph':
-      return `<p>${renderInlineChildren(node.content)}</p>`
+    case 'paragraph': {
+      const st = blockTextAlignAttr(node.attrs as Record<string, unknown> | undefined)
+      return `<p${st}>${renderInlineChildren(node.content)}</p>`
+    }
     case 'heading': {
       const level = (node.attrs as { level?: number } | undefined)?.level ?? 2
       const l = level >= 1 && level <= 3 ? level : 2
-      return `<h${l}>${renderInlineChildren(node.content)}</h${l}>`
+      const st = blockTextAlignAttr(node.attrs as Record<string, unknown> | undefined)
+      return `<h${l}${st}>${renderInlineChildren(node.content)}</h${l}>`
     }
     case 'bulletList':
       return `<ul>${renderChildren(node.content)}</ul>`
@@ -77,8 +88,10 @@ function renderNode(node: JSONContent): string {
       return `<ol>${renderChildren(node.content)}</ol>`
     case 'listItem':
       return `<li>${renderChildren(node.content)}</li>`
-    case 'blockquote':
-      return `<blockquote>${renderChildren(node.content)}</blockquote>`
+    case 'blockquote': {
+      const st = blockTextAlignAttr(node.attrs as Record<string, unknown> | undefined)
+      return `<blockquote${st}>${renderChildren(node.content)}</blockquote>`
+    }
     case 'horizontalRule':
       return `<hr />`
     case 'pageBreak':

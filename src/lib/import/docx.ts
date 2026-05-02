@@ -268,6 +268,9 @@ export async function importDocxToChapters(arrayBuffer: ArrayBuffer): Promise<Do
       styleMap: [
         "p[style-name='Page Break'] => div:data-inkwell=page-break",
         "p[style-name='page break'] => div:data-inkwell=page-break",
+        // Atticus / Word templates sometimes use named paragraph styles for chapter titles.
+        "p[style-name='Chapter Title'] => h1:fresh",
+        "p[style-name='chapter title'] => h1:fresh",
       ],
       includeDefaultStyleMap: true,
     },
@@ -287,11 +290,21 @@ export async function importDocxToChapters(arrayBuffer: ArrayBuffer): Promise<Do
     }
   }
 
-  // Split into chapters on Heading 1 (H1).
+  function headingLevel(block: JSONContent): number | null {
+    if (block.type !== 'heading') return null
+    const raw = (block.attrs as { level?: number } | undefined)?.level ?? 1
+    return typeof raw === 'number' && Number.isFinite(raw) ? Math.floor(raw) : 1
+  }
+
+  const hasH1 = allBlocks.some((b) => headingLevel(b) === 1)
+  /** Prefer H1 boundaries; if the document has no H1 (e.g. some Atticus exports), split on H2. */
+  const chapterHeadingLevel = hasH1 ? 1 : 2
+
+  // Split into chapters on H1, or on H2 when there is no H1.
   const chapters: ImportedChapter[] = []
   let currentTitle = 'Chapter 1'
   let currentBlocks: JSONContent[] = []
-  let sawH1 = false
+  let sawChapterHeading = false
 
   const flush = () => {
     const blocks = currentBlocks.slice()
@@ -302,7 +315,7 @@ export async function importDocxToChapters(arrayBuffer: ArrayBuffer): Promise<Do
   }
 
   for (const b of allBlocks) {
-    if (b.type === 'heading' && (b.attrs as { level?: number } | undefined)?.level === 1) {
+    if (headingLevel(b) === chapterHeadingLevel) {
       const title =
         b.content
           ?.map((n) => (n.type === 'text' ? (n.text ?? '') : ''))
@@ -310,14 +323,14 @@ export async function importDocxToChapters(arrayBuffer: ArrayBuffer): Promise<Do
           .trim() || 'Untitled chapter'
       if (currentBlocks.length) flush()
       currentTitle = title
-      sawH1 = true
+      sawChapterHeading = true
+      currentBlocks.push(b)
       continue
     }
     currentBlocks.push(b)
   }
 
-  if (sawH1) {
-    // If we saw at least one H1, we always flush the last chapter (even if empty).
+  if (sawChapterHeading) {
     flush()
   } else {
     // No chapter headings: return a single chapter containing everything.

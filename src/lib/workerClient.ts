@@ -16,12 +16,14 @@ type RenderEbookReq = {
   ebookTheme: EbookTheme
 }
 
-type PaginatePrintReq = {
-  kind: 'paginatePrint'
+type PaginatePrintChapterReq = {
+  kind: 'paginatePrintChapter'
   rev: number
-  chapters: Manuscript[]
+  chapterIndex: number
+  chapter: Manuscript
   theme: Theme
   meta: { bookTitle: string; authorName: string }
+  startPageNumber: number
 }
 
 type BuildPdfReq = {
@@ -30,7 +32,7 @@ type BuildPdfReq = {
   project: InkwellProject
 }
 
-type WorkerRequest = RenderEbookReq | PaginatePrintReq | BuildPdfReq
+type WorkerRequest = RenderEbookReq | PaginatePrintChapterReq | BuildPdfReq
 
 export type EbookResultMsg = {
   kind: 'ebookResult'
@@ -40,12 +42,14 @@ export type EbookResultMsg = {
   html: string
 }
 
-export type PrintChunkMsg = {
-  kind: 'printChunk'
+export type PrintChapterResultMsg = {
+  kind: 'printChapterResult'
   rev: number
+  chapterId: number
+  chapterIndex: number
   pages: PrintPage[]
-  done: boolean
-  pageCountSoFar: number
+  nextPageNumber: number
+  startPageNumber: number
 }
 
 export type PdfResultMsg = {
@@ -61,7 +65,7 @@ export type WorkerErrorMsg = {
   message: string
 }
 
-export type WorkerResponse = EbookResultMsg | PrintChunkMsg | PdfResultMsg | WorkerErrorMsg
+export type WorkerResponse = EbookResultMsg | PrintChapterResultMsg | PdfResultMsg | WorkerErrorMsg
 
 let singleton: Worker | null = null
 
@@ -81,4 +85,3 @@ export function onWorkerMessage(cb: (msg: WorkerResponse) => void): () => void {
   w.addEventListener('message', handler)
   return () => w.removeEventListener('message', handler)
 }
-

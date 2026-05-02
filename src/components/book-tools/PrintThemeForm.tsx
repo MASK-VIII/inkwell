@@ -1,4 +1,4 @@
-import type { PrintTheme, Theme, TrimPresetId } from '../../types'
+import type { PrintChapterOpener, PrintTheme, Theme, TrimPresetId } from '../../types'
 import { TRIM_PRESETS } from '../../types'
 import { clampNumber } from './clamp'
 import { CollapsibleSection } from './CollapsibleSection'
@@ -171,6 +171,24 @@ export function PrintThemeForm({ theme, onThemeChange }: Props) {
           />
         </label>
       </div>
+
+        <label className="mt-3 block space-y-1">
+          <span className="text-xs font-medium text-ink/70 dark:text-ink-dark/70">Chapter opener (print)</span>
+          <select
+            value={theme.print.chapterOpener}
+            onChange={(e) =>
+              onThemeChange({ print: { chapterOpener: e.target.value as PrintChapterOpener } })
+            }
+            className="w-full rounded-2xl border border-dust bg-parchment px-3 py-2 text-sm focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:focus:border-cream"
+          >
+            <option value="off">Off (body only)</option>
+            <option value="titleOnly">Centered title</option>
+            <option value="numberRuleTitle">Chapter number, rule, title</option>
+          </select>
+          <span className="block text-[11px] text-ink/55 dark:text-ink-dark/55">
+            Skipped when the chapter already opens with an H1 matching the chapter title.
+          </span>
+        </label>
       </CollapsibleSection>
 
       <CollapsibleSection

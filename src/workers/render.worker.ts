@@ -5,7 +5,7 @@ import { tiptapDocToXhtmlBody } from '../lib/ebook/tiptapRender'
 import { escapeHtml } from '../lib/escapeHtml'
 import { hashStringDjb2 } from '../lib/hash'
 import { getPrintFontForMeasurement } from '../lib/print/fonts'
-import { paginateWithFont, type PrintPage } from '../lib/print/paginate'
+import { paginateChapterWithFont, type PrintPage } from '../lib/print/paginate'
 
 type RenderEbookJob = {
   kind: 'renderEbook'
@@ -14,12 +14,14 @@ type RenderEbookJob = {
   ebookTheme: EbookTheme
 }
 
-type PaginatePrintJob = {
-  kind: 'paginatePrint'
+type PaginatePrintChapterJob = {
+  kind: 'paginatePrintChapter'
   rev: number
-  chapters: Manuscript[]
+  chapterIndex: number
+  chapter: Manuscript
   theme: Theme
   meta: { bookTitle: string; authorName: string }
+  startPageNumber: number
 }
 
 type BuildPdfJob = {
@@ -28,7 +30,7 @@ type BuildPdfJob = {
   project: InkwellProject
 }
 
-type WorkerRequest = RenderEbookJob | PaginatePrintJob | BuildPdfJob
+type WorkerRequest = RenderEbookJob | PaginatePrintChapterJob | BuildPdfJob
 
 type EbookResult = {
   kind: 'ebookResult'
@@ -38,12 +40,14 @@ type EbookResult = {
   html: string
 }
 
-type PrintChunk = {
-  kind: 'printChunk'
+type PrintChapterResult = {
+  kind: 'printChapterResult'
   rev: number
+  chapterId: number
+  chapterIndex: number
   pages: PrintPage[]
-  done: boolean
-  pageCountSoFar: number
+  nextPageNumber: number
+  startPageNumber: number
 }
 
 type PdfResult = {
@@ -59,32 +63,11 @@ type WorkerError = {
   message: string
 }
 
-type WorkerResponse = EbookResult | PrintChunk | PdfResult | WorkerError
+type WorkerResponse = EbookResult | PrintChapterResult | PdfResult | WorkerError
 
 const ebookHtmlCache = new Map<string, string>()
 const ebookCssCache = new Map<string, string>()
-const printPagesCache = new Map<string, PrintPage[]>()
-
-const PRINT_CHUNK_SIZE = 12
-
-async function streamPrintPages(rev: number, pages: PrintPage[]) {
-  if (pages.length === 0) {
-    post({ kind: 'printChunk', rev, pages: [], done: true, pageCountSoFar: 0 })
-    return
-  }
-  for (let i = 0; i < pages.length; i += PRINT_CHUNK_SIZE) {
-    const slice = pages.slice(i, i + PRINT_CHUNK_SIZE)
-    const end = i + slice.length
-    post({
-      kind: 'printChunk',
-      rev,
-      pages: slice,
-      done: end >= pages.length,
-      pageCountSoFar: end,
-    })
-    await new Promise<void>((r) => setTimeout(r, 0))
-  }
-}
+const printChapterCache = new Map<string, { pages: PrintPage[]; nextPageNumber: number }>()
 
 function safeStringify(x: unknown): string {
   try {
@@ -131,20 +114,44 @@ self.onmessage = async (ev: MessageEvent<WorkerRequest>) => {
       return
     }
 
-    if (req.kind === 'paginatePrint') {
+    if (req.kind === 'paginatePrintChapter') {
       const cacheKey = hashStringDjb2(
-        safeStringify({ chapters: req.chapters, theme: req.theme, meta: req.meta }),
+        safeStringify({
+          chapterContent: req.chapter.content,
+          chapterTitle: req.chapter.title,
+          chapterIndex: req.chapterIndex,
+          chapterId: req.chapter.id,
+          theme: req.theme,
+          startPageNumber: req.startPageNumber,
+          meta: req.meta,
+        }),
       )
-      let pages = printPagesCache.get(cacheKey)
-      if (!pages) {
+      let cached = printChapterCache.get(cacheKey)
+      if (!cached) {
         const { font } = await getPrintFontForMeasurement()
-        pages = await paginateWithFont(req.chapters, req.theme, font, {
-          bookTitle: req.meta.bookTitle,
-          authorName: req.meta.authorName,
-        })
-        printPagesCache.set(cacheKey, pages)
+        const res = await paginateChapterWithFont(
+          req.chapter,
+          req.chapterIndex,
+          req.theme,
+          font,
+          req.startPageNumber,
+          {
+            bookTitle: req.meta.bookTitle,
+            authorName: req.meta.authorName,
+          },
+        )
+        cached = { pages: res.pages, nextPageNumber: res.nextPageNumber }
+        printChapterCache.set(cacheKey, cached)
       }
-      await streamPrintPages(req.rev, pages)
+      post({
+        kind: 'printChapterResult',
+        rev: req.rev,
+        chapterId: req.chapter.id,
+        chapterIndex: req.chapterIndex,
+        pages: cached.pages,
+        nextPageNumber: cached.nextPageNumber,
+        startPageNumber: req.startPageNumber,
+      })
       return
     }
 
@@ -161,4 +168,3 @@ self.onmessage = async (ev: MessageEvent<WorkerRequest>) => {
     })
   }
 }
-

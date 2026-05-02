@@ -2,19 +2,26 @@ import { EditorContent, useEditor } from '@tiptap/react'
 import type { Editor, JSONContent } from '@tiptap/core'
 import CharacterCount from '@tiptap/extension-character-count'
 import StarterKit from '@tiptap/starter-kit'
-import Underline from '@tiptap/extension-underline'
+import TextAlign from '@tiptap/extension-text-align'
 import {
+  AlignCenter,
+  AlignJustify,
+  AlignLeft,
+  AlignRight,
   Bold,
   Feather,
   Italic,
+  Link2,
   List,
   ListOrdered,
+  Minus,
   Quote,
-  Scissors,
+  Redo2,
   Strikethrough,
   Underline as UnderlineIcon,
+  Undo2,
 } from 'lucide-react'
-import { memo, useEffect, useState, type MutableRefObject } from 'react'
+import { memo, useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react'
 import { PageBreak } from '../lib/tiptap/extensions/PageBreak'
 
 const HEADINGS = [
@@ -31,6 +38,13 @@ function headingSelectValue(editor: Editor): string {
   return ''
 }
 
+function isTextAlignActive(editor: Editor, alignment: 'left' | 'center' | 'right' | 'justify'): boolean {
+  if (alignment === 'left') {
+    return !(['center', 'right', 'justify'] as const).some((a) => editor.isActive({ textAlign: a }))
+  }
+  return editor.isActive({ textAlign: alignment })
+}
+
 type Props = {
   manuscriptId: number
   content: JSONContent
@@ -40,6 +54,10 @@ type Props = {
   compactFooterStats?: boolean
   /** Compact padding and editor min-height for floating popout */
   embedded?: boolean
+  /** Book chapters: large centered title at top of scroll area (not sticky). */
+  chapterTitle?: string
+  onChapterTitleChange?: (title: string) => void
+  showChapterTitleOnPage?: boolean
 }
 
 function ManuscriptEditorInner({
@@ -49,16 +67,30 @@ function ManuscriptEditorInner({
   editorRef,
   compactFooterStats,
   embedded,
+  chapterTitle,
+  onChapterTitleChange,
+  showChapterTitleOnPage,
 }: Props) {
   const [, setToolbarVersion] = useState(0)
+  const bumpToolbar = useCallback(() => setToolbarVersion((v) => v + 1), [])
+
+  const [linkOpen, setLinkOpen] = useState(false)
+  const [linkUrlDraft, setLinkUrlDraft] = useState('')
+  const linkPanelRef = useRef<HTMLDivElement | null>(null)
 
   const editor = useEditor(
     {
       extensions: [
         StarterKit.configure({
           heading: { levels: [1, 2, 3] },
+          link: {
+            openOnClick: false,
+            autolink: false,
+          },
         }),
-        Underline,
+        TextAlign.configure({
+          types: ['heading', 'paragraph', 'blockquote'],
+        }),
         PageBreak,
         CharacterCount.configure({
           limit: null,
@@ -73,7 +105,8 @@ function ManuscriptEditorInner({
       },
       onUpdate: ({ editor }) => {
         onDocumentChange(editor.getJSON())
-        setToolbarVersion((v) => v + 1)
+        // Intentionally no toolbar bump here: normal typing moves the selection,
+        // so `selectionUpdate` keeps the bar in sync without double React work per key.
       },
     },
     [manuscriptId],
@@ -88,12 +121,50 @@ function ManuscriptEditorInner({
 
   useEffect(() => {
     if (!editor) return
-    const bump = () => setToolbarVersion((v) => v + 1)
+    const bump = () => bumpToolbar()
     editor.on('selectionUpdate', bump)
     return () => {
       editor.off('selectionUpdate', bump)
     }
+  }, [editor, bumpToolbar])
+
+  useEffect(() => {
+    if (!linkOpen) return
+    const close = (e: MouseEvent) => {
+      const el = linkPanelRef.current
+      if (el && !el.contains(e.target as Node)) setLinkOpen(false)
+    }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [linkOpen])
+
+  const openLinkPanel = useCallback(() => {
+    if (!editor) return
+    const href = (editor.getAttributes('link') as { href?: string }).href ?? ''
+    setLinkUrlDraft(typeof href === 'string' ? href : '')
+    setLinkOpen(true)
   }, [editor])
+
+  const applyLink = useCallback(() => {
+    if (!editor) return
+    const raw = linkUrlDraft.trim()
+    if (!raw) {
+      editor.chain().focus().extendMarkRange('link').unsetLink().run()
+      setLinkOpen(false)
+      bumpToolbar()
+      return
+    }
+    editor.chain().focus().extendMarkRange('link').setLink({ href: raw }).run()
+    setLinkOpen(false)
+    bumpToolbar()
+  }, [editor, linkUrlDraft, bumpToolbar])
+
+  const removeLink = useCallback(() => {
+    if (!editor) return
+    editor.chain().focus().extendMarkRange('link').unsetLink().run()
+    setLinkOpen(false)
+    bumpToolbar()
+  }, [editor, bumpToolbar])
 
   const words = editor ? editor.storage.characterCount.words() : 0
   const characters = editor ? editor.storage.characterCount.characters() : 0
@@ -127,7 +198,7 @@ function ManuscriptEditorInner({
               const level = Number(v) as 1 | 2 | 3
               chain.toggleHeading({ level }).run()
             }
-            setToolbarVersion((x) => x + 1)
+            bumpToolbar()
           }}
           className="rounded-full border-2 border-dust bg-parchment px-3 py-2 text-sm font-medium text-ink focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:text-ink-dark dark:focus:border-cream sm:px-4 sm:py-2.5"
         >
@@ -208,16 +279,136 @@ function ManuscriptEditorInner({
           <span className="hidden sm:inline">Quote</span>
         </button>
 
+        <div className="hidden h-6 w-px bg-dust sm:block dark:bg-border-dark" />
+
+        {editor ? (
+          <>
+            <button
+              type="button"
+              className={toolBtn(isTextAlignActive(editor, 'left'))}
+              title="Align left (Ctrl/Cmd+Shift+L)"
+              onClick={() => editor.chain().focus().setTextAlign('left').run()}
+            >
+              <AlignLeft className="h-4 w-4" strokeWidth={2.25} />
+            </button>
+            <button
+              type="button"
+              className={toolBtn(isTextAlignActive(editor, 'center'))}
+              title="Align center (Ctrl/Cmd+Shift+E)"
+              onClick={() => editor.chain().focus().setTextAlign('center').run()}
+            >
+              <AlignCenter className="h-4 w-4" strokeWidth={2.25} />
+            </button>
+            <button
+              type="button"
+              className={toolBtn(isTextAlignActive(editor, 'right'))}
+              title="Align right (Ctrl/Cmd+Shift+R)"
+              onClick={() => editor.chain().focus().setTextAlign('right').run()}
+            >
+              <AlignRight className="h-4 w-4" strokeWidth={2.25} />
+            </button>
+            <button
+              type="button"
+              className={toolBtn(isTextAlignActive(editor, 'justify'))}
+              title="Justify (Ctrl/Cmd+Shift+J)"
+              onClick={() => editor.chain().focus().setTextAlign('justify').run()}
+            >
+              <AlignJustify className="h-4 w-4" strokeWidth={2.25} />
+            </button>
+          </>
+        ) : null}
+
+        <div className="hidden h-6 w-px bg-dust sm:block dark:bg-border-dark" />
+
+        <div className="relative">
+          <button
+            type="button"
+            className={toolBtn(editor?.isActive('link') ?? false)}
+            title="Link"
+            onClick={openLinkPanel}
+          >
+            <Link2 className="h-4 w-4" strokeWidth={2.25} />
+          </button>
+          {linkOpen && editor ? (
+            <div
+              ref={linkPanelRef}
+              className="absolute left-0 top-full z-50 mt-2 flex min-w-[min(18rem,calc(100vw-2rem))] flex-col gap-2 rounded-2xl border border-dust bg-parchment p-3 shadow-lg dark:border-border-dark dark:bg-panel-dark sm:left-auto sm:right-0"
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              <label className="text-xs font-semibold text-ink/80 dark:text-ink-dark/80" htmlFor={`inkwell-link-url-${manuscriptId}`}>
+                URL
+              </label>
+              <input
+                id={`inkwell-link-url-${manuscriptId}`}
+                type="url"
+                value={linkUrlDraft}
+                onChange={(e) => setLinkUrlDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    applyLink()
+                  }
+                }}
+                placeholder="https://…"
+                className="rounded-xl border border-dust bg-white px-3 py-2 text-sm text-ink focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:text-ink-dark dark:focus:border-cream"
+                autoFocus
+              />
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="rounded-full bg-ink px-4 py-2 text-xs font-semibold text-parchment hover:bg-walnut dark:bg-cream dark:text-ink dark:hover:bg-accent-warm"
+                  onClick={applyLink}
+                >
+                  Apply
+                </button>
+                <button
+                  type="button"
+                  className="rounded-full border border-dust px-4 py-2 text-xs font-semibold text-ink hover:bg-dust/30 dark:border-border-dark dark:text-ink-dark dark:hover:bg-border-dark/50"
+                  onClick={removeLink}
+                >
+                  Remove link
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        <button
+          type="button"
+          className={toolBtn(false)}
+          title="Scene break (horizontal rule)"
+          onClick={() => editor?.chain().focus().setHorizontalRule().run()}
+        >
+          <Minus className="h-4 w-4" strokeWidth={2.25} />
+        </button>
+
         <div className="min-w-[1rem] flex-1" />
 
         <button
           type="button"
-          className="flex items-center gap-2 rounded-2xl px-3 py-2 text-sm font-medium text-ink transition-colors hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50 sm:px-4"
-          title="Insert page break (Ctrl/Cmd+Enter)"
-          onClick={() => editor?.chain().focus().insertPageBreak().run()}
+          disabled={!editor?.can().undo()}
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl transition-colors disabled:cursor-default sm:h-10 sm:w-10 ${
+            editor?.can().undo()
+              ? 'text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50'
+              : 'cursor-default text-ink/35 dark:text-ink-dark/35'
+          }`}
+          title="Undo (Ctrl/Cmd+Z)"
+          onClick={() => editor?.chain().focus().undo().run()}
         >
-          <Scissors className="h-4 w-4" strokeWidth={2.25} />
-          <span className="hidden sm:inline">Page break</span>
+          <Undo2 className="h-4 w-4" strokeWidth={2.25} />
+        </button>
+        <button
+          type="button"
+          disabled={!editor?.can().redo()}
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl transition-colors disabled:cursor-default sm:h-10 sm:w-10 ${
+            editor?.can().redo()
+              ? 'text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50'
+              : 'cursor-default text-ink/35 dark:text-ink-dark/35'
+          }`}
+          title="Redo (Ctrl/Cmd+Shift+Z)"
+          onClick={() => editor?.chain().focus().redo().run()}
+        >
+          <Redo2 className="h-4 w-4" strokeWidth={2.25} />
         </button>
 
         <div
@@ -240,6 +431,23 @@ function ManuscriptEditorInner({
       </div>
 
       <div className={`inkwell-editor-shell flex-1 overflow-auto ${shellPad}`}>
+        {showChapterTitleOnPage && onChapterTitleChange ? (
+          <div
+            className={`mx-auto max-w-[720px] ${embedded ? 'mb-5 px-1' : 'mb-8 px-2 sm:px-4'}`}
+          >
+            <label className="sr-only" htmlFor={`inkwell-chapter-title-${manuscriptId}`}>
+              Chapter title
+            </label>
+            <input
+              id={`inkwell-chapter-title-${manuscriptId}`}
+              type="text"
+              value={chapterTitle ?? ''}
+              onChange={(e) => onChapterTitleChange(e.target.value)}
+              placeholder="Chapter title"
+              className="w-full bg-transparent text-center font-serif text-2xl font-semibold tracking-tight text-ink placeholder:text-ink/35 focus:outline-none focus-visible:ring-2 focus-visible:ring-walnut/40 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment dark:text-ink-dark dark:placeholder:text-ink-dark/35 dark:focus-visible:ring-cream/50 dark:focus-visible:ring-offset-panel-dark sm:text-4xl sm:leading-tight"
+            />
+          </div>
+        ) : null}
         {editor ? (
           <EditorContent editor={editor} className={`h-full ${editorMinH}`} />
         ) : (
@@ -261,6 +469,9 @@ export const ManuscriptEditor = memo(ManuscriptEditorInner, (prev, next) => {
     prev.onDocumentChange === next.onDocumentChange &&
     prev.editorRef === next.editorRef &&
     prev.compactFooterStats === next.compactFooterStats &&
-    prev.embedded === next.embedded
+    prev.embedded === next.embedded &&
+    prev.chapterTitle === next.chapterTitle &&
+    prev.onChapterTitleChange === next.onChapterTitleChange &&
+    prev.showChapterTitleOnPage === next.showChapterTitleOnPage
   )
 })

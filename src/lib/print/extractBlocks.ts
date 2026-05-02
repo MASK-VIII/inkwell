@@ -2,12 +2,15 @@ import type { JSONContent } from '@tiptap/core'
 
 export type PrintBlock =
   | { type: 'paragraph'; text: string }
-  | { type: 'heading'; level: 1 | 2 | 3; text: string }
+  /** printRole: synthetic chapter opener title — larger centered type in paginate */
+  | { type: 'heading'; level: 1 | 2 | 3; text: string; printRole?: 'chapterBanner' }
   | { type: 'pageBreak' }
 
 function textFromNode(node: JSONContent | null | undefined): string {
   if (!node) return ''
   if (node.type === 'text') return node.text ?? ''
+  // TipTap hard breaks; ebook HTML preserves <br/> — approximate for print measurement.
+  if (node.type === 'hardBreak') return ' '
   const parts = (node.content ?? []).map(textFromNode)
   return parts.join('')
 }
@@ -35,11 +38,31 @@ function visit(node: JSONContent, out: PrintBlock[]) {
   ;(node.content ?? []).forEach((child) => visit(child, out))
 }
 
+/** Collapse consecutive page breaks; strip leading/trailing breaks per chapter doc. */
+export function normalizePrintPageBreaks(blocks: PrintBlock[]): PrintBlock[] {
+  const collapsed: PrintBlock[] = []
+  for (const b of blocks) {
+    if (b.type === 'pageBreak') {
+      if (collapsed.length === 0) continue
+      const prev = collapsed[collapsed.length - 1]
+      if (prev?.type === 'pageBreak') continue
+      collapsed.push(b)
+    } else {
+      collapsed.push(b)
+    }
+  }
+  while (collapsed.length > 0 && collapsed[collapsed.length - 1]!.type === 'pageBreak') {
+    collapsed.pop()
+  }
+  return collapsed
+}
+
 export function extractPrintBlocks(doc: JSONContent): PrintBlock[] {
   const out: PrintBlock[] = []
   visit(doc, out)
   // Keep layout stable: normalize empty paragraphs away unless they are the only content.
   const filtered = out.filter((b) => (b.type === 'paragraph' ? b.text.trim().length > 0 : true))
-  return filtered.length > 0 ? filtered : [{ type: 'paragraph', text: '' }]
+  const blocks: PrintBlock[] = filtered.length > 0 ? filtered : [{ type: 'paragraph', text: '' }]
+  return normalizePrintPageBreaks(blocks)
 }
 

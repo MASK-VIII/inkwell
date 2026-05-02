@@ -16,6 +16,7 @@ const STORAGE_KEY_V1 = 'inkwell-manuscripts-v1'
 const STORAGE_KEY_V2 = 'inkwell-project-v2'
 const STORAGE_INDEX = 'inkwell-project-index-v1'
 const STORAGE_ACTIVE_ID = 'inkwell-active-project-id'
+const STORAGE_LAST_CHAPTER_BY_PROJECT = 'inkwell-last-chapter-by-project-v1'
 const STORAGE_PROJECT_PREFIX = 'inkwell-project-v3:'
 const STORAGE_HISTORY_PREFIX = 'inkwell-history:'
 /** Full snapshots are large; keep the cap modest for typical ~5MB localStorage quotas. */
@@ -284,6 +285,58 @@ export function getActiveProjectId(): string | null {
   } catch {
     return null
   }
+}
+
+function loadLastChapterMap(): Record<string, number> {
+  try {
+    const raw = localStorage.getItem(STORAGE_LAST_CHAPTER_BY_PROJECT)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as unknown
+    if (!parsed || typeof parsed !== 'object') return {}
+    const out: Record<string, number> = {}
+    for (const [k, v] of Object.entries(parsed)) {
+      if (typeof v === 'number' && Number.isFinite(v)) out[k] = v
+    }
+    return out
+  } catch {
+    return {}
+  }
+}
+
+function saveLastChapterMap(map: Record<string, number>): void {
+  try {
+    localStorage.setItem(STORAGE_LAST_CHAPTER_BY_PROJECT, JSON.stringify(map))
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Last focused chapter id for a project, if any. */
+export function getLastOpenChapterId(projectId: string): number | null {
+  const n = loadLastChapterMap()[projectId]
+  return n !== undefined ? n : null
+}
+
+/** Persist which chapter was open for reload / resume. */
+export function rememberOpenChapter(projectId: string, chapterId: number | null): void {
+  const map = loadLastChapterMap()
+  if (chapterId == null) delete map[projectId]
+  else map[projectId] = chapterId
+  saveLastChapterMap(map)
+}
+
+export function forgetOpenChapter(projectId: string): void {
+  const map = loadLastChapterMap()
+  if (map[projectId] === undefined) return
+  delete map[projectId]
+  saveLastChapterMap(map)
+}
+
+/** Chapter to show when opening a project (remembered id if still valid, else first). */
+export function resolveResumeChapterId(project: InkwellProject): number | null {
+  const remembered = getLastOpenChapterId(project.id)
+  if (remembered != null && project.chapters.some((c) => c.id === remembered)) return remembered
+  return project.chapters[0]?.id ?? null
 }
 
 export function loadProject(id: string): InkwellProject | null {
@@ -571,6 +624,7 @@ export function deleteProject(id: string): void {
   if (active === id) {
     setActiveProjectId(null)
   }
+  forgetOpenChapter(id)
 }
 
 export function ensureAtLeastOneProject(): InkwellProject {

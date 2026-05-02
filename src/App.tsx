@@ -44,7 +44,10 @@ import {
   listProjectHistory,
   loadProjectSnapshot,
   clearProjectHistory,
+  rememberOpenChapter,
+  resolveResumeChapterId,
   saveProject,
+  setActiveProjectId,
   totalWordsInChapters,
 } from './lib/manuscripts'
 import { buildKdpPdf } from './lib/export/pdfKdp'
@@ -97,6 +100,14 @@ function slugDownload(name: string) {
 const NOTE_DRAG_MIME = 'application/x-inkwell-note-id'
 const NOTE_DRAG_TEXT_PREFIX = 'inkwell-note:'
 
+function readInitialEditorSession(): {
+  project: InkwellProject
+  currentId: number | null
+} {
+  const project = ensureAtLeastOneProject()
+  return { project, currentId: resolveResumeChapterId(project) }
+}
+
 function readShelfDragNoteId(dt: DataTransfer): string | null {
   try {
     const id = dt.getData(NOTE_DRAG_MIME).trim()
@@ -113,8 +124,9 @@ function readShelfDragNoteId(dt: DataTransfer): string | null {
 
 export default function App() {
   const [route, setRouteState] = useState<Route>(() => readRouteFromHash())
-  const [project, setProject] = useState<InkwellProject>(() => ensureAtLeastOneProject())
-  const [currentId, setCurrentId] = useState<number | null>(() => project.chapters[0]?.id ?? null)
+  const [boot] = useState(readInitialEditorSession)
+  const [project, setProject] = useState<InkwellProject>(() => boot.project)
+  const [currentId, setCurrentId] = useState<number | null>(() => boot.currentId)
   const [ebookEditOpen, setEbookEditOpen] = useState(false)
   const [bookToolsOpen, setBookToolsOpen] = useState(false)
   const [stickyNotePopoutId, setStickyNotePopoutId] = useState<string | null>(null)
@@ -186,6 +198,10 @@ export default function App() {
   useLayoutEffect(() => {
     projectRef.current = project
   }, [project])
+
+  useEffect(() => {
+    rememberOpenChapter(project.id, currentId)
+  }, [project.id, currentId])
 
   useEffect(() => {
     if (prevProjectIdForEditorRef.current !== project.id) {
@@ -316,8 +332,9 @@ export default function App() {
       syncPersistedState()
       const p = loadProject(id)
       if (!p) return
+      setActiveProjectId(id)
       setProject(p)
-      setCurrentId(p.chapters[0]?.id ?? null)
+      setCurrentId(resolveResumeChapterId(p))
       setEbookEditOpen(false)
       setRoute('write')
       const force = listProjectHistory(p.id).length === 0
@@ -669,7 +686,7 @@ export default function App() {
       if (project.id === id) {
         const next = ensureAtLeastOneProject()
         setProject(next)
-        setCurrentId(next.chapters[0]?.id ?? null)
+        setCurrentId(resolveResumeChapterId(next))
       }
       setOpenNoteMenuId(null)
       showToast(
@@ -839,7 +856,7 @@ export default function App() {
   return (
     <div className="flex h-full min-h-0 flex-col bg-parchment text-ink transition-colors dark:bg-panel-dark dark:text-ink-dark">
       {route === 'bookshelf' ? (
-        <div className="mx-auto flex w-full max-w-screen-2xl flex-1 flex-col px-4 py-6 sm:px-8 sm:py-10">
+        <div className="inkwell-bookshelf mx-auto flex w-full max-w-screen-2xl flex-1 flex-col px-4 py-6 sm:px-8 sm:py-10">
           <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
             <div className="flex min-w-0 items-center gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-ink text-parchment dark:bg-cream dark:text-ink">
@@ -971,7 +988,21 @@ export default function App() {
             <h2 className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
               Books
             </h2>
-            <div className="grid items-start gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div
+              className={`grid items-start gap-3 sm:grid-cols-2 lg:grid-cols-3 ${
+                shelfBooks.length === 0
+                  ? 'min-h-[14rem] rounded-3xl border-2 border-dashed border-dust/90 bg-white/60 px-5 py-6 dark:border-border-dark dark:bg-panel-dark/55'
+                  : ''
+              }`}
+            >
+              {shelfBooks.length === 0 ? (
+                <div className="col-span-full flex min-h-[11rem] flex-col items-center justify-center gap-3 px-4 text-center sm:min-h-[12rem]">
+                  <p className="max-w-lg text-sm leading-relaxed text-ink/65 dark:text-ink-dark/60">
+                    No books yet. Click <strong>New → Book</strong> to start your first one, or{' '}
+                    <strong>Import DOCX…</strong> to bring in a draft.
+                  </p>
+                </div>
+              ) : null}
               {shelfBooks.map((p) => {
                 const linked = listLinkedNotesForBook(p.id, shelfMetas)
                 return (
@@ -980,41 +1011,49 @@ export default function App() {
                     onDragOver={(e) => shelfBookDragOver(e, p.id)}
                     onDragLeave={(e) => shelfBookDragLeave(e, p.id)}
                     onDrop={(e) => shelfBookDrop(e, p.id)}
-                    className={`flex flex-col rounded-3xl border border-dust bg-white/70 text-left transition-[transform,box-shadow,background-color] duration-300 ease-out hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:hover:bg-panel-dark/90 ${
+                    className={`inkwell-shelf-card flex flex-col rounded-3xl border border-dust bg-white/70 text-left ease-out hover:-translate-y-px hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:hover:bg-panel-dark/90 ${
                       shelfDropHoverBookId === p.id
                         ? 'inkwell-shelf-drop-target z-10 scale-[1.02] shadow-xl ring-2 ring-walnut ring-offset-2 ring-offset-parchment dark:ring-accent-warm dark:ring-offset-panel-dark'
                         : ''
                     }`}
                   >
-                    <button
-                      type="button"
-                      onClick={() => openProject(p.id)}
-                      className="flex w-full flex-col p-5 text-left"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="truncate font-serif text-lg font-semibold">
-                            {p.title || 'Untitled book'}
-                          </div>
-                          <div className="mt-1 text-xs text-ink/55 dark:text-ink-dark/55">
-                            Updated {new Date(p.updatedAt).toLocaleString()}
-                          </div>
+                    <div className="flex w-full items-start justify-between gap-3 p-5">
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => openProject(p.id)}
+                        onKeyDown={(e) => {
+                          if (e.key !== 'Enter' && e.key !== ' ') return
+                          e.preventDefault()
+                          openProject(p.id)
+                        }}
+                        className="min-w-0 flex-1 cursor-pointer rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-walnut focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark"
+                      >
+                        <div className="truncate font-serif text-lg font-semibold">
+                          {p.title || 'Untitled book'}
                         </div>
-                        <div className="flex shrink-0 items-start gap-1">
-                          <button
-                            type="button"
-                            title="Delete book"
-                            className="rounded-xl p-2 text-ink/50 hover:bg-dust/50 hover:text-ink dark:text-ink-dark/50 dark:hover:bg-border-dark/50 dark:hover:text-ink-dark"
-                            onClick={(e) => deleteShelfProject(p.id, e)}
-                          >
-                            <Trash2 className="h-4 w-4" strokeWidth={2} />
-                          </button>
-                          <div className="rounded-2xl bg-dust/40 px-2 py-1 text-[11px] font-semibold text-walnut dark:bg-border-dark/60 dark:text-accent-warm">
-                            Local
-                          </div>
+                        <div className="mt-1 text-xs text-ink/55 dark:text-ink-dark/55">
+                          Updated {new Date(p.updatedAt).toLocaleString()}
                         </div>
                       </div>
-                    </button>
+                      <div
+                        className="flex shrink-0 items-start gap-1"
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          title="Delete book"
+                          className="rounded-xl p-2 text-ink/50 hover:bg-red-500/10 hover:text-red-600 dark:text-ink-dark/50 dark:hover:bg-red-400/10 dark:hover:text-red-400"
+                          onClick={(e) => deleteShelfProject(p.id, e)}
+                        >
+                          <Trash2 className="h-4 w-4" strokeWidth={2} />
+                        </button>
+                        <div className="rounded-2xl bg-dust/40 px-2 py-1 text-[11px] font-semibold text-walnut dark:bg-border-dark/60 dark:text-accent-warm">
+                          Local
+                        </div>
+                      </div>
+                    </div>
                     {linked.length > 0 ? (
                       <div className="border-t border-dust px-5 pb-4 pt-2 dark:border-border-dark">
                         <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-ink/45 dark:text-ink-dark/45">
@@ -1158,7 +1197,7 @@ export default function App() {
                   }}
                   tabIndex={0}
                   role="button"
-                  className="group flex cursor-grab rounded-3xl border border-dust bg-white/70 outline-none transition-[transform,box-shadow,background-color] duration-200 ease-out hover:bg-white hover:shadow-md active:cursor-grabbing dark:border-border-dark dark:bg-panel-dark/70 dark:hover:bg-panel-dark/90 dark:hover:shadow-lg focus-visible:ring-2 focus-visible:ring-walnut focus-visible:ring-offset-2 focus-visible:ring-offset-parchment dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark"
+                  className="inkwell-shelf-card group flex cursor-grab rounded-3xl border border-dust bg-white/70 outline-none ease-out hover:-translate-y-px hover:bg-white active:cursor-grabbing dark:border-border-dark dark:bg-panel-dark/70 dark:hover:bg-panel-dark/90 focus-visible:ring-2 focus-visible:ring-walnut focus-visible:ring-offset-2 focus-visible:ring-offset-parchment dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark"
                 >
                   <div className="min-w-0 flex-1 p-5 text-left">
                     <div className="truncate font-serif text-lg font-semibold">{p.title || 'Untitled note'}</div>
@@ -1174,7 +1213,7 @@ export default function App() {
                     <button
                       type="button"
                       title="Delete note"
-                      className="rounded-xl p-2 text-ink/50 hover:bg-dust/50 hover:text-ink dark:text-ink-dark/50 dark:hover:bg-border-dark/50 dark:hover:text-ink-dark"
+                      className="rounded-xl p-2 text-ink/50 hover:bg-red-500/10 hover:text-red-600 dark:text-ink-dark/50 dark:hover:bg-red-400/10 dark:hover:text-red-400"
                       onClick={(e) => deleteShelfProject(p.id, e)}
                     >
                       <Trash2 className="h-4 w-4" strokeWidth={2} />
@@ -1295,14 +1334,32 @@ export default function App() {
               </button>
 
               <div className="min-w-0 px-1 sm:px-4">
-                <input
-                  type="text"
-                  value={current?.title ?? ''}
-                  disabled={!current || route !== 'write'}
-                  onChange={(e) => updateCurrentTitle(e.target.value)}
-                  placeholder={isNote ? 'Note title' : 'Chapter title'}
-                  className="w-[min(44rem,calc(100vw-10rem))] min-w-0 rounded-2xl border border-transparent bg-transparent px-3 py-2 text-center text-base font-medium focus:border-walnut focus:outline-none dark:focus:border-cream sm:px-4 sm:text-lg"
-                />
+                {isNote ? (
+                  <input
+                    type="text"
+                    value={current?.title ?? ''}
+                    disabled={!current || route !== 'write'}
+                    onChange={(e) => updateCurrentTitle(e.target.value)}
+                    placeholder="Note title"
+                    className="w-[min(44rem,calc(100vw-10rem))] min-w-0 rounded-2xl border border-transparent bg-transparent px-3 py-2 text-center text-base font-medium focus:border-walnut focus:outline-none dark:focus:border-cream sm:px-4 sm:text-lg"
+                  />
+                ) : route === 'write' ? (
+                  <div
+                    className="mx-auto max-w-[min(44rem,calc(100vw-10rem))] truncate text-center font-serif text-sm font-semibold text-ink/80 dark:text-ink-dark/80 sm:text-base"
+                    title={project.book.title.trim() || 'Untitled book'}
+                  >
+                    {project.book.title.trim() || 'Untitled book'}
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    value={current?.title ?? ''}
+                    disabled={!current}
+                    onChange={(e) => updateCurrentTitle(e.target.value)}
+                    placeholder="Chapter title"
+                    className="w-[min(44rem,calc(100vw-10rem))] min-w-0 rounded-2xl border border-transparent bg-transparent px-3 py-2 text-center text-base font-medium focus:border-walnut focus:outline-none dark:focus:border-cream sm:px-4 sm:text-lg disabled:opacity-80"
+                  />
+                )}
               </div>
 
               <div className="flex items-center justify-end gap-1 sm:gap-2">
@@ -1394,6 +1451,9 @@ export default function App() {
                   theme={project.theme}
                   book={project.book}
                   scrollToChapterId={currentId}
+                  onChapterSelect={setCurrentId}
+                  onPrevChapter={prevChapter}
+                  onNextChapter={nextChapter}
                   onJumpToChapter={(id) => {
                     setCurrentId(id)
                     setRoute('write')
@@ -1411,6 +1471,9 @@ export default function App() {
                           onDocumentChange={updateCurrentContent}
                           editorRef={editorRef}
                           compactFooterStats
+                          chapterTitle={current.title}
+                          onChapterTitleChange={updateCurrentTitle}
+                          showChapterTitleOnPage
                         />
                       ) : (
                         <div className="flex flex-1 items-center justify-center p-8 font-serif text-lg text-walnut/80 dark:text-accent-warm/80">
@@ -1439,6 +1502,9 @@ export default function App() {
                   onDocumentChange={updateCurrentContent}
                   editorRef={editorRef}
                   compactFooterStats
+                  chapterTitle={current.title}
+                  onChapterTitleChange={updateCurrentTitle}
+                  showChapterTitleOnPage
                 />
               ) : (
                 <div className="flex flex-1 items-center justify-center p-8 font-serif text-lg text-walnut/80 dark:text-accent-warm/80">

@@ -329,6 +329,16 @@ body {
   opacity: 0.95;
 }
 
+.tiptap.ProseMirror hr {
+  border: none;
+  border-top: 1px solid color-mix(in srgb, var(--color-ink) 18%, transparent);
+  margin: 1.35em 0;
+}
+
+.dark .tiptap.ProseMirror hr {
+  border-top-color: color-mix(in srgb, var(--color-ink-dark) 28%, transparent);
+}
+
 .tiptap.ProseMirror a {
   color: var(--color-walnut);
   text-decoration: underline;
@@ -552,4 +562,63 @@ body {
 
 .dark .inkwell-shelf-drop-target {
   animation-name: inkwell-shelf-drop-glow-dark;
+}
+
+/* Bookshelf: snappy button hover glow + focus rings */
+.inkwell-bookshelf button {
+  transition:
+    background-color 200ms ease,
+    color 200ms ease,
+    border-color 200ms ease,
+    box-shadow 200ms ease,
+    transform 200ms ease;
+}
+
+.inkwell-bookshelf button:not(:disabled):hover {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-walnut) 34%, transparent),
+    0 8px 26px -6px color-mix(in srgb, var(--color-walnut) 52%, transparent),
+    0 0 36px -14px color-mix(in srgb, var(--color-walnut) 28%, transparent);
+}
+
+.dark .inkwell-bookshelf button:not(:disabled):hover {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-accent-warm) 38%, transparent),
+    0 9px 28px -6px color-mix(in srgb, var(--color-accent-warm) 56%, transparent),
+    0 0 40px -12px color-mix(in srgb, var(--color-accent-warm) 32%, transparent);
+}
+
+/* Book / note shelf cards (not <button>, so they need their own hover glow) */
+.inkwell-bookshelf .inkwell-shelf-card {
+  transition:
+    transform 200ms ease,
+    box-shadow 200ms ease,
+    background-color 200ms ease;
+}
+
+.inkwell-bookshelf .inkwell-shelf-card:not(.inkwell-shelf-drop-target):hover {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-walnut) 38%, transparent),
+    0 12px 34px -8px color-mix(in srgb, var(--color-walnut) 55%, transparent),
+    0 0 48px -12px color-mix(in srgb, var(--color-walnut) 34%, transparent);
+}
+
+.dark .inkwell-bookshelf .inkwell-shelf-card:not(.inkwell-shelf-drop-target):hover {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-accent-warm) 42%, transparent),
+    0 14px 38px -8px color-mix(in srgb, var(--color-accent-warm) 58%, transparent),
+    0 0 52px -10px color-mix(in srgb, var(--color-accent-warm) 36%, transparent);
+}
+
+.inkwell-bookshelf button:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--color-walnut),
+    0 0 0 4px color-mix(in srgb, var(--color-walnut) 25%, transparent);
+}
+
+.dark .inkwell-bookshelf button:focus-visible {
+  box-shadow:
+    0 0 0 2px var(--color-accent-warm),
+    0 0 0 4px color-mix(in srgb, var(--color-accent-warm) 28%, transparent);
 }

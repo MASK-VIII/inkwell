@@ -43,6 +43,9 @@ export function trimLabel(id: TrimPresetId): string {
   return TRIM_PRESETS[id]?.label ?? id
 }
 
+/** Synthetic chapter opening lines in print layout (see paginate). */
+export type PrintChapterOpener = 'off' | 'titleOnly' | 'numberRuleTitle'
+
 export type PrintTheme = {
   trimPreset: TrimPresetId
   /** Inches */
@@ -59,6 +62,8 @@ export type PrintTheme = {
   /** Legacy quick toggle; header/footer config is the preferred system. */
   pageNumbers: 'footerCenter' | 'none'
   chapterStartsOn: 'either' | 'right'
+  /** Centered opener before chapter body; skipped when body already starts with an H1 matching the chapter title. */
+  chapterOpener: PrintChapterOpener
   header: PrintHeaderFooterTheme
   footer: PrintHeaderFooterTheme
 }
@@ -157,6 +162,7 @@ export function defaultTheme(): Theme {
       hyphenation: true,
       pageNumbers: 'footerCenter',
       chapterStartsOn: 'right',
+      chapterOpener: 'titleOnly',
       header: {
         enabled: true,
         fontSizePt: 9,
