@@ -56,14 +56,39 @@ export type PrintTheme = {
   fontSizePt: number
   lineHeight: number
   hyphenation: boolean
+  /** Legacy quick toggle; header/footer config is the preferred system. */
   pageNumbers: 'footerCenter' | 'none'
   chapterStartsOn: 'either' | 'right'
+  header: PrintHeaderFooterTheme
+  footer: PrintHeaderFooterTheme
+}
+
+export type PrintHeaderFooterToken = 'none' | 'bookTitle' | 'author' | 'chapterTitle' | 'pageNumber'
+
+export type PrintHeaderFooterSlots = {
+  left: PrintHeaderFooterToken
+  center: PrintHeaderFooterToken
+  right: PrintHeaderFooterToken
+}
+
+export type PrintHeaderFooterTheme = {
+  enabled: boolean
+  fontSizePt: number
+  odd: PrintHeaderFooterSlots
+  even: PrintHeaderFooterSlots
 }
 
 export type EbookTheme = {
   fontFamily: 'serif'
   baseFontSizePx: number
   lineHeight: number
+  /** Reader column width within the preview/export */
+  maxWidthPx: number
+  /** Space between paragraphs */
+  paragraphSpacingEm: number
+  textAlign: 'left' | 'justify'
+  /** First-line indentation for paragraphs */
+  firstLineIndentEm: number
 }
 
 export type Theme = {
@@ -125,11 +150,27 @@ export function defaultTheme(): Theme {
       hyphenation: true,
       pageNumbers: 'footerCenter',
       chapterStartsOn: 'right',
+      header: {
+        enabled: true,
+        fontSizePt: 9,
+        odd: { left: 'bookTitle', center: 'none', right: 'chapterTitle' },
+        even: { left: 'chapterTitle', center: 'none', right: 'bookTitle' },
+      },
+      footer: {
+        enabled: true,
+        fontSizePt: 10,
+        odd: { left: 'none', center: 'pageNumber', right: 'none' },
+        even: { left: 'none', center: 'pageNumber', right: 'none' },
+      },
     },
     ebook: {
       fontFamily: 'serif',
       baseFontSizePx: 18,
       lineHeight: 1.7,
+      maxWidthPx: 520,
+      paragraphSpacingEm: 0.75,
+      textAlign: 'left',
+      firstLineIndentEm: 0,
     },
   }
 }

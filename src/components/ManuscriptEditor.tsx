@@ -14,7 +14,7 @@ import {
   Strikethrough,
   Underline as UnderlineIcon,
 } from 'lucide-react'
-import { useEffect, useState, type MutableRefObject } from 'react'
+import { memo, useEffect, useState, type MutableRefObject } from 'react'
 import { PageBreak } from '../lib/tiptap/extensions/PageBreak'
 
 const HEADINGS = [
@@ -40,7 +40,7 @@ type Props = {
   compactFooterStats?: boolean
 }
 
-export function ManuscriptEditor({
+function ManuscriptEditorInner({
   manuscriptId,
   content,
   onDocumentChange,
@@ -87,10 +87,8 @@ export function ManuscriptEditor({
     if (!editor) return
     const bump = () => setToolbarVersion((v) => v + 1)
     editor.on('selectionUpdate', bump)
-    editor.on('transaction', bump)
     return () => {
       editor.off('selectionUpdate', bump)
-      editor.off('transaction', bump)
     }
   }, [editor])
 
@@ -241,3 +239,13 @@ export function ManuscriptEditor({
     </div>
   )
 }
+
+/** Skips re-renders when parent refreshes `content` every keystroke; TipTap owns the live document. */
+export const ManuscriptEditor = memo(ManuscriptEditorInner, (prev, next) => {
+  return (
+    prev.manuscriptId === next.manuscriptId &&
+    prev.onDocumentChange === next.onDocumentChange &&
+    prev.editorRef === next.editorRef &&
+    prev.compactFooterStats === next.compactFooterStats
+  )
+})

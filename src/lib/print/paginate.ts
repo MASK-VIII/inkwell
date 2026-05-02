@@ -1,8 +1,8 @@
 import type { JSONContent } from '@tiptap/core'
-import type { Manuscript, PrintTheme, Theme } from '../../types'
+import type { Manuscript, PrintHeaderFooterSlots, PrintHeaderFooterToken, PrintTheme, Theme } from '../../types'
 import { TRIM_PRESETS } from '../../types'
 import { extractPrintBlocks, type PrintBlock } from './extractBlocks'
-import { PDFDocument, StandardFonts } from 'pdf-lib'
+import { getPrintFontForMeasurement } from './fonts'
 
 export type PrintLine = {
   text: string
@@ -10,6 +10,7 @@ export type PrintLine = {
   yPt: number
   fontSizePt: number
   chapterId: number
+  kind: 'body' | 'header' | 'footer'
 }
 
 export type PrintPage = {
@@ -97,7 +98,11 @@ function wrapText(text: string, maxWidthPt: number, fontSizePt: number, font: Fo
   return lines
 }
 
-function contentBoxForPage(theme: PrintTheme, pageNumber: number) {
+function contentBoxForPage(
+  theme: PrintTheme,
+  pageNumber: number,
+  opts?: { headerReservePt?: number; footerReservePt?: number },
+) {
   const trim = TRIM_PRESETS[theme.trimPreset]
   const widthPt = inToPt(trim.widthIn)
   const heightPt = inToPt(trim.heightIn)
@@ -105,8 +110,8 @@ function contentBoxForPage(theme: PrintTheme, pageNumber: number) {
   const isRight = pageNumber % 2 === 1
   const inner = inToPt(theme.marginInnerIn + theme.gutterIn)
   const outer = inToPt(theme.marginOuterIn)
-  const top = inToPt(theme.marginTopIn)
-  const bottom = inToPt(theme.marginBottomIn)
+  const top = inToPt(theme.marginTopIn) + (opts?.headerReservePt ?? 0)
+  const bottom = inToPt(theme.marginBottomIn) + (opts?.footerReservePt ?? 0)
 
   const leftPt = isRight ? inner : outer
   const rightPt = isRight ? outer : inner
@@ -122,25 +127,39 @@ function buildRuns(chapters: Manuscript[]): Run[] {
   return chapters.map((ch) => ({ chapterId: ch.id, blocks: extractPrintBlocks(ch.content as JSONContent) }))
 }
 
-export async function paginateForPrintReview(chapters: Manuscript[], theme: Theme): Promise<PrintPage[]> {
-  // pdf-lib gives us deterministic text measurement that we can reuse in PDF export.
-  const pdf = await PDFDocument.create()
-  const font = await pdf.embedFont(StandardFonts.TimesRoman)
-  return paginateWithFont(chapters, theme, font)
+export async function paginateForPrintReview(
+  chapters: Manuscript[],
+  theme: Theme,
+  ctx?: PrintLayoutContext,
+): Promise<PrintPage[]> {
+  // Use the same embedded Unicode font strategy as PDF export so Print Review
+  // is a true WYSIWYG preview (including diacritics/symbols where glyphs exist).
+  const { font } = await getPrintFontForMeasurement()
+  return paginateWithFont(chapters, theme, font, ctx)
+}
+
+export type PrintLayoutContext = {
+  bookTitle?: string
+  authorName?: string
 }
 
 export async function paginateWithFont(
   chapters: Manuscript[],
   theme: Theme,
   font: FontMeasurer,
+  ctx?: PrintLayoutContext,
 ): Promise<PrintPage[]> {
   const print = theme.print
+
+  const headerReservePt = print.header.enabled ? print.header.fontSizePt * 1.8 : 0
+  const footerReservePt = print.footer.enabled ? print.footer.fontSizePt * 1.8 : 0
+  const boxOpts = { headerReservePt, footerReservePt }
 
   const pages: PrintPage[] = []
   let pageNumber = 1
 
   const startNewPage = (blank = false) => {
-    const box = contentBoxForPage(print, pageNumber)
+    const box = contentBoxForPage(print, pageNumber, boxOpts)
     pages.push({
       pageNumber,
       widthPt: box.widthPt,
@@ -178,7 +197,7 @@ export async function paginateWithFont(
         continue
       }
 
-      const box = contentBoxForPage(print, pageNumber)
+      const box = contentBoxForPage(print, pageNumber, boxOpts)
       ensurePage()
       const page = pages[pages.length - 1]!
 
@@ -212,22 +231,27 @@ export async function paginateWithFont(
         const minYPt = box.bottomPt + blockLineHeightPt
         if (cursorYPt <= minYPt) {
           nextPage(false)
-          const nextBox = contentBoxForPage(print, pageNumber)
+          const nextBox = contentBoxForPage(print, pageNumber, boxOpts)
           const nextPageObj = pages[pages.length - 1]!
           cursorYPt = nextBox.heightPt - nextBox.topPt
           // Recompute box for new page.
           ;(void nextPageObj)
         }
 
-        const boxNow = contentBoxForPage(print, pageNumber)
-        const left = boxNow.leftPt
+        const boxNow = contentBoxForPage(print, pageNumber, boxOpts)
+        const lineWidth = safeWidthOfTextAtSize(line, fontSizePt, font)
+        const xPt =
+          block.type === 'heading'
+            ? boxNow.leftPt + Math.max(0, (boxNow.contentWidthPt - lineWidth) / 2)
+            : boxNow.leftPt
         const pageNow = pages[pages.length - 1]!
         pageNow.lines.push({
           text: line,
-          xPt: left,
+          xPt,
           yPt: cursorYPt,
           fontSizePt,
           chapterId: run.chapterId,
+          kind: 'body',
         })
         cursorYPt -= blockLineHeightPt
       }
@@ -239,7 +263,109 @@ export async function paginateWithFont(
     startNewPage(false)
   }
 
-  // If page numbers are disabled, keep them logically but caller can hide UI.
+  const chapterTitleById = new Map<number, string>(chapters.map((c) => [c.id, c.title]))
+
+  const resolveToken = (token: PrintHeaderFooterToken, page: PrintPage, chapterId: number | null): string => {
+    switch (token) {
+      case 'none':
+        return ''
+      case 'bookTitle':
+        return ctx?.bookTitle?.trim() ?? ''
+      case 'author':
+        return ctx?.authorName?.trim() ?? ''
+      case 'chapterTitle':
+        return chapterId == null ? '' : (chapterTitleById.get(chapterId) ?? '')
+      case 'pageNumber':
+        return String(page.pageNumber)
+    }
+  }
+
+  const placeSlot = (
+    slot: keyof PrintHeaderFooterSlots,
+    text: string,
+    fontSizePt: number,
+    page: PrintPage,
+    pageBox: ReturnType<typeof contentBoxForPage>,
+    yPt: number,
+    chapterId: number,
+    kind: 'header' | 'footer',
+  ) => {
+    if (!text) return
+    const w = safeWidthOfTextAtSize(text, fontSizePt, font)
+    const xPt =
+      slot === 'left'
+        ? pageBox.leftPt
+        : slot === 'center'
+          ? (page.widthPt - w) / 2
+          : page.widthPt - pageBox.rightPt - w
+    page.lines.push({ text, xPt, yPt, fontSizePt, chapterId, kind })
+  }
+
+  // Apply header/footer lines as part of the canonical layout output.
+  for (const p of pages) {
+    if (p.isBlank) continue
+    const pageBox = contentBoxForPage(print, p.pageNumber, boxOpts)
+    const bodyChapterId = p.lines.find((l) => l.kind === 'body')?.chapterId ?? null
+    const chapterIdForNav = bodyChapterId ?? chapters[0]?.id ?? 0
+
+    const isOdd = p.pageNumber % 2 === 1
+    const headerSlots = isOdd ? print.header.odd : print.header.even
+    const footerSlots = isOdd ? print.footer.odd : print.footer.even
+
+    if (print.header.enabled) {
+      const yHeader = p.heightPt - inToPt(print.marginTopIn) + print.header.fontSizePt * 0.2
+      placeSlot('left', resolveToken(headerSlots.left, p, bodyChapterId), print.header.fontSizePt, p, pageBox, yHeader, chapterIdForNav, 'header')
+      placeSlot('center', resolveToken(headerSlots.center, p, bodyChapterId), print.header.fontSizePt, p, pageBox, yHeader, chapterIdForNav, 'header')
+      placeSlot('right', resolveToken(headerSlots.right, p, bodyChapterId), print.header.fontSizePt, p, pageBox, yHeader, chapterIdForNav, 'header')
+    }
+
+    if (print.footer.enabled || print.pageNumbers === 'footerCenter') {
+      // Back-compat: if legacy pageNumbers is on, force footer center page number
+      // unless user has explicitly enabled footer tokens.
+      const effectiveFooterSlots =
+        print.footer.enabled
+          ? footerSlots
+          : print.pageNumbers === 'footerCenter'
+            ? ({ left: 'none', center: 'pageNumber', right: 'none' } as const)
+            : footerSlots
+      const effectiveFooterFontSizePt =
+        print.footer.enabled ? print.footer.fontSizePt : print.pageNumbers === 'footerCenter' ? 10 : print.footer.fontSizePt
+
+      const minBaseline = effectiveFooterFontSizePt * 1.2
+      const yFooter = Math.max(minBaseline, inToPt(print.marginBottomIn) - effectiveFooterFontSizePt * 0.2)
+      placeSlot(
+        'left',
+        resolveToken(effectiveFooterSlots.left, p, bodyChapterId),
+        effectiveFooterFontSizePt,
+        p,
+        pageBox,
+        yFooter,
+        chapterIdForNav,
+        'footer',
+      )
+      placeSlot(
+        'center',
+        resolveToken(effectiveFooterSlots.center, p, bodyChapterId),
+        effectiveFooterFontSizePt,
+        p,
+        pageBox,
+        yFooter,
+        chapterIdForNav,
+        'footer',
+      )
+      placeSlot(
+        'right',
+        resolveToken(effectiveFooterSlots.right, p, bodyChapterId),
+        effectiveFooterFontSizePt,
+        p,
+        pageBox,
+        yFooter,
+        chapterIdForNav,
+        'footer',
+      )
+    }
+  }
+
   return pages
 }
 

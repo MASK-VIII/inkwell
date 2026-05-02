@@ -1,6 +1,7 @@
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
+import { PDFDocument, rgb } from 'pdf-lib'
 import type { InkwellProject } from '../../types'
 import { paginateWithFont } from '../print/paginate'
+import { getPrintFontForPdf } from '../print/fonts'
 
 function toWinAnsiFallback(s: string): string {
   const normalized = s.normalize('NFKD').replace(/\p{M}+/gu, '')
@@ -17,9 +18,12 @@ function toWinAnsiFallback(s: string): string {
 
 export async function buildKdpPdf(project: InkwellProject): Promise<Uint8Array> {
   const pdf = await PDFDocument.create()
-  const font = await pdf.embedFont(StandardFonts.TimesRoman)
+  const font = await getPrintFontForPdf(pdf)
 
-  const pages = await paginateWithFont(project.chapters, project.theme, font)
+  const pages = await paginateWithFont(project.chapters, project.theme, font, {
+    bookTitle: project.book.title,
+    authorName: project.book.authorName,
+  })
 
   for (const p of pages) {
     const page = pdf.addPage([p.widthPt, p.heightPt])
@@ -27,7 +31,6 @@ export async function buildKdpPdf(project: InkwellProject): Promise<Uint8Array> 
       for (const l of p.lines) {
         const text = (() => {
           try {
-            // If it throws, the StandardFont can't encode a glyph.
             font.encodeText(l.text)
             return l.text
           } catch {
@@ -36,19 +39,6 @@ export async function buildKdpPdf(project: InkwellProject): Promise<Uint8Array> 
         })()
         page.drawText(text, { x: l.xPt, y: l.yPt, font, size: l.fontSizePt, color: rgb(0.12, 0.1, 0.09) })
       }
-    }
-
-    if (project.theme.print.pageNumbers === 'footerCenter') {
-      const size = 10
-      const text = String(p.pageNumber)
-      const w = font.widthOfTextAtSize(text, size)
-      page.drawText(text, {
-        x: (p.widthPt - w) / 2,
-        y: 18,
-        font,
-        size,
-        color: rgb(0.12, 0.1, 0.09),
-      })
     }
   }
 

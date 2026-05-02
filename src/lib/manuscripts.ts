@@ -1,6 +1,8 @@
 import type { JSONContent } from '@tiptap/core'
+import { compress, decompress } from 'lz-string'
 import type { InkwellProject, Manuscript, ProjectIndex, ProjectMeta, WritingGoals } from '../types'
 import { defaultBookMeta, defaultTheme, defaultWritingGoals } from '../types'
+import { hashStringDjb2 } from './hash'
 import { countWordsInDoc, todayLocalISODate } from './wordCount'
 
 const STORAGE_KEY_V1 = 'inkwell-manuscripts-v1'
@@ -9,8 +11,34 @@ const STORAGE_INDEX = 'inkwell-project-index-v1'
 const STORAGE_ACTIVE_ID = 'inkwell-active-project-id'
 const STORAGE_PROJECT_PREFIX = 'inkwell-project-v3:'
 const STORAGE_HISTORY_PREFIX = 'inkwell-history:'
-const HISTORY_MAX_ENTRIES = 150
+/** Full snapshots are large; keep the cap modest for typical ~5MB localStorage quotas. */
+const HISTORY_MAX_ENTRIES = 35
 const HISTORY_REPLACE_WITHIN_MS = 12_000
+/** Compressed payloads; plain JSON (legacy) has no prefix. */
+const LZ_PREFIX = 'iwz1:'
+
+function isQuotaExceeded(e: unknown): boolean {
+  return (
+    e instanceof DOMException &&
+    (e.name === 'QuotaExceededError' || e.code === 22 || (e as DOMException & { code?: number }).code === 1014)
+  )
+}
+
+function encodeForStorage(value: unknown): string {
+  const json = JSON.stringify(value)
+  if (json.length < 512) return json
+  const packed = LZ_PREFIX + compress(json)
+  return packed.length < json.length ? packed : json
+}
+
+function decodeFromStorage(raw: string): unknown {
+  if (raw.startsWith(LZ_PREFIX)) {
+    const text = decompress(raw.slice(LZ_PREFIX.length))
+    if (text == null) throw new SyntaxError('Invalid compressed inkwell payload')
+    return JSON.parse(text)
+  }
+  return JSON.parse(raw)
+}
 
 function projectKey(id: string): string {
   return `${STORAGE_PROJECT_PREFIX}${id}`
@@ -23,13 +51,6 @@ function historyKey(id: string): string {
 function newId(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID()
   return `p_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
-}
-
-function hashString(input: string): string {
-  // Simple, fast, stable (not cryptographic).
-  let h = 5381
-  for (let i = 0; i < input.length; i++) h = ((h << 5) + h) ^ input.charCodeAt(i)
-  return (h >>> 0).toString(16)
 }
 
 export const defaultDoc = (): JSONContent => ({
@@ -177,7 +198,7 @@ export function loadProject(id: string): InkwellProject | null {
   try {
     const raw = localStorage.getItem(projectKey(id))
     if (!raw) return null
-    const parsed = JSON.parse(raw) as Partial<InkwellProject>
+    const parsed = decodeFromStorage(raw) as Partial<InkwellProject>
     if (parsed && parsed.version === 3) return normalizeProjectV3(parsed, id)
   } catch {
     /* fall through */
@@ -185,9 +206,58 @@ export function loadProject(id: string): InkwellProject | null {
   return null
 }
 
+function trimOneHistorySnapshot(projectId: string): boolean {
+  const h = loadHistoryRaw(projectId)
+  if (h.entries.length === 0) return false
+  const removed = h.entries.pop()!
+  delete h.snapshotsById[removed.id]
+  persistHistoryBlob(projectId, h)
+  return true
+}
+
+/** Writes history; on quota, drops oldest snapshots until it fits or history is empty. */
+function persistHistoryBlob(projectId: string, next: StoredHistory): void {
+  let working = next
+  for (let attempt = 0; attempt < 250; attempt++) {
+    const payload = encodeForStorage(working)
+    try {
+      localStorage.setItem(historyKey(projectId), payload)
+      return
+    } catch (e) {
+      if (!isQuotaExceeded(e)) throw e
+      if (working.entries.length <= 0) {
+        try {
+          localStorage.removeItem(historyKey(projectId))
+        } catch {
+          /* ignore */
+        }
+        return
+      }
+      const removed = working.entries.pop()!
+      const nextSnapshots = { ...working.snapshotsById }
+      delete nextSnapshots[removed.id]
+      working = { version: 1, entries: working.entries, snapshotsById: nextSnapshots }
+    }
+  }
+}
+
+/** Writes the project blob; on quota, trims this book's history (oldest first) and retries. */
+function persistProjectBlob(projectId: string, normalized: InkwellProject): void {
+  for (let attempt = 0; attempt < 250; attempt++) {
+    const payload = encodeForStorage(normalized)
+    try {
+      localStorage.setItem(projectKey(projectId), payload)
+      return
+    } catch (e) {
+      if (!isQuotaExceeded(e)) throw e
+      if (!trimOneHistorySnapshot(projectId)) throw e
+    }
+  }
+}
+
 export function saveProject(project: InkwellProject): InkwellProject {
   const normalized = withAlignedGoals(project)
-  localStorage.setItem(projectKey(project.id), JSON.stringify(normalized))
+  persistProjectBlob(normalized.id, normalized)
   const idx = loadIndex()
   const now = Date.now()
   const metaTitle = normalized.book.title.trim() || normalized.chapters[0]?.title || 'Untitled book'
@@ -225,7 +295,7 @@ function loadHistoryRaw(projectId: string): StoredHistory {
   try {
     const raw = localStorage.getItem(historyKey(projectId))
     if (!raw) return { version: 1, entries: [], snapshotsById: {} }
-    const parsed = JSON.parse(raw) as Partial<StoredHistory>
+    const parsed = decodeFromStorage(raw) as Partial<StoredHistory>
     if (parsed && parsed.version === 1 && Array.isArray(parsed.entries) && parsed.snapshotsById) {
       return {
         version: 1,
@@ -240,7 +310,7 @@ function loadHistoryRaw(projectId: string): StoredHistory {
 }
 
 function saveHistoryRaw(projectId: string, next: StoredHistory): void {
-  localStorage.setItem(historyKey(projectId), JSON.stringify(next))
+  persistHistoryBlob(projectId, next)
 }
 
 export function listProjectHistory(projectId: string): ProjectHistoryEntry[] {
@@ -270,7 +340,7 @@ export function pushProjectHistorySnapshot(
   const normalized = withAlignedGoals(project)
 
   const serialized = JSON.stringify(normalized)
-  const hash = hashString(serialized)
+  const hash = hashStringDjb2(serialized)
   const bytes = serialized.length
 
   const h = loadHistoryRaw(normalized.id)

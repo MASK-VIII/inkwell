@@ -1,5 +1,6 @@
 import type { JSONContent } from '@tiptap/core'
 import mammoth from 'mammoth'
+import { coerceDocThroughTipTap } from './coerceTipTapImport'
 
 export type ImportedChapter = {
   title: string
@@ -172,6 +173,92 @@ function docFromBlocks(blocks: JSONContent[]): JSONContent {
   return { type: 'doc', content: cleaned.length ? cleaned : [{ type: 'paragraph' }] }
 }
 
+/**
+ * TipTap listItem schema is `paragraph block*` — the first child must be a paragraph.
+ * Mammoth/HTML can yield list items that start with a nested list or page break, which
+ * crashes ProseMirror when the editor mounts (white screen).
+ */
+function sanitizeImportedNode(node: JSONContent): JSONContent | null {
+  if (!node || typeof node !== 'object') return null
+
+  if (node.type === 'text') {
+    const out: JSONContent = { type: 'text', text: node.text ?? '' }
+    if (node.marks && node.marks.length > 0) out.marks = node.marks
+    return out
+  }
+
+  if (node.type === 'hardBreak') return node
+  if (node.type === 'pageBreak') return node
+
+  if (node.type === 'heading') {
+    const raw = typeof node.attrs?.level === 'number' ? node.attrs.level : 1
+    const level = Math.min(3, Math.max(1, Math.floor(raw))) as 1 | 2 | 3
+    const inner = (Array.isArray(node.content) ? node.content : [])
+      .map(sanitizeImportedNode)
+      .filter((n): n is JSONContent => n != null && typeof n === 'object')
+    return { type: 'heading', attrs: { level }, content: inner }
+  }
+
+  if (node.type === 'listItem' && Array.isArray(node.content)) {
+    const inner = node.content.map(sanitizeImportedNode)
+    let blocks = inner.filter((b): b is JSONContent => b != null && typeof b === 'object')
+    if (blocks.length === 0) {
+      return { type: 'listItem', content: [{ type: 'paragraph' }] }
+    }
+    if (blocks[0].type !== 'paragraph') {
+      blocks = [{ type: 'paragraph' }, ...blocks]
+    }
+    return { type: 'listItem', content: blocks }
+  }
+
+  if (node.type === 'bulletList' || node.type === 'orderedList') {
+    const inner = (Array.isArray(node.content) ? node.content : [])
+      .map(sanitizeImportedNode)
+      .filter((n): n is JSONContent => n != null && typeof n === 'object')
+    const items = inner.filter((n) => n.type === 'listItem')
+    if (items.length === 0) return null
+    return { ...node, content: items } as JSONContent
+  }
+
+  if (node.type === 'blockquote') {
+    const inner = (Array.isArray(node.content) ? node.content : [])
+      .map(sanitizeImportedNode)
+      .filter((n): n is JSONContent => n != null && typeof n === 'object')
+    if (inner.length === 0) {
+      return { type: 'blockquote', content: [{ type: 'paragraph' }] }
+    }
+    return { type: 'blockquote', content: inner }
+  }
+
+  if (node.type === 'paragraph') {
+    const inner = (Array.isArray(node.content) ? node.content : [])
+      .map(sanitizeImportedNode)
+      .filter((n): n is JSONContent => n != null && typeof n === 'object')
+    return { type: 'paragraph', content: inner }
+  }
+
+  if (Array.isArray(node.content)) {
+    const inner = node.content
+      .map(sanitizeImportedNode)
+      .filter((n): n is JSONContent => n != null && typeof n === 'object')
+    if (inner.length === 0) return null
+    return { ...node, content: inner } as JSONContent
+  }
+
+  return node
+}
+
+function sanitizeImportedDoc(doc: JSONContent): JSONContent {
+  if (doc.type !== 'doc' || !Array.isArray(doc.content)) return doc
+  const content = doc.content
+    .map(sanitizeImportedNode)
+    .filter((n): n is JSONContent => n != null && typeof n === 'object')
+  return {
+    type: 'doc',
+    content: content.length ? content : [{ type: 'paragraph' }],
+  }
+}
+
 export async function importDocxToChapters(arrayBuffer: ArrayBuffer): Promise<DocxImportResult> {
   // mammoth converts docx to HTML, preserving bold/italic reasonably well.
   const { value: html } = await mammoth.convertToHtml(
@@ -237,8 +324,17 @@ export async function importDocxToChapters(arrayBuffer: ArrayBuffer): Promise<Do
     chapters.push({ title: 'Imported document', content: docFromBlocks(allBlocks) })
   }
 
-  // Ensure non-empty output.
-  const normalized = chapters.filter((c): c is ImportedChapter => !!c.content && c.content.type === 'doc')
-  return { chapters: normalized.length ? normalized : [{ title: 'Imported document', content: docFromBlocks([]) }] }
+  // Ensure non-empty output, structural fixes, then run through TipTap (same schema as the editor).
+  const normalized = chapters
+    .filter((c): c is ImportedChapter => !!c.content && c.content.type === 'doc')
+    .map((c) => ({
+      ...c,
+      content: coerceDocThroughTipTap(sanitizeImportedDoc(c.content)),
+    }))
+  return {
+    chapters: normalized.length
+      ? normalized
+      : [{ title: 'Imported document', content: coerceDocThroughTipTap(sanitizeImportedDoc(docFromBlocks([]))) }],
+  }
 }
 

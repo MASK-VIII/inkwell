@@ -1,91 +1,83 @@
-import type { JSONContent } from '@tiptap/core'
-import { useMemo, useState, type ReactNode } from 'react'
+import { startTransition, useEffect, useMemo, useRef, useState } from 'react'
 import type { EbookTheme, Manuscript } from '../types'
 import { ebookCss } from '../lib/ebook/ebookCss'
+import { nextWorkerRev, onWorkerMessage, sendWorker } from '../lib/workerClient'
 
 type Props = {
   chapters: Manuscript[]
   theme: { ebook: EbookTheme }
-  onJumpToChapter: (id: number) => void
+  activeChapterId: number | null
+  onPrevChapter?: () => void
+  onNextChapter?: () => void
 }
 
-function marksToWrap(
-  node: JSONContent,
-  child: ReactNode,
-): ReactNode {
-  const marks = (node.marks as { type: string }[] | undefined) ?? []
-  const types = new Set(marks.map((m) => m.type))
-  let out: ReactNode = child
-  if (types.has('underline')) out = <u>{out}</u>
-  if (types.has('italic')) out = <em>{out}</em>
-  if (types.has('bold')) out = <strong>{out}</strong>
-  return out
-}
-
-function renderInline(node: JSONContent, key: string): ReactNode {
-  if (node.type === 'text') {
-    const t = node.text ?? ''
-    return <span key={key}>{marksToWrap(node, t)}</span>
-  }
-  if (node.type === 'hardBreak') return <br key={key} />
-  return null
-}
-
-function renderBlock(node: JSONContent, key: string): ReactNode {
-  switch (node.type) {
-    case 'paragraph':
-      return (
-        <p key={key}>
-          {(node.content ?? []).map((n, i) => renderInline(n, `${key}_i${i}`))}
-        </p>
-      )
-    case 'heading': {
-      const level = (node.attrs as { level?: number } | undefined)?.level ?? 2
-      const kids = (node.content ?? []).map((n, i) => renderInline(n, `${key}_i${i}`))
-      if (level === 1) return <h1 key={key}>{kids}</h1>
-      if (level === 2) return <h2 key={key}>{kids}</h2>
-      return <h3 key={key}>{kids}</h3>
-    }
-    case 'bulletList':
-      return (
-        <ul key={key}>
-          {(node.content ?? []).map((n, i) => renderBlock(n, `${key}_b${i}`))}
-        </ul>
-      )
-    case 'orderedList':
-      return (
-        <ol key={key}>
-          {(node.content ?? []).map((n, i) => renderBlock(n, `${key}_o${i}`))}
-        </ol>
-      )
-    case 'listItem':
-      return <li key={key}>{(node.content ?? []).map((n, i) => renderBlock(n, `${key}_li${i}`))}</li>
-    case 'blockquote':
-      return <blockquote key={key}>{(node.content ?? []).map((n, i) => renderBlock(n, `${key}_q${i}`))}</blockquote>
-    case 'horizontalRule':
-      return <hr key={key} />
-    case 'pageBreak':
-      // Ignore (ebook is reflow).
-      return null
-    default:
-      if (node.content?.length) {
-        return <div key={key}>{(node.content ?? []).map((n, i) => renderBlock(n, `${key}_d${i}`))}</div>
-      }
-      return null
-  }
-}
-
-export function EbookReview({ chapters, theme, onJumpToChapter }: Props) {
+export function EbookReview({ chapters, theme, activeChapterId, onPrevChapter, onNextChapter }: Props) {
   const [device, setDevice] = useState<'phone' | 'tablet' | 'ereader'>(() => 'ereader')
+  const viewportEl = useRef<HTMLDivElement | null>(null)
+  const revRef = useRef(0)
+  const debounceRef = useRef<number | null>(null)
 
-  const css = useMemo(() => ebookCss(theme.ebook), [theme.ebook])
+  const [css, setCss] = useState(() => ebookCss(theme.ebook))
+  const [html, setHtml] = useState<string>('')
+  const [status, setStatus] = useState<'idle' | 'rendering' | 'error'>('idle')
 
-  const width =
-    device === 'phone' ? 360 : device === 'tablet' ? 640 : 460
+  const { width, height } = useMemo(() => {
+    if (device === 'phone') return { width: 360, height: 740 }
+    if (device === 'tablet') return { width: 700, height: 860 }
+    return { width: 460, height: 820 } // e-reader
+  }, [device])
+
+  const active = useMemo(
+    () => (activeChapterId == null ? null : chapters.find((c) => c.id === activeChapterId) ?? null),
+    [chapters, activeChapterId],
+  )
+
+  useEffect(() => {
+    return onWorkerMessage((msg) => {
+      if (msg.kind === 'ebookResult') {
+        if (msg.rev !== revRef.current) return
+        setCss(msg.css)
+        setHtml(msg.html)
+        setStatus('idle')
+        viewportEl.current?.scrollTo({ top: 0 })
+      } else if (msg.kind === 'error') {
+        if (msg.rev !== revRef.current) return
+        if (msg.job === 'renderEbook') setStatus('error')
+      }
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!active) {
+      if (debounceRef.current) window.clearTimeout(debounceRef.current)
+      debounceRef.current = null
+      return
+    }
+
+    if (debounceRef.current) window.clearTimeout(debounceRef.current)
+    startTransition(() => setStatus('rendering'))
+    debounceRef.current = window.setTimeout(() => {
+      const rev = nextWorkerRev()
+      revRef.current = rev
+      sendWorker({
+        kind: 'renderEbook',
+        rev,
+        chapter: { id: active.id, title: active.title, content: active.content },
+        ebookTheme: theme.ebook,
+      })
+    }, 280)
+
+    return () => {
+      if (debounceRef.current) window.clearTimeout(debounceRef.current)
+    }
+  }, [active, theme.ebook])
+
+  const canPrev = !!active && chapters.findIndex((c) => c.id === active.id) > 0
+  const canNext = !!active && chapters.findIndex((c) => c.id === active.id) < chapters.length - 1
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-dust bg-white/60 px-4 py-3 dark:border-border-dark dark:bg-panel-dark/60 sm:px-8">
+    <div className="inkwell-ebook-review-scroll flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overscroll-y-contain">
+      <div className="sticky top-0 z-10 flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-dust bg-white/90 px-4 py-3 backdrop-blur-md dark:border-border-dark dark:bg-panel-dark/90 sm:px-8">
         <div className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
           Review: Ebook
         </div>
@@ -105,36 +97,56 @@ export function EbookReview({ chapters, theme, onJumpToChapter }: Props) {
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 overflow-auto p-6 sm:p-10">
-        <div className="mx-auto flex w-full max-w-[1100px] flex-col gap-6">
-          <div
-            className="mx-auto overflow-hidden rounded-[2rem] border border-dust bg-white shadow-xl dark:border-border-dark dark:bg-black/10"
-            style={{ width }}
-          >
+      <div className="flex shrink-0 flex-col items-center p-6 pb-20 sm:p-10 sm:pb-28">
+        <div className="flex w-full max-w-[1100px] flex-col items-center gap-6">
+          <div style={{ width }}>
             <style>{css}</style>
-            <div className="inkwell-ebook-preview">
-              <div className="chapter py-6">
-              {chapters.map((ch) => (
-                <button
-                  key={ch.id}
-                  type="button"
-                  onClick={() => onJumpToChapter(ch.id)}
-                  className="w-full text-left hover:bg-dust/20 dark:hover:bg-border-dark/30"
-                  title="Jump to this chapter in Write mode"
-                >
-                  <div className="px-4 py-4">
-                    <h1 className="m-0">{ch.title || 'Untitled chapter'}</h1>
-                    <div className="mt-3">
-                      {(ch.content?.content ?? []).map((n, i) => renderBlock(n, `${ch.id}_${i}`))}
+            <div
+              ref={viewportEl}
+              className="inkwell-ebook-device-scroll overflow-y-auto overflow-x-hidden rounded-[2rem] border border-dust bg-white shadow-xl dark:border-border-dark dark:bg-panel-dark/40"
+              style={{ height }}
+            >
+              <div className="inkwell-ebook-preview">
+                <div className="py-6 px-4">
+                  {!active ? (
+                    <div className="rounded-3xl border border-dust bg-white/60 p-6 text-sm text-ink/70 dark:border-border-dark dark:bg-panel-dark/60 dark:text-ink-dark/70">
+                      Select a chapter to preview.
                     </div>
-                  </div>
-                </button>
-              ))}
+                  ) : status === 'error' ? (
+                    <div className="rounded-3xl border border-dust bg-white/60 p-6 text-sm text-ink/70 dark:border-border-dark dark:bg-panel-dark/60 dark:text-ink-dark/70">
+                      Preview failed to render.
+                    </div>
+                  ) : (
+                    <div dangerouslySetInnerHTML={{ __html: html }} />
+                  )}
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="mx-auto max-w-xl text-center text-xs text-ink/60 dark:text-ink-dark/60">
+          <div className="flex w-full max-w-[min(46rem,100%)] items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={onPrevChapter}
+              disabled={!onPrevChapter || !canPrev}
+              className="rounded-3xl border border-dust bg-white/70 px-4 py-2 text-sm font-semibold text-ink transition-colors hover:bg-white disabled:opacity-40 dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
+            >
+              ‹ Chapter
+            </button>
+            <div className="text-xs font-semibold uppercase tracking-widest text-walnut/80 dark:text-accent-warm/80">
+              {!active ? 'Preview' : status === 'rendering' ? 'Rendering…' : active.title}
+            </div>
+            <button
+              type="button"
+              onClick={onNextChapter}
+              disabled={!onNextChapter || !canNext}
+              className="rounded-3xl border border-dust bg-white/70 px-4 py-2 text-sm font-semibold text-ink transition-colors hover:bg-white disabled:opacity-40 dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
+            >
+              Chapter ›
+            </button>
+          </div>
+
+          <div className="max-w-xl text-center text-xs text-ink/60 dark:text-ink-dark/60">
             This is a reflow preview. Real EPUB readers may differ in fonts and pagination.
           </div>
         </div>

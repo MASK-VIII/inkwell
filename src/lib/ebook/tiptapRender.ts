@@ -8,25 +8,35 @@ function esc(s: string): string {
     .replace(/"/g, '&quot;')
 }
 
-function openMarks(marks: { type: string }[] | undefined): string {
+function openMarks(marks: { type: string; attrs?: Record<string, unknown> }[] | undefined): string {
   if (!marks || marks.length === 0) return ''
-  // Keep stable nesting order.
-  const types = new Set(marks.map((m) => m.type))
   let out = ''
+  // Keep stable nesting order (outer → inner).
+  const link = marks.find((m) => m.type === 'link') ?? null
+  const href = (link?.attrs as { href?: unknown } | undefined)?.href
+  if (typeof href === 'string' && href.trim()) out += `<a href="${esc(href)}">`
+
+  const types = new Set(marks.map((m) => m.type))
   if (types.has('bold')) out += '<strong>'
   if (types.has('italic')) out += '<em>'
   if (types.has('underline')) out += '<u>'
+  if (types.has('strike')) out += '<s>'
   return out
 }
 
-function closeMarks(marks: { type: string }[] | undefined): string {
+function closeMarks(marks: { type: string; attrs?: Record<string, unknown> }[] | undefined): string {
   if (!marks || marks.length === 0) return ''
-  const types = new Set(marks.map((m) => m.type))
   let out = ''
-  // Reverse order of openMarks
+  const link = marks.find((m) => m.type === 'link') ?? null
+  const href = (link?.attrs as { href?: unknown } | undefined)?.href
+
+  const types = new Set(marks.map((m) => m.type))
+  // Reverse order of openMarks (inner → outer).
+  if (types.has('strike')) out += '</s>'
   if (types.has('underline')) out += '</u>'
   if (types.has('italic')) out += '</em>'
   if (types.has('bold')) out += '</strong>'
+  if (typeof href === 'string' && href.trim()) out += '</a>'
   return out
 }
 

@@ -1,43 +1,66 @@
-import { useEffect, useMemo, useState } from 'react'
-import type { Manuscript, Theme } from '../types'
+import { startTransition, useEffect, useMemo, useRef, useState } from 'react'
+import type { BookMeta, Manuscript, Theme } from '../types'
 import { TRIM_PRESETS } from '../types'
-import { paginateForPrintReview, type PrintPage } from '../lib/print/paginate'
+import type { PrintPage } from '../lib/print/paginate'
+import { nextWorkerRev, onWorkerMessage, sendWorker } from '../lib/workerClient'
 
 const PX_PER_PT = 96 / 72
 
 type Props = {
   chapters: Manuscript[]
   theme: Theme
+  book: BookMeta
+  /** When this changes (e.g. chapter click in sidebar), scroll preview to that chapter's start page */
+  scrollToChapterId?: number | null
   onJumpToChapter?: (chapterId: number) => void
 }
 
-export function PrintReview({ chapters, theme, onJumpToChapter }: Props) {
+export function PrintReview({ chapters, theme, book, scrollToChapterId, onJumpToChapter }: Props) {
   const [pages, setPages] = useState<PrintPage[] | null>(null)
   const [err, setErr] = useState<string | null>(null)
+  const pageAnchorRefs = useRef(new Map<number, HTMLDivElement>())
 
   const trim = TRIM_PRESETS[theme.print.trimPreset]
   const pageWidthPx = useMemo(() => trim.widthIn * 96, [trim.widthIn])
   const pageHeightPx = useMemo(() => trim.heightIn * 96, [trim.heightIn])
 
   useEffect(() => {
-    let cancelled = false
-    queueMicrotask(() => {
-      if (cancelled) return
+    const job = nextWorkerRev()
+    startTransition(() => {
       setPages(null)
       setErr(null)
     })
-    ;(async () => {
-      try {
-        const p = await paginateForPrintReview(chapters, theme)
-        if (!cancelled) setPages(p)
-      } catch (e) {
-        if (!cancelled) setErr(e instanceof Error ? e.message : 'Failed to paginate')
+
+    const unsub = onWorkerMessage((msg) => {
+      if (msg.kind === 'error' && msg.job === 'paginatePrint' && msg.rev === job) {
+        setPages(null)
+        setErr(msg.message)
+        return
       }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [chapters, theme])
+      if (msg.kind !== 'printChunk' || msg.rev !== job) return
+      setPages((prev) => (prev == null ? [...msg.pages] : [...prev, ...msg.pages]))
+    })
+
+    sendWorker({
+      kind: 'paginatePrint',
+      rev: job,
+      chapters,
+      theme,
+      meta: { bookTitle: book.title, authorName: book.authorName },
+    })
+
+    return () => unsub()
+  }, [chapters, theme, book.title, book.authorName])
+
+  useEffect(() => {
+    if (scrollToChapterId == null || !pages?.length) return
+    const target = pages.find(
+      (pg) => !pg.isBlank && pg.lines.some((l) => l.kind === 'body' && l.chapterId === scrollToChapterId),
+    )
+    if (!target) return
+    const el = pageAnchorRefs.current.get(target.pageNumber)
+    el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [scrollToChapterId, pages])
 
   if (err) {
     return (
@@ -74,9 +97,18 @@ export function PrintReview({ chapters, theme, onJumpToChapter }: Props) {
           {pages.map((p) => {
             const widthPx = p.widthPt * PX_PER_PT
             const heightPx = p.heightPt * PX_PER_PT
-            const isFooter = theme.print.pageNumbers === 'footerCenter'
             return (
-              <div key={p.pageNumber} className="flex flex-col items-center gap-3">
+              <div
+                key={p.pageNumber}
+                ref={(el) => {
+                  if (!el) {
+                    pageAnchorRefs.current.delete(p.pageNumber)
+                    return
+                  }
+                  pageAnchorRefs.current.set(p.pageNumber, el)
+                }}
+                className="flex flex-col items-center gap-3 scroll-mt-6"
+              >
                 <div
                   className="relative overflow-hidden rounded-sm bg-white shadow-[0_18px_55px_-28px_rgba(0,0,0,0.55)] ring-1 ring-dust/80 dark:ring-border-dark"
                   style={{
@@ -109,12 +141,6 @@ export function PrintReview({ chapters, theme, onJumpToChapter }: Props) {
                           </div>
                         )
                       })}
-                    </div>
-                  )}
-
-                  {isFooter && (
-                    <div className="absolute bottom-3 left-0 right-0 text-center text-[11px] text-ink/70">
-                      {p.pageNumber}
                     </div>
                   )}
                 </div>

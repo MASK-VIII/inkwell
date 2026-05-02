@@ -1,17 +1,10 @@
-import {
-  BookOpen,
-  Download,
-  GripVertical,
-  Library,
-  Moon,
-  Plus,
-  Sun,
-  Trash2,
-} from 'lucide-react'
+import { BookOpen, Download, Library, Moon, Plus, Sun } from 'lucide-react'
 import {
   useCallback,
+  useDeferredValue,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -19,7 +12,9 @@ import {
 import { BookTools } from './components/BookTools'
 import { EbookReview } from './components/EbookReview'
 import { ManuscriptEditor } from './components/ManuscriptEditor'
+import { ManuscriptRow } from './components/ManuscriptRow'
 import { PrintReview } from './components/PrintReview'
+import { escapeHtml } from './lib/escapeHtml'
 import {
   createProject,
   defaultDoc,
@@ -41,8 +36,12 @@ import type { BookMeta, EbookTheme, InkwellProject, Manuscript, PrintTheme, Proj
 import type { Editor, JSONContent } from '@tiptap/core'
 
 const THEME_KEY = 'inkwell-theme'
+/** Delay before writing the open book to localStorage after typing stops (keystrokes only update React state). */
+const PERSIST_IDLE_MS = 450
 
 type DeletedSnapshot = Manuscript & { originalIndex: number }
+
+type Route = 'bookshelf' | 'write' | 'review_print' | 'review_ebook'
 
 function readInitialDarkMode(): boolean {
   if (typeof window === 'undefined') return false
@@ -51,69 +50,171 @@ function readInitialDarkMode(): boolean {
   return stored === 'dark' || (!stored && prefersDark)
 }
 
+function readRouteFromHash(): Route {
+  const hash = (typeof window === 'undefined' ? '' : window.location.hash).replace(/^#/, '')
+  if (hash === 'bookshelf') return 'bookshelf'
+  if (hash === 'review/print') return 'review_print'
+  if (hash === 'review/ebook') return 'review_ebook'
+  return 'write'
+}
+
+function routeToHash(route: Route): string {
+  switch (route) {
+    case 'bookshelf':
+      return '#bookshelf'
+    case 'review_print':
+      return '#review/print'
+    case 'review_ebook':
+      return '#review/ebook'
+    case 'write':
+    default:
+      return '#write'
+  }
+}
+
 function slugDownload(name: string) {
   return name.replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '') || 'manuscript'
 }
 
 export default function App() {
-  const [view, setView] = useState<'bookshelf' | 'book'>('book')
-  const [mode, setMode] = useState<'write' | 'review_print' | 'review_ebook'>('write')
+  const [route, setRouteState] = useState<Route>(() => readRouteFromHash())
   const [project, setProject] = useState<InkwellProject>(() => ensureAtLeastOneProject())
   const [currentId, setCurrentId] = useState<number | null>(() => project.chapters[0]?.id ?? null)
+  const [ebookEditOpen, setEbookEditOpen] = useState(false)
   const [bookToolsOpen, setBookToolsOpen] = useState(false)
   const [toast, setToast] = useState<{ node: ReactNode; ms: number } | null>(null)
   const [darkMode, setDarkMode] = useState(readInitialDarkMode)
   const lastDeletedRef = useRef<DeletedSnapshot | null>(null)
 
   const editorRef = useRef<Editor | null>(null)
+  const projectRef = useRef(project)
   const historyTimerRef = useRef<number | null>(null)
   const historyLastRecordAtRef = useRef<number>(0)
+  const persistIdleTimerRef = useRef<number | null>(null)
+  const toastTimeoutRef = useRef<number | null>(null)
   const [historyRev, setHistoryRev] = useState(0)
+  /** Bumps when in-place manuscript tree changes but `currentId` can stay the same (DOCX import, history restore). Forces TipTap to remount — otherwise useEditor([manuscriptId]) keeps stale ProseMirror doc and can white-screen. */
+  const [editorEpoch, setEditorEpoch] = useState(0)
+  const prevProjectIdForEditorRef = useRef(project.id)
 
   const chapters = project.chapters
   const current = chapters.find((m) => m.id === currentId) ?? null
-  const totalBookWords = totalWordsInChapters(chapters)
-  const wordsWrittenToday = Math.max(0, totalBookWords - project.goals.dailyBaselineWordCount)
-  const historyEntries = listProjectHistory(project.id)
-  void historyRev
+  const currentChapterIndex = useMemo(() => {
+    if (currentId == null) return -1
+    return chapters.findIndex((c) => c.id === currentId)
+  }, [chapters, currentId])
+
+  const prevChapter = useCallback(() => {
+    if (currentChapterIndex <= 0) return
+    const prev = chapters[currentChapterIndex - 1]!
+    setCurrentId(prev.id)
+  }, [chapters, currentChapterIndex])
+
+  const nextChapter = useCallback(() => {
+    if (currentChapterIndex < 0 || currentChapterIndex >= chapters.length - 1) return
+    const next = chapters[currentChapterIndex + 1]!
+    setCurrentId(next.id)
+  }, [chapters, currentChapterIndex])
+
+  const deferredProject = useDeferredValue(project)
+  const totalBookWords = useMemo(
+    () => totalWordsInChapters(deferredProject.chapters),
+    [deferredProject.chapters],
+  )
+  const wordsWrittenToday = useMemo(
+    () => Math.max(0, totalBookWords - deferredProject.goals.dailyBaselineWordCount),
+    [totalBookWords, deferredProject.goals.dailyBaselineWordCount],
+  )
+  const historyEntries = useMemo(() => {
+    void historyRev
+    return listProjectHistory(project.id)
+  }, [project.id, historyRev])
 
   useLayoutEffect(() => {
     document.documentElement.classList.toggle('dark', darkMode)
   }, [darkMode])
 
+  useLayoutEffect(() => {
+    projectRef.current = project
+  }, [project])
+
+  useEffect(() => {
+    if (prevProjectIdForEditorRef.current !== project.id) {
+      prevProjectIdForEditorRef.current = project.id
+      setEditorEpoch((e) => e + 1)
+    }
+  }, [project.id])
+
+  const setRoute = useCallback((next: Route) => {
+    setRouteState(next)
+    if (typeof window !== 'undefined') {
+      window.location.hash = routeToHash(next)
+    }
+  }, [])
+
+  useEffect(() => {
+    const onHash = () => setRouteState(readRouteFromHash())
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
+
   const bumpHistory = useCallback(() => setHistoryRev((n) => (n + 1) % 1_000_000), [])
 
-  const recordHistorySoon = useCallback(
-    (label: string) => {
-      // Debounced "idle" snapshot: it should feel automatic but not spam storage.
-      const now = Date.now()
-      historyLastRecordAtRef.current = now
-      if (historyTimerRef.current) window.clearTimeout(historyTimerRef.current)
-      historyTimerRef.current = window.setTimeout(() => {
-        const entry = pushProjectHistorySnapshot(project, { label })
-        if (entry) bumpHistory()
-      }, 2500)
-    },
-    [project, bumpHistory],
-  )
+  const clearPersistIdleTimer = useCallback(() => {
+    if (persistIdleTimerRef.current != null) {
+      window.clearTimeout(persistIdleTimerRef.current)
+      persistIdleTimerRef.current = null
+    }
+  }, [])
+
+  /** Persist the in-memory book to localStorage and align goals; clears any pending debounced save. */
+  const syncPersistedState = useCallback(() => {
+    clearPersistIdleTimer()
+    const saved = saveProject(projectRef.current)
+    setProject(saved)
+    return saved
+  }, [clearPersistIdleTimer])
+
+  const scheduleIdlePersist = useCallback(() => {
+    if (persistIdleTimerRef.current != null) {
+      window.clearTimeout(persistIdleTimerRef.current)
+    }
+    persistIdleTimerRef.current = window.setTimeout(() => {
+      persistIdleTimerRef.current = null
+      setProject((prev) => saveProject(prev))
+    }, PERSIST_IDLE_MS)
+  }, [])
+
+  const recordHistorySoon = useCallback((label: string) => {
+    // Debounced "idle" snapshot: it should feel automatic but not spam storage.
+    const now = Date.now()
+    historyLastRecordAtRef.current = now
+    if (historyTimerRef.current) window.clearTimeout(historyTimerRef.current)
+    historyTimerRef.current = window.setTimeout(() => {
+      const entry = pushProjectHistorySnapshot(projectRef.current, { label })
+      if (entry) bumpHistory()
+    }, 2500)
+  }, [bumpHistory])
 
   // Ensure we have at least one baseline snapshot per book.
   useEffect(() => {
-    if (historyEntries.length === 0) {
-      const entry = pushProjectHistorySnapshot(project, { label: 'Initial', force: true })
+    if (listProjectHistory(project.id).length === 0) {
+      const entry = pushProjectHistorySnapshot(projectRef.current, { label: 'Initial', force: true })
       if (entry) bumpHistory()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project.id])
+  }, [project.id, bumpHistory])
 
   // Flush a snapshot when the tab is hidden or page is closing.
   useEffect(() => {
     const flush = (label: string) => {
+      clearPersistIdleTimer()
       if (historyTimerRef.current) {
         window.clearTimeout(historyTimerRef.current)
         historyTimerRef.current = null
       }
-      const entry = pushProjectHistorySnapshot(project, { label })
+      const saved = saveProject(projectRef.current)
+      setProject(saved)
+      const entry = pushProjectHistorySnapshot(saved, { label })
       if (entry) bumpHistory()
     }
     const onVis = () => {
@@ -126,84 +227,118 @@ export default function App() {
       document.removeEventListener('visibilitychange', onVis)
       window.removeEventListener('beforeunload', onBeforeUnload)
     }
-  }, [project, bumpHistory])
+  }, [bumpHistory, clearPersistIdleTimer])
 
-  const persistProject = useCallback((next: InkwellProject) => {
-    setProject(saveProject(next))
-    recordHistorySoon('Auto')
-  }, [])
+  useLayoutEffect(() => {
+    return () => {
+      clearPersistIdleTimer()
+      setProject((prev) => saveProject(prev))
+    }
+  }, [currentId, clearPersistIdleTimer])
 
-  const openProject = useCallback((id: string) => {
-    const p = loadProject(id)
-    if (!p) return
-    setProject(p)
-    setCurrentId(p.chapters[0]?.id ?? null)
-    setView('book')
-    // baseline snapshot if needed
-    const entry = pushProjectHistorySnapshot(p, { label: 'Opened', force: historyEntries.length === 0 })
-    if (entry) bumpHistory()
-  }, [])
+  const persistProject = useCallback(
+    (next: InkwellProject) => {
+      clearPersistIdleTimer()
+      setProject(saveProject(next))
+      recordHistorySoon('Auto')
+    },
+    [clearPersistIdleTimer, recordHistorySoon],
+  )
 
-  const patchBook = useCallback((patch: Partial<BookMeta>) => {
-    setProject((prev) => {
-      const next = saveProject({ ...prev, book: { ...prev.book, ...patch } })
-      return next
-    })
-    recordHistorySoon('Auto')
-  }, [])
+  const openProject = useCallback(
+    (id: string) => {
+      syncPersistedState()
+      const p = loadProject(id)
+      if (!p) return
+      setProject(p)
+      setCurrentId(p.chapters[0]?.id ?? null)
+      setEbookEditOpen(false)
+      setRoute('write')
+      const force = listProjectHistory(p.id).length === 0
+      const entry = pushProjectHistorySnapshot(p, { label: 'Opened', force })
+      if (entry) bumpHistory()
+    },
+    [bumpHistory, setRoute, syncPersistedState],
+  )
 
-  const patchGoals = useCallback((patch: Partial<WritingGoals>) => {
-    setProject((prev) => {
-      const next = saveProject({ ...prev, goals: { ...prev.goals, ...patch } })
-      return next
-    })
-    recordHistorySoon('Auto')
-  }, [])
+  const patchBook = useCallback(
+    (patch: Partial<BookMeta>) => {
+      setProject((prev) => {
+        const next = saveProject({ ...prev, book: { ...prev.book, ...patch } })
+        return next
+      })
+      recordHistorySoon('Auto')
+    },
+    [recordHistorySoon],
+  )
 
-  const patchTheme = useCallback((patch: { print?: Partial<PrintTheme>; ebook?: Partial<EbookTheme> }) => {
-    setProject((prev) =>
-      saveProject({
-        ...prev,
-        theme: {
-          print: { ...prev.theme.print, ...(patch.print ?? {}) },
-          ebook: { ...prev.theme.ebook, ...(patch.ebook ?? {}) },
-        },
-      }),
-    )
-    recordHistorySoon('Auto')
-  }, [])
+  const patchGoals = useCallback(
+    (patch: Partial<WritingGoals>) => {
+      setProject((prev) => {
+        const next = saveProject({ ...prev, goals: { ...prev.goals, ...patch } })
+        return next
+      })
+      recordHistorySoon('Auto')
+    },
+    [recordHistorySoon],
+  )
+
+  const patchTheme = useCallback(
+    (patch: { print?: Partial<PrintTheme>; ebook?: Partial<EbookTheme> }) => {
+      setProject((prev) =>
+        saveProject({
+          ...prev,
+          theme: {
+            print: { ...prev.theme.print, ...(patch.print ?? {}) },
+            ebook: { ...prev.theme.ebook, ...(patch.ebook ?? {}) },
+          },
+        }),
+      )
+      recordHistorySoon('Auto')
+    },
+    [recordHistorySoon],
+  )
+
+  useEffect(
+    () => () => {
+      if (toastTimeoutRef.current != null) window.clearTimeout(toastTimeoutRef.current)
+    },
+    [],
+  )
 
   const showToast = useCallback((node: ReactNode, ms = 3200) => {
+    if (toastTimeoutRef.current != null) window.clearTimeout(toastTimeoutRef.current)
     setToast({ node, ms })
-    window.setTimeout(() => setToast(null), ms)
+    toastTimeoutRef.current = window.setTimeout(() => {
+      toastTimeoutRef.current = null
+      setToast(null)
+    }, ms)
   }, [])
 
   const updateCurrentContent = useCallback(
     (json: JSONContent) => {
       if (currentId === null) return
-      setProject((prev) => {
-        const nextChapters = prev.chapters.map((m) =>
-          m.id === currentId ? { ...m, content: json } : m,
-        )
-        return saveProject({ ...prev, chapters: nextChapters })
-      })
+      setProject((prev) => ({
+        ...prev,
+        chapters: prev.chapters.map((m) => (m.id === currentId ? { ...m, content: json } : m)),
+      }))
+      scheduleIdlePersist()
       recordHistorySoon('Auto')
     },
-    [currentId],
+    [currentId, recordHistorySoon, scheduleIdlePersist],
   )
 
   const updateCurrentTitle = useCallback(
     (title: string) => {
       if (currentId === null) return
-      setProject((prev) => {
-        const nextChapters = prev.chapters.map((m) =>
-          m.id === currentId ? { ...m, title } : m,
-        )
-        return saveProject({ ...prev, chapters: nextChapters })
-      })
+      setProject((prev) => ({
+        ...prev,
+        chapters: prev.chapters.map((m) => (m.id === currentId ? { ...m, title } : m)),
+      }))
+      scheduleIdlePersist()
       recordHistorySoon('Auto')
     },
-    [currentId],
+    [currentId, recordHistorySoon, scheduleIdlePersist],
   )
 
   const undoDelete = useCallback(() => {
@@ -211,6 +346,7 @@ export default function App() {
     if (!snap) return
     const { originalIndex, ...rest } = snap
     lastDeletedRef.current = null
+    clearPersistIdleTimer()
     setProject((prev) => {
       const copy = [...prev.chapters]
       const idx = Math.min(originalIndex, copy.length)
@@ -219,9 +355,68 @@ export default function App() {
     })
     setCurrentId(rest.id)
     showToast('Chapter restored')
-  }, [showToast])
+  }, [clearPersistIdleTimer, showToast])
+
+  const selectChapter = useCallback(
+    (id: number) => {
+      setCurrentId(id)
+      if (route === 'review_ebook' && !ebookEditOpen) {
+        setEbookEditOpen(false)
+      }
+    },
+    [route, ebookEditOpen],
+  )
+
+  const deleteChapter = useCallback(
+    (id: number) => {
+      const proj = projectRef.current
+      const ch = proj.chapters
+      const index = ch.findIndex((m) => m.id === id)
+      if (index === -1) return
+      const removed = ch[index]
+      lastDeletedRef.current = { ...removed, originalIndex: index }
+      const nextChapters = ch.filter((m) => m.id !== id)
+      persistProject({ ...proj, chapters: nextChapters })
+      if (id === currentId) {
+        setCurrentId(nextChapters[0]?.id ?? null)
+      }
+      showToast(
+        <span className="flex flex-wrap items-center gap-2">
+          Chapter deleted
+          <button
+            type="button"
+            className="rounded-full bg-white/20 px-3 py-1 text-xs font-semibold hover:bg-white/30"
+            onClick={() => undoDelete()}
+          >
+            Undo
+          </button>
+        </span>,
+        4500,
+      )
+    },
+    [currentId, persistProject, showToast, undoDelete],
+  )
+
+  const onReorder = useCallback(
+    (draggedId: number, targetId: number) => {
+      if (draggedId === targetId) return
+      const proj = projectRef.current
+      const ch = proj.chapters
+      const draggedIndex = ch.findIndex((m) => m.id === draggedId)
+      const targetIndex = ch.findIndex((m) => m.id === targetId)
+      if (draggedIndex === -1 || targetIndex === -1) return
+      const copy = [...ch]
+      const [row] = copy.splice(draggedIndex, 1)
+      copy.splice(targetIndex, 0, row)
+      persistProject({ ...proj, chapters: copy })
+      recordHistorySoon('Auto')
+      showToast('Chapters reordered')
+    },
+    [persistProject, recordHistorySoon, showToast],
+  )
 
   const createManuscript = () => {
+    clearPersistIdleTimer()
     let newId = 0
     setProject((prev) => {
       newId = nextManuscriptId(prev.chapters)
@@ -235,32 +430,6 @@ export default function App() {
     setCurrentId(newId)
     recordHistorySoon('Auto')
     showToast('New chapter created')
-  }
-
-  const deleteManuscript = (id: number) => {
-    const index = chapters.findIndex((m) => m.id === id)
-    if (index === -1) return
-    const removed = chapters[index]
-    lastDeletedRef.current = { ...removed, originalIndex: index }
-    const nextChapters = chapters.filter((m) => m.id !== id)
-    persistProject({ ...project, chapters: nextChapters })
-    if (id === currentId) {
-      setCurrentId(nextChapters[0]?.id ?? null)
-    }
-    recordHistorySoon('Auto')
-    showToast(
-      <span className="flex flex-wrap items-center gap-2">
-        Chapter deleted
-        <button
-          type="button"
-          className="rounded-full bg-white/20 px-3 py-1 text-xs font-semibold hover:bg-white/30"
-          onClick={() => undoDelete()}
-        >
-          Undo
-        </button>
-      </span>,
-      4500,
-    )
   }
 
   const toggleTheme = () => {
@@ -330,7 +499,8 @@ export default function App() {
     )
     if (!ok) return
     try {
-      pushProjectHistorySnapshot(project, { label: 'Before import', force: true })
+      clearPersistIdleTimer()
+      pushProjectHistorySnapshot(projectRef.current, { label: 'Before import', force: true })
       bumpHistory()
       const ab = await file.arrayBuffer()
       const res = await importDocxToChapters(ab)
@@ -346,29 +516,18 @@ export default function App() {
       })
       recordHistorySoon('Auto')
       setCurrentId(nextChapters[0]?.id ?? null)
-      setMode('write')
+      setEditorEpoch((e) => e + 1)
+      setEbookEditOpen(false)
+      setRoute('write')
       showToast(`Imported ${nextChapters.length} chapter${nextChapters.length === 1 ? '' : 's'}`)
     } catch {
       showToast('DOCX import failed')
     }
   }
 
-  const onReorder = (draggedId: number, targetId: number) => {
-    if (draggedId === targetId) return
-    const draggedIndex = chapters.findIndex((m) => m.id === draggedId)
-    const targetIndex = chapters.findIndex((m) => m.id === targetId)
-    if (draggedIndex === -1 || targetIndex === -1) return
-    const copy = [...chapters]
-    const [row] = copy.splice(draggedIndex, 1)
-    copy.splice(targetIndex, 0, row)
-    persistProject({ ...project, chapters: copy })
-    recordHistorySoon('Auto')
-    showToast('Chapters reordered')
-  }
-
   const restoreHistory = useCallback(
     (snapshotId: string) => {
-      const snap = loadProjectSnapshot(project.id, snapshotId)
+      const snap = loadProjectSnapshot(projectRef.current.id, snapshotId)
       if (!snap) {
         showToast('Snapshot not found')
         return
@@ -380,16 +539,19 @@ export default function App() {
       )
       if (!ok) return
 
+      clearPersistIdleTimer()
       // Safety: snapshot current state first.
-      pushProjectHistorySnapshot(project, { label: 'Before restore', force: true })
+      pushProjectHistorySnapshot(projectRef.current, { label: 'Before restore', force: true })
       const normalized = saveProject(snap)
       setProject(normalized)
       setCurrentId(normalized.chapters[0]?.id ?? null)
-      setMode('write')
+      setEditorEpoch((e) => e + 1)
+      setEbookEditOpen(false)
+      setRoute('write')
       bumpHistory()
       showToast('Restored snapshot')
     },
-    [project, historyEntries, showToast, bumpHistory],
+    [clearPersistIdleTimer, historyEntries, showToast, bumpHistory, setRoute],
   )
 
   const clearHistory = useCallback(() => {
@@ -400,7 +562,7 @@ export default function App() {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-parchment text-ink transition-colors dark:bg-panel-dark dark:text-ink-dark">
-      {view === 'bookshelf' ? (
+      {route === 'bookshelf' ? (
         <div className="mx-auto flex w-full max-w-screen-2xl flex-1 flex-col px-4 py-6 sm:px-8 sm:py-10">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
@@ -412,19 +574,32 @@ export default function App() {
                 <p className="text-sm text-ink/60 dark:text-ink-dark/60">Local projects on this device</p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                const p = createProject()
-                setProject(p)
-                setCurrentId(p.chapters[0]?.id ?? null)
-                setView('book')
-              }}
-              className="flex items-center gap-2 rounded-3xl bg-ink px-4 py-2.5 text-sm font-semibold text-parchment hover:bg-walnut dark:bg-cream dark:text-ink dark:hover:bg-accent-warm"
-            >
-              <Plus className="h-4 w-4" strokeWidth={2.5} />
-              New book
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={toggleTheme}
+                className="flex h-11 w-11 items-center justify-center rounded-3xl border border-dust bg-white/70 text-ink transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
+                aria-label="Toggle theme"
+                title="Toggle theme"
+              >
+                {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  syncPersistedState()
+                  const p = createProject()
+                  setProject(p)
+                  setCurrentId(p.chapters[0]?.id ?? null)
+                  setEbookEditOpen(false)
+                  setRoute('write')
+                }}
+                className="flex items-center gap-2 rounded-3xl bg-ink px-4 py-2.5 text-sm font-semibold text-parchment hover:bg-walnut dark:bg-cream dark:text-ink dark:hover:bg-accent-warm"
+              >
+                <Plus className="h-4 w-4" strokeWidth={2.5} />
+                New book
+              </button>
+            </div>
           </div>
 
           <div className="mt-6 grid gap-3 sm:mt-8 sm:grid-cols-2 lg:grid-cols-3">
@@ -456,7 +631,10 @@ export default function App() {
             <div className="mx-auto grid max-w-screen-2xl grid-cols-[1fr_auto_1fr] items-center gap-3 px-3 py-3 sm:gap-4 sm:px-6">
               <button
                 type="button"
-                onClick={() => setView('bookshelf')}
+                onClick={() => {
+                  syncPersistedState()
+                  setRoute('bookshelf')
+                }}
                 className="group inline-flex w-fit items-center gap-2 rounded-2xl pr-2 transition-colors hover:bg-dust/30 focus:outline-none dark:hover:bg-border-dark/50 sm:gap-3"
                 aria-label="Back to Bookshelf"
                 title="Bookshelf"
@@ -473,7 +651,7 @@ export default function App() {
                 <input
                   type="text"
                   value={current?.title ?? ''}
-                  disabled={!current}
+                  disabled={!current || route !== 'write'}
                   onChange={(e) => updateCurrentTitle(e.target.value)}
                   placeholder="Chapter title"
                   className="w-[min(44rem,calc(100vw-10rem))] min-w-0 rounded-2xl border border-transparent bg-transparent px-3 py-2 text-center text-base font-medium focus:border-walnut focus:outline-none dark:focus:border-cream sm:px-4 sm:text-lg"
@@ -481,27 +659,44 @@ export default function App() {
               </div>
 
               <div className="flex items-center justify-end gap-1 sm:gap-2">
+                <div className="flex items-center gap-0 sm:gap-0.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBookToolsOpen(true)
+                    }}
+                    className="flex h-10 w-10 items-center justify-center rounded-2xl text-ink transition-colors hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
+                    aria-label="Book tools"
+                    title="Book tools"
+                  >
+                    <Library className="h-5 w-5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={toggleTheme}
+                    className="flex h-10 w-10 items-center justify-center rounded-2xl text-ink transition-colors hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
+                    aria-label="Toggle theme"
+                  >
+                    {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+                  </button>
+                </div>
                 <button
                   type="button"
-                  onClick={() => setBookToolsOpen(true)}
-                  className="flex h-10 w-10 items-center justify-center rounded-2xl text-ink transition-colors hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
-                  aria-label="Book tools"
-                  title="Book tools"
+                  onClick={() => {
+                    if (route === 'review_ebook') setEbookEditOpen((v) => !v)
+                  }}
+                  className={`items-center gap-2 rounded-3xl border border-dust bg-white/70 px-3 py-2 text-sm font-medium text-ink transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90 ${
+                    route === 'review_ebook' ? 'hidden sm:flex' : 'hidden'
+                  }`}
+                  title="Toggle editor for ebook review"
                 >
-                  <Library className="h-5 w-5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={toggleTheme}
-                  className="flex h-10 w-10 items-center justify-center rounded-2xl text-ink transition-colors hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
-                  aria-label="Toggle theme"
-                >
-                  {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+                  <BookOpen className="h-4 w-4 shrink-0" />
+                  <span>{ebookEditOpen ? 'Hide editor' : 'Edit'}</span>
                 </button>
                 <button
                   type="button"
                   onClick={exportHtml}
-                  disabled={!current}
+                  disabled={!current || route !== 'write'}
                   className="flex items-center gap-2 rounded-3xl bg-ink px-3 py-2 text-sm font-medium text-parchment transition-colors hover:bg-walnut disabled:opacity-40 dark:bg-cream dark:text-ink dark:hover:bg-accent-warm sm:px-5 sm:py-2.5"
                 >
                   <Download className="h-4 w-4 shrink-0" />
@@ -532,8 +727,8 @@ export default function App() {
                     key={ms.id}
                     manuscript={ms}
                     active={ms.id === currentId}
-                    onSelect={() => setCurrentId(ms.id)}
-                    onDelete={() => deleteManuscript(ms.id)}
+                    onSelectChapter={selectChapter}
+                    onDeleteChapter={deleteChapter}
                     onDropReorder={onReorder}
                   />
                 ))}
@@ -544,27 +739,52 @@ export default function App() {
             </aside>
 
             <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-parchment/40 dark:bg-panel-dark/40">
-              {mode === 'review_print' ? (
+              {route === 'review_print' ? (
                 <PrintReview
                   chapters={chapters}
                   theme={project.theme}
+                  book={project.book}
+                  scrollToChapterId={currentId}
                   onJumpToChapter={(id) => {
                     setCurrentId(id)
-                    setMode('write')
+                    setRoute('write')
                   }}
                 />
-              ) : mode === 'review_ebook' ? (
-                <EbookReview
-                  chapters={chapters}
-                  theme={project.theme}
-                  onJumpToChapter={(id) => {
-                    setCurrentId(id)
-                    setMode('write')
-                  }}
-                />
+              ) : route === 'review_ebook' ? (
+                <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+                  {ebookEditOpen && (
+                    <div className="min-h-0 flex-1">
+                      {current ? (
+                        <ManuscriptEditor
+                          key={`${current.id}-${editorEpoch}`}
+                          manuscriptId={current.id}
+                          content={current.content}
+                          onDocumentChange={updateCurrentContent}
+                          editorRef={editorRef}
+                          compactFooterStats
+                        />
+                      ) : (
+                        <div className="flex flex-1 items-center justify-center p-8 font-serif text-lg text-walnut/80 dark:text-accent-warm/80">
+                          Create a chapter to begin.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <div
+                    className={`flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden ${ebookEditOpen ? 'border-t border-dust dark:border-border-dark lg:border-l lg:border-t-0' : ''}`}
+                  >
+                    <EbookReview
+                      chapters={chapters}
+                      theme={project.theme}
+                      activeChapterId={currentId}
+                      onPrevChapter={prevChapter}
+                      onNextChapter={nextChapter}
+                    />
+                  </div>
+                </div>
               ) : current ? (
                 <ManuscriptEditor
-                  key={current.id}
+                  key={`${current.id}-${editorEpoch}`}
                   manuscriptId={current.id}
                   content={current.content}
                   onDocumentChange={updateCurrentContent}
@@ -583,10 +803,8 @@ export default function App() {
             open={bookToolsOpen}
             onClose={() => setBookToolsOpen(false)}
             projectId={project.id}
-            mode={mode}
-            onSetMode={(next) => {
-              setMode(next)
-            }}
+            mode={route === 'write' ? 'write' : route === 'review_print' ? 'review_print' : 'review_ebook'}
+            onSetMode={(next) => setRoute(next)}
             book={project.book}
             onBookChange={patchBook}
             goals={project.goals}
@@ -596,11 +814,12 @@ export default function App() {
             totalBookWords={totalBookWords}
             wordsWrittenToday={wordsWrittenToday}
             onOpenPrintReview={() => {
-              setMode('review_print')
+              setRoute('review_print')
               setBookToolsOpen(false)
             }}
             onOpenEbookReview={() => {
-              setMode('review_ebook')
+              setRoute('review_ebook')
+              setEbookEditOpen(false)
               setBookToolsOpen(false)
             }}
             onExportPdfKdp={() => {
@@ -633,93 +852,6 @@ export default function App() {
           )}
         </>
       )}
-    </div>
-  )
-}
-
-function escapeHtml(s: string) {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-}
-
-type RowProps = {
-  manuscript: Manuscript
-  active: boolean
-  onSelect: () => void
-  onDelete: () => void
-  onDropReorder: (draggedId: number, targetId: number) => void
-}
-
-function ManuscriptRow({
-  manuscript,
-  active,
-  onSelect,
-  onDelete,
-  onDropReorder,
-}: RowProps) {
-  const [dragOver, setDragOver] = useState(false)
-  const [dragging, setDragging] = useState(false)
-
-  return (
-    <div
-      className={`flex items-center gap-2 rounded-3xl px-3 py-3 transition-colors sm:gap-3 sm:px-4 sm:py-4 ${
-        active
-          ? 'bg-ink text-parchment dark:bg-cream dark:text-ink'
-          : 'hover:bg-dust/30 dark:hover:bg-border-dark/50'
-      } ${dragOver && !active ? 'bg-dust text-ink dark:bg-border-dark dark:text-ink-dark' : ''} ${dragging ? 'opacity-40 scale-[0.98]' : ''}`}
-      onDragOver={(e) => {
-        e.preventDefault()
-        setDragOver(true)
-      }}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={(e) => {
-        e.preventDefault()
-        setDragOver(false)
-        const id = Number(e.dataTransfer.getData('text/plain'))
-        if (!Number.isFinite(id)) return
-        onDropReorder(id, manuscript.id)
-      }}
-    >
-      <button
-        type="button"
-        draggable
-        onDragStart={(e) => {
-          e.dataTransfer.setData('text/plain', String(manuscript.id))
-          e.dataTransfer.effectAllowed = 'move'
-          setDragging(true)
-        }}
-        onDragEnd={() => setDragging(false)}
-        className={`cursor-grab touch-none text-walnut active:cursor-grabbing dark:text-accent-warm ${active ? 'text-parchment/80 dark:text-ink/70' : ''}`}
-        aria-label="Reorder"
-      >
-        <GripVertical className="h-5 w-5" />
-      </button>
-      <button
-        type="button"
-        onClick={onSelect}
-        className="flex min-w-0 flex-1 items-center gap-2 text-left"
-      >
-        <BookOpen className="h-4 w-4 shrink-0 opacity-80" />
-        <span className="truncate font-medium">{manuscript.title}</span>
-      </button>
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation()
-          onDelete()
-        }}
-        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl transition-colors ${
-          active
-            ? 'text-parchment/70 hover:bg-white/10 dark:text-ink/60 dark:hover:bg-black/10'
-            : 'text-walnut hover:bg-white/40 hover:text-red-600 dark:text-accent-warm dark:hover:bg-black/20 dark:hover:text-red-400'
-        }`}
-        aria-label="Delete chapter"
-      >
-        <Trash2 className="h-4 w-4" />
-      </button>
     </div>
   )
 }
