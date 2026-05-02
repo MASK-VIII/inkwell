@@ -38,6 +38,8 @@ type Props = {
   editorRef: MutableRefObject<Editor | null>
   /** Slimmer word/char line for minimal chrome */
   compactFooterStats?: boolean
+  /** Compact padding and editor min-height for floating popout */
+  embedded?: boolean
 }
 
 function ManuscriptEditorInner({
@@ -46,6 +48,7 @@ function ManuscriptEditorInner({
   onDocumentChange,
   editorRef,
   compactFooterStats,
+  embedded,
 }: Props) {
   const [, setToolbarVersion] = useState(0)
 
@@ -103,9 +106,16 @@ function ManuscriptEditorInner({
         : 'text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50'
     }`
 
+  const shellPad = embedded ? 'p-3 sm:p-4' : 'p-6 sm:p-12'
+  const editorMinH = embedded ? 'min-h-[9rem]' : 'min-h-[50vh]'
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex flex-wrap items-center gap-2 border-b border-dust bg-white/50 px-4 py-2.5 dark:border-border-dark dark:bg-panel-dark/50 sm:px-8 sm:py-3">
+      <div
+        className={`flex flex-wrap items-center gap-2 border-b border-dust bg-white/50 dark:border-border-dark dark:bg-panel-dark/50 ${
+          embedded ? 'px-2 py-2 sm:px-3 sm:py-2.5' : 'px-4 py-2.5 sm:px-8 sm:py-3'
+        }`}
+      >
         <select
           value={editor ? headingSelectValue(editor) : ''}
           onChange={(e) => {
@@ -229,11 +239,15 @@ function ManuscriptEditorInner({
         )}
       </div>
 
-      <div className="inkwell-editor-shell flex-1 overflow-auto p-6 sm:p-12">
+      <div className={`inkwell-editor-shell flex-1 overflow-auto ${shellPad}`}>
         {editor ? (
-          <EditorContent editor={editor} className="h-full min-h-[50vh]" />
+          <EditorContent editor={editor} className={`h-full ${editorMinH}`} />
         ) : (
-          <div className="mx-auto max-w-[720px] min-h-[40vh] animate-pulse rounded-xl bg-dust/20 dark:bg-border-dark/30" />
+          <div
+            className={`mx-auto max-w-[720px] animate-pulse rounded-xl bg-dust/20 dark:bg-border-dark/30 ${
+              embedded ? 'min-h-[9rem]' : 'min-h-[40vh]'
+            }`}
+          />
         )}
       </div>
     </div>
@@ -246,6 +260,7 @@ export const ManuscriptEditor = memo(ManuscriptEditorInner, (prev, next) => {
     prev.manuscriptId === next.manuscriptId &&
     prev.onDocumentChange === next.onDocumentChange &&
     prev.editorRef === next.editorRef &&
-    prev.compactFooterStats === next.compactFooterStats
+    prev.compactFooterStats === next.compactFooterStats &&
+    prev.embedded === next.embedded
   )
 })

@@ -1,5 +1,6 @@
 import type { EbookTheme, Theme } from '../../types'
 import { clampNumber } from './clamp'
+import { CollapsibleSection } from './CollapsibleSection'
 
 type Props = {
   theme: Theme
@@ -9,8 +10,15 @@ type Props = {
 export function EbookThemeForm({ theme, onThemeChange }: Props) {
   return (
     <div className="rounded-2xl border border-dust bg-parchment/80 p-4 dark:border-border-dark dark:bg-panel-dark/80 space-y-3">
-      <div className="text-sm font-semibold text-ink dark:text-ink-dark">Ebook</div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
+        Ebook
+      </div>
+      <CollapsibleSection
+        title="Reflow & EPUB typography"
+        description="Preview pane and exported ebook styling."
+      >
+        <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
         <label className="block space-y-1">
           <span className="text-xs font-medium text-ink/70 dark:text-ink-dark/70">Base font size (px)</span>
           <input
@@ -115,6 +123,8 @@ export function EbookThemeForm({ theme, onThemeChange }: Props) {
           />
         </label>
       </div>
+        </div>
+      </CollapsibleSection>
     </div>
   )
 }

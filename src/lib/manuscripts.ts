@@ -1,6 +1,13 @@
 import type { JSONContent } from '@tiptap/core'
 import { compress, decompress } from 'lz-string'
-import type { InkwellProject, Manuscript, ProjectIndex, ProjectMeta, WritingGoals } from '../types'
+import type {
+  InkwellProject,
+  Manuscript,
+  ProjectIndex,
+  ProjectKind,
+  ProjectMeta,
+  WritingGoals,
+} from '../types'
 import { defaultBookMeta, defaultTheme, defaultWritingGoals } from '../types'
 import { hashStringDjb2 } from './hash'
 import { countWordsInDoc, todayLocalISODate } from './wordCount'
@@ -58,6 +65,57 @@ export const defaultDoc = (): JSONContent => ({
   content: [{ type: 'paragraph' }],
 })
 
+const NOTE_TITLE_MAX = 72
+
+function firstPlainLineFromDoc(doc: JSONContent | undefined): string {
+  if (!doc || doc.type !== 'doc') return ''
+  let found = ''
+  const walk = (node: JSONContent): boolean => {
+    if (node.text) {
+      found += node.text
+      if (/[\r\n]/.test(found)) return true
+      if (found.length >= NOTE_TITLE_MAX) return true
+    }
+    if (node.content) {
+      for (const c of node.content) {
+        if (walk(c)) return true
+      }
+    }
+    return false
+  }
+  doc.content?.some(walk)
+  const line = found.split(/\r?\n/)[0]?.trim() ?? ''
+  return line.length > NOTE_TITLE_MAX ? `${line.slice(0, NOTE_TITLE_MAX)}…` : line
+}
+
+/** Shelf / meta title for note projects */
+export function deriveNoteMetaTitle(project: Pick<InkwellProject, 'chapters'>): string {
+  const ch0 = project.chapters[0]
+  const fromChapter = ch0?.title?.trim() ?? ''
+  if (fromChapter) return fromChapter
+  const fromDoc = firstPlainLineFromDoc(ch0?.content)
+  if (fromDoc) return fromDoc
+  return 'Untitled note'
+}
+
+function normalizeKind(raw: unknown): ProjectKind {
+  return raw === 'note' ? 'note' : 'book'
+}
+
+/** Merge defaults for index rows saved before kind / linkedBookId existed */
+export function normalizeProjectMeta(m: Partial<ProjectMeta> & Pick<ProjectMeta, 'id'>): ProjectMeta {
+  const createdAt = typeof m.createdAt === 'number' ? m.createdAt : typeof m.updatedAt === 'number' ? m.updatedAt : 0
+  const updatedAt = typeof m.updatedAt === 'number' ? m.updatedAt : createdAt
+  return {
+    id: m.id,
+    title: typeof m.title === 'string' ? m.title : '',
+    createdAt,
+    updatedAt,
+    kind: normalizeKind(m.kind),
+    linkedBookId: m.linkedBookId ?? null,
+  }
+}
+
 function seedChapters(): Manuscript[] {
   return [
     {
@@ -68,10 +126,12 @@ function seedChapters(): Manuscript[] {
   ]
 }
 
-function seedProject(id: string): InkwellProject {
+function seedBookProject(id: string): InkwellProject {
   return withAlignedGoals({
     version: 3,
     id,
+    kind: 'book',
+    linkedBookId: null,
     book: defaultBookMeta(),
     goals: defaultWritingGoals(),
     chapters: seedChapters(),
@@ -107,6 +167,8 @@ function migrateV1Array(id: string, parsed: Manuscript[]): InkwellProject {
   return withAlignedGoals({
     version: 3,
     id,
+    kind: 'book',
+    linkedBookId: null,
     book: defaultBookMeta(),
     goals: defaultWritingGoals(),
     chapters,
@@ -132,9 +194,17 @@ function normalizeProjectV3(parsed: Partial<InkwellProject>, id: string): Inkwel
     ebook: { ...themeDefaults.ebook, ...((parsedTheme.ebook ?? {}) as Partial<InkwellProject['theme']['ebook']>) },
   }
 
+  const kind = normalizeKind(parsed.kind)
+  const linkedBookId =
+    parsed.linkedBookId === undefined || parsed.linkedBookId === null || parsed.linkedBookId === ''
+      ? null
+      : String(parsed.linkedBookId)
+
   return withAlignedGoals({
     version: 3,
     id,
+    kind,
+    linkedBookId: kind === 'note' ? linkedBookId : null,
     book: { ...defaultBookMeta(), ...(parsed.book ?? {}) },
     goals: { ...defaultWritingGoals(), ...(parsed.goals ?? {}) } as WritingGoals,
     chapters,
@@ -147,6 +217,8 @@ function migrateV2ToV3(id: string, parsed: LegacyV2): InkwellProject {
   return withAlignedGoals({
     version: 3,
     id,
+    kind: 'book',
+    linkedBookId: null,
     book: { ...defaultBookMeta(), ...(parsed.book as object) } as InkwellProject['book'],
     goals: { ...defaultWritingGoals(), ...(parsed.goals as object) } as WritingGoals,
     chapters,
@@ -160,7 +232,12 @@ function loadIndex(): ProjectIndex {
     if (!raw) return { version: 1, projects: [] }
     const parsed = JSON.parse(raw) as Partial<ProjectIndex>
     if (parsed && parsed.version === 1 && Array.isArray(parsed.projects)) {
-      return { version: 1, projects: parsed.projects as ProjectMeta[] }
+      return {
+        version: 1,
+        projects: (parsed.projects as Partial<ProjectMeta>[]).map((row) =>
+          normalizeProjectMeta(row as Partial<ProjectMeta> & Pick<ProjectMeta, 'id'>),
+        ),
+      }
     }
   } catch {
     /* ignore */
@@ -174,7 +251,22 @@ function saveIndex(idx: ProjectIndex): ProjectIndex {
 }
 
 export function listProjects(): ProjectMeta[] {
-  return loadIndex().projects.slice().sort((a, b) => b.updatedAt - a.updatedAt)
+  return loadIndex()
+    .projects.map((row) => normalizeProjectMeta(row))
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+}
+
+export function listBookMetas(metas = listProjects()): ProjectMeta[] {
+  return metas.filter((m) => m.kind === 'book')
+}
+
+/** General scratchpad notes (not stuck to a book) */
+export function listGeneralNoteMetas(metas = listProjects()): ProjectMeta[] {
+  return metas.filter((m) => m.kind === 'note' && !m.linkedBookId)
+}
+
+export function listLinkedNotesForBook(bookId: string, metas = listProjects()): ProjectMeta[] {
+  return metas.filter((m) => m.kind === 'note' && m.linkedBookId === bookId)
 }
 
 export function setActiveProjectId(id: string | null): void {
@@ -256,18 +348,36 @@ function persistProjectBlob(projectId: string, normalized: InkwellProject): void
 }
 
 export function saveProject(project: InkwellProject): InkwellProject {
-  const normalized = withAlignedGoals(project)
+  const merged = normalizeProjectV3(project, project.id)
+  const normalized = withAlignedGoals(merged)
   persistProjectBlob(normalized.id, normalized)
   const idx = loadIndex()
   const now = Date.now()
-  const metaTitle = normalized.book.title.trim() || normalized.chapters[0]?.title || 'Untitled book'
-  const existing = idx.projects.find((p) => p.id === normalized.id) ?? null
+  const metaTitle =
+    normalized.kind === 'note'
+      ? deriveNoteMetaTitle(normalized)
+      : normalized.book.title.trim() || normalized.chapters[0]?.title || 'Untitled book'
+  const existingRaw = idx.projects.find((p) => p.id === normalized.id) ?? null
+  const existing = existingRaw ? normalizeProjectMeta(existingRaw) : null
   const nextMeta: ProjectMeta = existing
-    ? { ...existing, title: metaTitle, updatedAt: now }
-    : { id: normalized.id, title: metaTitle, createdAt: now, updatedAt: now }
+    ? {
+        ...existing,
+        title: metaTitle,
+        updatedAt: now,
+        kind: normalized.kind,
+        linkedBookId: normalized.kind === 'note' ? normalized.linkedBookId ?? null : null,
+      }
+    : {
+        id: normalized.id,
+        title: metaTitle,
+        createdAt: now,
+        updatedAt: now,
+        kind: normalized.kind,
+        linkedBookId: normalized.kind === 'note' ? normalized.linkedBookId ?? null : null,
+      }
   saveIndex({
     version: 1,
-    projects: [nextMeta, ...idx.projects.filter((p) => p.id !== normalized.id)],
+    projects: [nextMeta, ...idx.projects.filter((p) => p.id !== normalized.id).map((row) => normalizeProjectMeta(row))],
   })
   return normalized
 }
@@ -320,7 +430,9 @@ export function listProjectHistory(projectId: string): ProjectHistoryEntry[] {
 
 export function loadProjectSnapshot(projectId: string, snapshotId: string): InkwellProject | null {
   const h = loadHistoryRaw(projectId)
-  return h.snapshotsById[snapshotId] ?? null
+  const raw = h.snapshotsById[snapshotId]
+  if (!raw) return null
+  return normalizeProjectV3(raw as Partial<InkwellProject>, raw.id ?? projectId)
 }
 
 export function clearProjectHistory(projectId: string): void {
@@ -399,12 +511,66 @@ export function nextManuscriptId(chapters: Manuscript[]): number {
   return chapters.reduce((max, m) => Math.max(max, m.id), 0) + 1
 }
 
-export function createProject(): InkwellProject {
+export function createBookProject(): InkwellProject {
   const id = newId()
-  const project = seedProject(id)
+  const project = seedBookProject(id)
   saveProject(project)
   setActiveProjectId(id)
   return project
+}
+
+/** @deprecated use createBookProject */
+export function createProject(): InkwellProject {
+  return createBookProject()
+}
+
+export function createNoteProject(options?: { linkedBookId?: string | null }): InkwellProject {
+  const id = newId()
+  const linked =
+    options?.linkedBookId === undefined || options?.linkedBookId === null || options?.linkedBookId === ''
+      ? null
+      : options.linkedBookId
+  const project = withAlignedGoals({
+    version: 3,
+    id,
+    kind: 'note',
+    linkedBookId: linked,
+    book: defaultBookMeta(),
+    goals: defaultWritingGoals(),
+    chapters: [
+      {
+        id: 1,
+        title: '',
+        content: defaultDoc(),
+      },
+    ],
+    theme: defaultTheme(),
+  })
+  saveProject(project)
+  setActiveProjectId(id)
+  return project
+}
+
+export function deleteProject(id: string): void {
+  try {
+    localStorage.removeItem(projectKey(id))
+  } catch {
+    /* ignore */
+  }
+  try {
+    localStorage.removeItem(historyKey(id))
+  } catch {
+    /* ignore */
+  }
+  const idx = loadIndex()
+  saveIndex({
+    version: 1,
+    projects: idx.projects.filter((p) => p.id !== id).map((row) => normalizeProjectMeta(row)),
+  })
+  const active = getActiveProjectId()
+  if (active === id) {
+    setActiveProjectId(null)
+  }
 }
 
 export function ensureAtLeastOneProject(): InkwellProject {
@@ -457,5 +623,5 @@ export function ensureAtLeastOneProject(): InkwellProject {
     /* ignore */
   }
 
-  return createProject()
+  return createBookProject()
 }

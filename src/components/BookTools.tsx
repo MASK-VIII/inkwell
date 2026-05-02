@@ -1,6 +1,6 @@
 import { X } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import type { BookMeta, EbookTheme, PrintTheme, Theme, WritingGoals } from '../types'
+import type { BookMeta, EbookTheme, PrintTheme, ProjectMeta, Theme, WritingGoals } from '../types'
 import type { ProjectHistoryEntry } from '../lib/manuscripts'
 import { EbookThemeForm } from './book-tools/EbookThemeForm'
 import { HistoryPanel } from './book-tools/HistoryPanel'
@@ -11,6 +11,7 @@ type Props = {
   open: boolean
   onClose: () => void
   projectId: string
+  variant?: 'book' | 'note'
   mode: 'write' | 'review_print' | 'review_ebook'
   onSetMode: (mode: 'write' | 'review_print' | 'review_ebook') => void
   book: BookMeta
@@ -29,12 +30,19 @@ type Props = {
   historyEntries: ProjectHistoryEntry[]
   onRestoreHistory: (snapshotId: string) => void
   onClearHistory: () => void
+  /** Only for books: opens a new linked note and navigates to write */
+  onNewNoteForBook?: () => void
+  /** Notes stuck to this book (general writing UI only). */
+  linkedNotesForBook?: ProjectMeta[]
+  /** Open a linked note in a floating editor over the workspace */
+  onPopoutLinkedNote?: (noteId: string) => void
 }
 
 export function BookTools({
   open,
   onClose,
   projectId,
+  variant = 'book',
   mode,
   onSetMode,
   book,
@@ -53,7 +61,11 @@ export function BookTools({
   historyEntries,
   onRestoreHistory,
   onClearHistory,
+  onNewNoteForBook,
+  linkedNotesForBook = [],
+  onPopoutLinkedNote,
 }: Props) {
+  const isNote = variant === 'note'
   const [present, setPresent] = useState(open)
   const [phase, setPhase] = useState<'entering' | 'open' | 'closing'>(() =>
     open ? 'entering' : 'closing',
@@ -119,7 +131,7 @@ export function BookTools({
       >
         <div className="flex items-center justify-between border-b border-dust px-6 py-4 dark:border-border-dark">
           <h2 id="book-tools-title" className="font-serif text-xl font-semibold text-ink dark:text-ink-dark">
-            Book tools
+            {isNote ? 'Note tools' : 'Book tools'}
           </h2>
           <button
             type="button"
@@ -132,90 +144,155 @@ export function BookTools({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6 space-y-10">
-          <section className="space-y-4">
-            <h3 className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
-              Workspace
-            </h3>
-            <div className="rounded-2xl border border-dust bg-parchment/80 p-2 dark:border-border-dark dark:bg-panel-dark/80">
-              <div className="flex flex-wrap gap-1">
-                <button type="button" className={modeBtn(mode === 'write')} onClick={() => onSetMode('write')}>
-                  Write
-                </button>
-                <button
-                  type="button"
-                  className={modeBtn(mode === 'review_print')}
-                  onClick={() => onSetMode('review_print')}
-                  title="Review: Print"
-                >
-                  Review: Print
-                </button>
-                <button
-                  type="button"
-                  className={modeBtn(mode === 'review_ebook')}
-                  onClick={() => onSetMode('review_ebook')}
-                  title="Review: Ebook"
-                >
-                  Review: Ebook
-                </button>
+          {!isNote ? (
+            <section className="space-y-4">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
+                Workspace
+              </h3>
+              <div className="rounded-2xl border border-dust bg-parchment/80 p-2 dark:border-border-dark dark:bg-panel-dark/80">
+                <div className="flex flex-wrap gap-1">
+                  <button type="button" className={modeBtn(mode === 'write')} onClick={() => onSetMode('write')}>
+                    Write
+                  </button>
+                  <button
+                    type="button"
+                    className={modeBtn(mode === 'review_print')}
+                    onClick={() => onSetMode('review_print')}
+                    title="Review: Print"
+                  >
+                    Review: Print
+                  </button>
+                  <button
+                    type="button"
+                    className={modeBtn(mode === 'review_ebook')}
+                    onClick={() => onSetMode('review_ebook')}
+                    title="Review: Ebook"
+                  >
+                    Review: Ebook
+                  </button>
+                </div>
               </div>
-            </div>
-          </section>
+              {onNewNoteForBook ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onNewNoteForBook()
+                  }}
+                  className="w-full rounded-2xl border border-dust bg-white/70 px-4 py-3 text-sm font-semibold text-ink transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
+                >
+                  New note for this book
+                </button>
+              ) : null}
+              <div className="space-y-3">
+                <h4 className="text-[11px] font-semibold uppercase tracking-wider text-walnut/90 dark:text-accent-warm/90">
+                  Sticky notes
+                </h4>
+                {linkedNotesForBook.length === 0 ? (
+                  <p className="rounded-2xl border border-dashed border-dust/80 bg-white/50 px-4 py-3 text-sm text-ink/55 dark:border-border-dark dark:bg-panel-dark/50 dark:text-ink-dark/55">
+                    No notes stuck to this book yet. Use{' '}
+                    <span className="font-medium text-ink/75 dark:text-ink-dark/75">New note for this book</span> or
+                    drag notes on the shelf.
+                  </p>
+                ) : (
+                  <ul className="space-y-2">
+                    {linkedNotesForBook.map((n) => (
+                      <li key={n.id}>
+                        <button
+                          type="button"
+                          onClick={() => onPopoutLinkedNote?.(n.id)}
+                          className="w-full rounded-2xl border border-dust bg-white/70 px-4 py-3 text-left transition-colors hover:border-walnut/40 hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:hover:border-accent-warm/35 dark:hover:bg-panel-dark/90"
+                        >
+                          <span className="block truncate font-medium text-ink dark:text-ink-dark">
+                            {n.title || 'Untitled note'}
+                          </span>
+                          <span className="mt-0.5 block text-[11px] text-ink/45 dark:text-ink-dark/45">
+                            Open floating editor
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </section>
+          ) : (
+            <section className="space-y-4">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
+                Workspace
+              </h3>
+              <div className="rounded-2xl border border-dust bg-parchment/80 p-2 dark:border-border-dark dark:bg-panel-dark/80">
+                <div className="flex flex-wrap gap-1">
+                  <button type="button" className={modeBtn(mode === 'write')} onClick={() => onSetMode('write')}>
+                    Write
+                  </button>
+                </div>
+              </div>
+            </section>
+          )}
 
           <section className="space-y-4">
             <h3 className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
-              Book details
+              {isNote ? 'Details' : 'Book details'}
             </h3>
             <div className="space-y-3">
               <label className="block space-y-1">
-                <span className="text-xs font-medium text-ink/70 dark:text-ink-dark/70">Title</span>
+                <span className="text-xs font-medium text-ink/70 dark:text-ink-dark/70">
+                  {isNote ? 'Working title (optional)' : 'Title'}
+                </span>
                 <input
                   type="text"
                   value={book.title}
                   onChange={(e) => onBookChange({ title: e.target.value })}
-                  placeholder="Working title"
+                  placeholder={isNote ? 'Optional label for exports' : 'Working title'}
                   className="w-full rounded-2xl border border-dust bg-parchment px-4 py-2.5 text-sm focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:focus:border-cream"
                 />
               </label>
-              <label className="block space-y-1">
-                <span className="text-xs font-medium text-ink/70 dark:text-ink-dark/70">Subtitle</span>
-                <input
-                  type="text"
-                  value={book.subtitle}
-                  onChange={(e) => onBookChange({ subtitle: e.target.value })}
-                  placeholder="Optional"
-                  className="w-full rounded-2xl border border-dust bg-parchment px-4 py-2.5 text-sm focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:focus:border-cream"
-                />
-              </label>
-              <label className="block space-y-1">
-                <span className="text-xs font-medium text-ink/70 dark:text-ink-dark/70">Author</span>
-                <input
-                  type="text"
-                  value={book.authorName}
-                  onChange={(e) => onBookChange({ authorName: e.target.value })}
-                  placeholder="Your name"
-                  className="w-full rounded-2xl border border-dust bg-parchment px-4 py-2.5 text-sm focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:focus:border-cream"
-                />
-              </label>
-              <label className="block space-y-1">
-                <span className="text-xs font-medium text-ink/70 dark:text-ink-dark/70">Series</span>
-                <input
-                  type="text"
-                  value={book.series}
-                  onChange={(e) => onBookChange({ series: e.target.value })}
-                  placeholder="Optional"
-                  className="w-full rounded-2xl border border-dust bg-parchment px-4 py-2.5 text-sm focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:focus:border-cream"
-                />
-              </label>
+              {!isNote ? (
+                <>
+                  <label className="block space-y-1">
+                    <span className="text-xs font-medium text-ink/70 dark:text-ink-dark/70">Subtitle</span>
+                    <input
+                      type="text"
+                      value={book.subtitle}
+                      onChange={(e) => onBookChange({ subtitle: e.target.value })}
+                      placeholder="Optional"
+                      className="w-full rounded-2xl border border-dust bg-parchment px-4 py-2.5 text-sm focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:focus:border-cream"
+                    />
+                  </label>
+                  <label className="block space-y-1">
+                    <span className="text-xs font-medium text-ink/70 dark:text-ink-dark/70">Author</span>
+                    <input
+                      type="text"
+                      value={book.authorName}
+                      onChange={(e) => onBookChange({ authorName: e.target.value })}
+                      placeholder="Your name"
+                      className="w-full rounded-2xl border border-dust bg-parchment px-4 py-2.5 text-sm focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:focus:border-cream"
+                    />
+                  </label>
+                  <label className="block space-y-1">
+                    <span className="text-xs font-medium text-ink/70 dark:text-ink-dark/70">Series</span>
+                    <input
+                      type="text"
+                      value={book.series}
+                      onChange={(e) => onBookChange({ series: e.target.value })}
+                      placeholder="Optional"
+                      className="w-full rounded-2xl border border-dust bg-parchment px-4 py-2.5 text-sm focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:focus:border-cream"
+                    />
+                  </label>
+                </>
+              ) : null}
             </div>
           </section>
 
-          <section className="space-y-4">
-            <h3 className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
-              Theme
-            </h3>
-            <PrintThemeForm theme={theme} onThemeChange={onThemeChange} />
-            <EbookThemeForm theme={theme} onThemeChange={onThemeChange} />
-          </section>
+          {!isNote ? (
+            <section className="space-y-4">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
+                Theme
+              </h3>
+              <PrintThemeForm theme={theme} onThemeChange={onThemeChange} />
+              <EbookThemeForm theme={theme} onThemeChange={onThemeChange} />
+            </section>
+          ) : null}
 
           <section className="space-y-4">
             <h3 className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
@@ -287,60 +364,62 @@ export function BookTools({
             )}
           </section>
 
-          <section className="space-y-4">
-            <h3 className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
-              Review & export
-            </h3>
-            <div className="rounded-2xl border border-dust bg-parchment/80 p-4 dark:border-border-dark dark:bg-panel-dark/80 space-y-3">
-              <button
-                type="button"
-                onClick={onOpenPrintReview}
-                className="w-full rounded-2xl bg-ink px-4 py-3 text-sm font-semibold text-parchment transition-colors hover:bg-walnut dark:bg-cream dark:text-ink dark:hover:bg-accent-warm"
-              >
-                Open Print Review
-              </button>
-              <button
-                type="button"
-                onClick={onOpenEbookReview}
-                className="w-full rounded-2xl border border-dust bg-white/70 px-4 py-3 text-sm font-semibold text-ink transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
-              >
-                Open Ebook Review
-              </button>
-              <button
-                type="button"
-                onClick={onExportPdfKdp}
-                className="w-full rounded-2xl border border-dust bg-white/70 px-4 py-3 text-sm font-semibold text-ink transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
-              >
-                Export PDF (KDP)
-              </button>
-              <button
-                type="button"
-                onClick={onExportEpub}
-                className="w-full rounded-2xl border border-dust bg-white/70 px-4 py-3 text-sm font-semibold text-ink transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
-              >
-                Export EPUB
-              </button>
-              <label className="block">
-                <input
-                  type="file"
-                  accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                  className="hidden"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0] ?? null
-                    e.currentTarget.value = ''
-                    if (!f) return
-                    onImportDocx(f)
-                  }}
-                />
-                <span className="block w-full cursor-pointer rounded-2xl border border-dashed border-dust bg-white/40 px-4 py-3 text-center text-sm font-semibold text-ink/80 transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/40 dark:text-ink-dark/80 dark:hover:bg-panel-dark/70">
-                  Import DOCX…
-                </span>
-              </label>
-              <div className="text-xs text-ink/60 dark:text-ink-dark/60">
-                Print export uses trim, margins, and manual page breaks. EPUB uses ebook theme and reflow.
+          {!isNote ? (
+            <section className="space-y-4">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
+                Review & export
+              </h3>
+              <div className="rounded-2xl border border-dust bg-parchment/80 p-4 dark:border-border-dark dark:bg-panel-dark/80 space-y-3">
+                <button
+                  type="button"
+                  onClick={onOpenPrintReview}
+                  className="w-full rounded-2xl bg-ink px-4 py-3 text-sm font-semibold text-parchment transition-colors hover:bg-walnut dark:bg-cream dark:text-ink dark:hover:bg-accent-warm"
+                >
+                  Open Print Review
+                </button>
+                <button
+                  type="button"
+                  onClick={onOpenEbookReview}
+                  className="w-full rounded-2xl border border-dust bg-white/70 px-4 py-3 text-sm font-semibold text-ink transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
+                >
+                  Open Ebook Review
+                </button>
+                <button
+                  type="button"
+                  onClick={onExportPdfKdp}
+                  className="w-full rounded-2xl border border-dust bg-white/70 px-4 py-3 text-sm font-semibold text-ink transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
+                >
+                  Export PDF (KDP)
+                </button>
+                <button
+                  type="button"
+                  onClick={onExportEpub}
+                  className="w-full rounded-2xl border border-dust bg-white/70 px-4 py-3 text-sm font-semibold text-ink transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
+                >
+                  Export EPUB
+                </button>
+                <label className="block">
+                  <input
+                    type="file"
+                    accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0] ?? null
+                      e.currentTarget.value = ''
+                      if (!f) return
+                      onImportDocx(f)
+                    }}
+                  />
+                  <span className="block w-full cursor-pointer rounded-2xl border border-dashed border-dust bg-white/40 px-4 py-3 text-center text-sm font-semibold text-ink/80 transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/40 dark:text-ink-dark/80 dark:hover:bg-panel-dark/70">
+                    Import DOCX…
+                  </span>
+                </label>
+                <div className="text-xs text-ink/60 dark:text-ink-dark/60">
+                  Print export uses trim, margins, and manual page breaks. EPUB uses ebook theme and reflow.
+                </div>
               </div>
-            </div>
-          </section>
+            </section>
+          ) : null}
 
           <section className="space-y-4">
             <h3 className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
@@ -357,11 +436,12 @@ export function BookTools({
           <section className="rounded-2xl border border-dashed border-dust p-4 text-sm text-ink/55 dark:border-border-dark dark:text-ink-dark/55">
             <p className="font-medium text-ink/70 dark:text-ink-dark/70">Coming next</p>
             <p className="mt-1">
-              Outline, find & replace, front matter, notes, and export options will live here as they ship.
+              Outline, find & replace, front matter, and more export options will live here as they ship.
             </p>
           </section>
         </div>
       </aside>
+
     </>
   )
 }

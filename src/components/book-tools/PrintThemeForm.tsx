@@ -1,6 +1,7 @@
 import type { PrintTheme, Theme, TrimPresetId } from '../../types'
 import { TRIM_PRESETS } from '../../types'
 import { clampNumber } from './clamp'
+import { CollapsibleSection } from './CollapsibleSection'
 import { HeaderFooterRow } from './HeaderFooterRow'
 
 type Props = {
@@ -12,15 +13,17 @@ export function PrintThemeForm({ theme, onThemeChange }: Props) {
   const printPreset = TRIM_PRESETS[theme.print.trimPreset]
 
   return (
-    <div className="rounded-2xl border border-dust bg-parchment/80 p-4 dark:border-border-dark dark:bg-panel-dark/80 space-y-4">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="text-sm font-semibold text-ink dark:text-ink-dark">Print</div>
-          <div className="mt-0.5 text-xs text-ink/60 dark:text-ink-dark/60">
-            Trim {printPreset.widthIn}" × {printPreset.heightIn}"
-          </div>
-        </div>
-        <label className="block min-w-[12rem] space-y-1">
+    <div className="rounded-2xl border border-dust bg-parchment/80 p-4 dark:border-border-dark dark:bg-panel-dark/80 space-y-3">
+      <div className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
+        Print
+      </div>
+
+      <CollapsibleSection
+        title="Layout & body text"
+        description={`Trim ${printPreset.widthIn}" × ${printPreset.heightIn}" · margins & typography`}
+        defaultOpen
+      >
+        <label className="mb-4 block space-y-1">
           <span className="text-[11px] font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
             Trim preset
           </span>
@@ -36,9 +39,8 @@ export function PrintThemeForm({ theme, onThemeChange }: Props) {
             ))}
           </select>
         </label>
-      </div>
 
-      <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-3">
         <label className="block space-y-1">
           <span className="text-xs font-medium text-ink/70 dark:text-ink-dark/70">Font size (pt)</span>
           <input
@@ -169,17 +171,12 @@ export function PrintThemeForm({ theme, onThemeChange }: Props) {
           />
         </label>
       </div>
+      </CollapsibleSection>
 
-      <div className="rounded-2xl border border-dust bg-white/60 p-4 dark:border-border-dark dark:bg-panel-dark/60 space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <div className="text-sm font-semibold text-ink dark:text-ink-dark">Headers & footers</div>
-            <div className="mt-0.5 text-xs text-ink/60 dark:text-ink-dark/60">
-              Configure odd/even page header/footer content.
-            </div>
-          </div>
-        </div>
-
+      <CollapsibleSection
+        title="Headers & footers"
+        description="Odd/even running heads and page numbers."
+      >
         <div className="grid grid-cols-2 gap-3">
           <label className="flex items-center justify-between gap-3 rounded-2xl border border-dust bg-parchment px-4 py-3 text-sm dark:border-border-dark dark:bg-panel-dark">
             <span className="text-sm font-medium text-ink/80 dark:text-ink-dark/80">Header</span>
@@ -270,7 +267,7 @@ export function PrintThemeForm({ theme, onThemeChange }: Props) {
           value={theme.print.footer.even}
           onChange={(next) => onThemeChange({ print: { footer: { ...theme.print.footer, even: next } } })}
         />
-      </div>
+      </CollapsibleSection>
     </div>
   )
 }

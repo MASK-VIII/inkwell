@@ -96,11 +96,16 @@ export type Theme = {
   ebook: EbookTheme
 }
 
+export type ProjectKind = 'book' | 'note'
+
 export type ProjectMeta = {
   id: string
   title: string
   updatedAt: number
   createdAt: number
+  kind: ProjectKind
+  /** When kind is note: optional attachment to a book project id */
+  linkedBookId?: string | null
 }
 
 export type ProjectIndex = {
@@ -111,6 +116,8 @@ export type ProjectIndex = {
 export type InkwellProject = {
   version: 3
   id: string
+  kind: ProjectKind
+  linkedBookId?: string | null
   book: BookMeta
   goals: WritingGoals
   chapters: Manuscript[]

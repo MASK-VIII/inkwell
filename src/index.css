@@ -30,18 +30,26 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* WebKit/Blink number spinners inherit color-scheme from :root / .dark above */
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button {
+  cursor: pointer;
+}
+
 button:not(:disabled):not(.cursor-grab) {
   cursor: pointer;
 }
 
-/* Themed scrollbars (Firefox + WebKit/Blink) */
+/* Themed scrollbars (Firefox + WebKit/Blink) + native form widgets (number spinners, selects) */
 :root {
+  color-scheme: light;
   scrollbar-color: color-mix(in srgb, var(--color-walnut) 55%, transparent)
     color-mix(in srgb, var(--color-dust) 55%, transparent);
   scrollbar-width: thin;
 }
 
 .dark {
+  color-scheme: dark;
   scrollbar-color: color-mix(in srgb, var(--color-accent-warm) 55%, transparent)
     color-mix(in srgb, var(--color-border-dark) 80%, transparent);
 }
@@ -374,4 +382,174 @@ body {
 .dark .tiptap.ProseMirror::selection {
   background: var(--color-cream);
   color: var(--color-ink);
+}
+
+/* Read-only note preview in Book tools modal */
+.inkwell-linked-note-preview p {
+  margin: 0 0 0.75em;
+}
+
+.inkwell-linked-note-preview p:last-child {
+  margin-bottom: 0;
+}
+
+.inkwell-linked-note-preview ul,
+.inkwell-linked-note-preview ol {
+  margin: 0.5em 0 0.75em;
+  padding-left: 1.35em;
+}
+
+.inkwell-linked-note-preview ul {
+  list-style-type: disc;
+}
+
+.inkwell-linked-note-preview ol {
+  list-style-type: decimal;
+}
+
+.inkwell-linked-note-preview li {
+  margin: 0.15em 0;
+}
+
+.inkwell-linked-note-preview h1,
+.inkwell-linked-note-preview h2,
+.inkwell-linked-note-preview h3 {
+  font-family: var(--font-serif), Georgia, serif;
+  font-weight: 600;
+  margin: 1em 0 0.4em;
+  line-height: 1.25;
+}
+
+.inkwell-linked-note-preview h1 {
+  font-size: 1.35em;
+}
+
+.inkwell-linked-note-preview h2 {
+  font-size: 1.2em;
+}
+
+.inkwell-linked-note-preview h3 {
+  font-size: 1.08em;
+}
+
+.inkwell-linked-note-preview blockquote {
+  margin: 0.75em 0;
+  padding-left: 1em;
+  border-left: 3px solid color-mix(in srgb, var(--color-walnut) 45%, transparent);
+  color: color-mix(in srgb, var(--color-ink) 88%, transparent);
+}
+
+.dark .inkwell-linked-note-preview blockquote {
+  border-left-color: color-mix(in srgb, var(--color-accent-warm) 50%, transparent);
+  color: color-mix(in srgb, var(--color-ink-dark) 90%, transparent);
+}
+
+.inkwell-linked-note-preview hr {
+  margin: 1em 0;
+  border: none;
+  border-top: 1px solid color-mix(in srgb, var(--color-dust) 80%, transparent);
+}
+
+.dark .inkwell-linked-note-preview hr {
+  border-top-color: color-mix(in srgb, var(--color-border-dark) 90%, transparent);
+}
+
+.inkwell-linked-note-preview a {
+  color: var(--color-walnut);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.dark .inkwell-linked-note-preview a {
+  color: var(--color-accent-warm);
+}
+
+/* Drag source lift (bookshelf notes + chapter reorder) */
+.inkwell-drag-source-lift {
+  opacity: 0.42 !important;
+  transform: scale(0.94) !important;
+  box-shadow: 0 14px 32px -12px rgba(44, 36, 31, 0.38) !important;
+  transition:
+    transform 0.22s cubic-bezier(0.34, 1.45, 0.64, 1),
+    opacity 0.2s ease,
+    box-shadow 0.22s ease !important;
+}
+
+.dark .inkwell-drag-source-lift {
+  box-shadow: 0 14px 32px -12px rgba(0, 0, 0, 0.55) !important;
+}
+
+.inkwell-shelf-note-drag-ghost {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  border-radius: 18px;
+  background: linear-gradient(155deg, #fffefb 0%, #f4ebe0 55%, #ebe3d6 100%);
+  border: 1px solid color-mix(in srgb, var(--color-walnut) 38%, transparent);
+  box-shadow:
+    0 20px 44px -14px rgba(44, 36, 31, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.65) inset;
+  max-width: min(280px, 85vw);
+}
+
+.dark .inkwell-shelf-note-drag-ghost {
+  background: linear-gradient(155deg, #1e2228 0%, #2a3038 100%);
+  border-color: color-mix(in srgb, var(--color-accent-warm) 42%, transparent);
+  box-shadow:
+    0 22px 48px -12px rgba(0, 0, 0, 0.65),
+    0 0 0 1px rgba(217, 164, 65, 0.12) inset;
+}
+
+.inkwell-shelf-note-drag-ghost-icon {
+  font-size: 1.15rem;
+  line-height: 1;
+  filter: drop-shadow(0 1px 2px rgba(44, 36, 31, 0.2));
+}
+
+.dark .inkwell-shelf-note-drag-ghost-icon {
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.5));
+}
+
+.inkwell-shelf-note-drag-ghost-title {
+  font-family: var(--font-serif), Georgia, serif;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-ink);
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dark .inkwell-shelf-note-drag-ghost-title {
+  color: var(--color-ink-dark);
+}
+
+@keyframes inkwell-shelf-drop-glow-light {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.07);
+  }
+}
+
+@keyframes inkwell-shelf-drop-glow-dark {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.09);
+  }
+}
+
+.inkwell-shelf-drop-target {
+  animation: inkwell-shelf-drop-glow-light 1.35s ease-in-out infinite;
+}
+
+.dark .inkwell-shelf-drop-target {
+  animation-name: inkwell-shelf-drop-glow-dark;
 }
