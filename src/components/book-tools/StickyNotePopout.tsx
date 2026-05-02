@@ -1,14 +1,17 @@
-import { type MutableRefObject, useCallback, useEffect, useRef, useState } from 'react'
+import { type MutableRefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Editor } from '@tiptap/react'
 import type { JSONContent } from '@tiptap/core'
 import { GripVertical, PenLine, X } from 'lucide-react'
 
 import type { InkwellProject } from '../../types'
-import { deriveNoteMetaTitle, loadProject, saveProject } from '../../lib/manuscripts'
+import { deriveNoteMetaTitle, loadProject, saveProject, totalWordsInChapters } from '../../lib/manuscripts'
+import type { MentionItem } from '../../lib/tiptap/mentionUi'
 import { ManuscriptEditor } from '../ManuscriptEditor'
+import { OpenProjectInNewTabLink } from '../OpenProjectInNewTabLink'
 
 type Props = {
   noteId: string
+  /** Title of the book or note this sticky is linked from */
   bookTitle: string
   onClose: () => void
   /** Flush save, close popout, then navigate shelf to this note */
@@ -150,6 +153,24 @@ export function StickyNotePopout({
   const title = noteProject ? deriveNoteMetaTitle(noteProject) : 'Note'
   const ch0 = noteProject?.chapters[0]
 
+  const noteTotalWords = useMemo(
+    () => (noteProject ? totalWordsInChapters(noteProject.chapters) : 0),
+    [noteProject],
+  )
+
+  const mentionItems = useMemo((): MentionItem[] => {
+    if (!noteProject) return []
+    const items: MentionItem[] = []
+    const author = noteProject.book.authorName.trim()
+    if (author) items.push({ id: 'mention:author', label: author })
+    const nt = noteProject.book.title.trim()
+    if (nt) items.push({ id: 'mention:note', label: nt })
+    const ct = noteProject.chapters[0]?.title.trim()
+    if (ct) items.push({ id: 'mention:chapter', label: ct })
+    if (bookTitle.trim()) items.push({ id: 'mention:linked-book', label: bookTitle.trim() })
+    return items
+  }, [noteProject, bookTitle])
+
   return (
     <div
       ref={panelRef}
@@ -168,9 +189,15 @@ export function StickyNotePopout({
             {title}
           </div>
           <div className="truncate text-[11px] text-faded">
-            Linked from “{bookTitle}” — drag to move
+            Under “{bookTitle}” — drag to move
           </div>
         </div>
+        <OpenProjectInNewTabLink
+          projectId={noteId}
+          label="Open note in new tab"
+          variant="ghost"
+          className="min-h-0 h-9 w-9 rounded-lg"
+        />
         <button
           type="button"
           className="rounded-lg p-1.5 text-faded hover:bg-dust/40 hover:text-ink dark:hover:bg-white/10 dark:hover:text-ink-dark"
@@ -207,6 +234,11 @@ export function StickyNotePopout({
             editorRef={editorRef as MutableRefObject<Editor | null>}
             embedded
             compactFooterStats
+            mentionItems={mentionItems}
+            totalBookWords={noteTotalWords}
+            statsBookLabel="Entire note"
+            statsScopeLabel="Note"
+            wordStatStorageKey={noteId}
           />
         ) : (
           <div className="flex flex-1 items-center justify-center p-6 text-sm text-faded">

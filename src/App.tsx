@@ -2,11 +2,13 @@ import {
   BookOpen,
   ChevronDown,
   Download,
+  Folders,
   Library,
   Moon,
   MoreVertical,
   PenLine,
   Plus,
+  StickyNote,
   Sun,
   Trash2,
 } from 'lucide-react'
@@ -21,39 +23,57 @@ import {
   type ReactNode,
 } from 'react'
 import { BookTools } from './components/BookTools'
+import { OpenProjectInNewTabLink } from './components/OpenProjectInNewTabLink'
+import { ShelfLinkedNotesList } from './components/ShelfLinkedNotesList'
 import { StickyNotePopout } from './components/book-tools/StickyNotePopout'
 import { EbookReview } from './components/EbookReview'
 import { ManuscriptEditor } from './components/ManuscriptEditor'
 import { ManuscriptRow } from './components/ManuscriptRow'
 import { PrintReview } from './components/PrintReview'
 import { attachInkwellDragGhost } from './lib/dragGhost'
+import { NOTE_DRAG_MIME, NOTE_DRAG_TEXT_PREFIX, readShelfDragNoteId } from './lib/shelfDrag'
 import { escapeHtml } from './lib/escapeHtml'
 import {
   createBookProject,
   createNoteProject,
   defaultDoc,
   deleteProject,
+  deriveNoteMetaTitle,
   ensureAtLeastOneProject,
   listBookMetas,
-  listGeneralNoteMetas,
   listLinkedNotesForBook,
+  listLinkedNotesForBookInShelfOrder,
+  listLooseNoteMetas,
+  listProjectNoteMetas,
   listProjects,
   loadProject,
+  migrateProjectChildPins,
   nextManuscriptId,
+  noteHasChildren,
+  isProjectNotePinned,
+  pinProjectNote,
+  clearProjectChildPins,
+  purgeChildNoteFromProjectShelfLists,
+  registerNoteAttachedUnderMaster,
+  removeChildNoteFromAllProjectPins,
+  unpinProjectNote,
   pushProjectHistorySnapshot,
   listProjectHistory,
   loadProjectSnapshot,
   clearProjectHistory,
+  readOpenProjectIdFromLocation,
   rememberOpenChapter,
   resolveResumeChapterId,
   saveProject,
   setActiveProjectId,
   totalWordsInChapters,
+  wouldCreateNoteAttachmentCycle,
 } from './lib/manuscripts'
 import { buildKdpPdf } from './lib/export/pdfKdp'
 import { buildEpub, epubFilename } from './lib/export/epub'
 import { importDocxToChapters } from './lib/import/docx'
 import type { BookMeta, EbookTheme, InkwellProject, Manuscript, PrintTheme, WritingGoals } from './types'
+import type { MentionItem } from './lib/tiptap/mentionUi'
 import type { Editor, JSONContent } from '@tiptap/core'
 
 const THEME_KEY = 'inkwell-theme'
@@ -97,29 +117,20 @@ function slugDownload(name: string) {
   return name.replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '') || 'manuscript'
 }
 
-const NOTE_DRAG_MIME = 'application/x-inkwell-note-id'
-const NOTE_DRAG_TEXT_PREFIX = 'inkwell-note:'
-
 function readInitialEditorSession(): {
   project: InkwellProject
   currentId: number | null
 } {
+  const fromUrl = readOpenProjectIdFromLocation()
+  if (fromUrl) {
+    const p = loadProject(fromUrl)
+    if (p) {
+      setActiveProjectId(fromUrl)
+      return { project: p, currentId: resolveResumeChapterId(p) }
+    }
+  }
   const project = ensureAtLeastOneProject()
   return { project, currentId: resolveResumeChapterId(project) }
-}
-
-function readShelfDragNoteId(dt: DataTransfer): string | null {
-  try {
-    const id = dt.getData(NOTE_DRAG_MIME).trim()
-    if (id) return id
-    const plain = dt.getData('text/plain')
-    if (plain.startsWith(NOTE_DRAG_TEXT_PREFIX)) {
-      return plain.slice(NOTE_DRAG_TEXT_PREFIX.length).trim()
-    }
-  } catch {
-    /* ignore */
-  }
-  return null
 }
 
 export default function App() {
@@ -129,6 +140,8 @@ export default function App() {
   const [currentId, setCurrentId] = useState<number | null>(() => boot.currentId)
   const [ebookEditOpen, setEbookEditOpen] = useState(false)
   const [bookToolsOpen, setBookToolsOpen] = useState(false)
+  const [linkedNotesMenuOpen, setLinkedNotesMenuOpen] = useState(false)
+  const linkedNotesMenuRef = useRef<HTMLDivElement | null>(null)
   const [stickyNotePopoutId, setStickyNotePopoutId] = useState<string | null>(null)
   const [toast, setToast] = useState<{ node: ReactNode; ms: number } | null>(null)
   const [darkMode, setDarkMode] = useState(readInitialDarkMode)
@@ -138,10 +151,22 @@ export default function App() {
   const docxShelfInputRef = useRef<HTMLInputElement | null>(null)
   const [newProjectMenuOpen, setNewProjectMenuOpen] = useState(false)
   const [stickNoteId, setStickNoteId] = useState<string | null>(null)
-  const [stickSelectBookId, setStickSelectBookId] = useState<string>('')
+  const [stickSelectParentId, setStickSelectParentId] = useState<string>('')
   const [openNoteMenuId, setOpenNoteMenuId] = useState<string | null>(null)
-  const [shelfDropHoverBookId, setShelfDropHoverBookId] = useState<string | null>(null)
+  const [shelfDropHoverAttachId, setShelfDropHoverAttachId] = useState<string | null>(null)
   const [shelfDropHoverNotesSection, setShelfDropHoverNotesSection] = useState(false)
+  const [shelfDropHoverProjectsSection, setShelfDropHoverProjectsSection] = useState(false)
+  const [expandedShelfParentId, setExpandedShelfParentId] = useState<string | null>(null)
+  const [, setShelfPinRev] = useState(0)
+  const [, setShelfUiTick] = useState(0)
+  const [shelfDropHoverTrash, setShelfDropHoverTrash] = useState(false)
+  const [shelfProjectChildDropTarget, setShelfProjectChildDropTarget] = useState<{
+    masterId: string
+    targetId: string
+    place: 'before' | 'after'
+  } | null>(null)
+  const [trashPull, setTrashPull] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
+  const trashDropRef = useRef<HTMLDivElement | null>(null)
   const shelfDraggingNoteIdRef = useRef<string | null>(null)
   /** After a drag, suppress the click that some browsers emit on the source. */
   const shelfNoteHadDragRef = useRef(false)
@@ -158,6 +183,61 @@ export default function App() {
   const prevProjectIdForEditorRef = useRef(project.id)
 
   const chapters = project.chapters
+  const linkedNotesUnderWorkspace = useMemo(
+    () =>
+      project.kind === 'book' || project.kind === 'note'
+        ? listLinkedNotesForBookInShelfOrder(project.id)
+        : [],
+    [project.kind, project.id],
+  )
+
+  /** Shelf parent for linked notes: book/note id that owns the current project’s note cluster. */
+  const shelfParentIdForLinkedNotes = useMemo(() => {
+    if (project.kind === 'note' && project.linkedBookId?.trim()) return project.linkedBookId.trim()
+    return project.id
+  }, [project.kind, project.id, project.linkedBookId])
+
+  /** First row in BookTools “Notes in this project” / “Linked notes”; book or note master. */
+  const notesProjectMaster = useMemo(() => {
+    if (project.kind !== 'book' && project.kind !== 'note') return null
+    const parentId = project.linkedBookId?.trim()
+    if (parentId) {
+      const m = loadProject(parentId)
+      if (!m) {
+        return {
+          id: parentId,
+          title: '',
+          kind: 'book' as const,
+          isCurrent: false,
+          missing: true as const,
+        }
+      }
+      const title = m.kind === 'book' ? m.book.title.trim() || 'Untitled book' : deriveNoteMetaTitle(m)
+      return { id: m.id, title, kind: m.kind, isCurrent: false, missing: false as const }
+    }
+    const title =
+      project.kind === 'book' ? project.book.title.trim() || 'Untitled book' : deriveNoteMetaTitle(project)
+    return { id: project.id, title, kind: project.kind, isCurrent: true, missing: false as const }
+  }, [project.kind, project.id, project.linkedBookId, project.book.title, project.chapters])
+
+  /** Child notes under the shelf parent; excludes current note so it isn’t duplicated in the list. */
+  const linkedNotesForBookPanel = useMemo(() => {
+    if (project.kind !== 'book' && project.kind !== 'note') return []
+    return listLinkedNotesForBookInShelfOrder(shelfParentIdForLinkedNotes).filter((n) => n.id !== project.id)
+  }, [project.kind, project.id, shelfParentIdForLinkedNotes])
+
+  const mentionItems = useMemo((): MentionItem[] => {
+    const items: MentionItem[] = []
+    const author = project.book.authorName.trim()
+    if (author) items.push({ id: 'mention:author', label: author })
+    const bookTitle = project.book.title.trim()
+    if (bookTitle) items.push({ id: 'mention:book', label: bookTitle })
+    for (const ch of chapters) {
+      const t = ch.title.trim()
+      if (t) items.push({ id: `mention:ch-${ch.id}`, label: t })
+    }
+    return items
+  }, [project.book.authorName, project.book.title, chapters])
   const isNote = project.kind === 'note'
   const current = chapters.find((m) => m.id === currentId) ?? null
   const currentChapterIndex = useMemo(() => {
@@ -178,6 +258,7 @@ export default function App() {
   }, [chapters, currentChapterIndex])
 
   const deferredProject = useDeferredValue(project)
+  const liveTotalBookWords = useMemo(() => totalWordsInChapters(chapters), [chapters])
   const totalBookWords = useMemo(
     () => totalWordsInChapters(deferredProject.chapters),
     [deferredProject.chapters],
@@ -240,6 +321,49 @@ export default function App() {
     }
   }, [newProjectMenuOpen])
 
+  useEffect(() => {
+    if (!linkedNotesMenuOpen) return
+    const onDocMouseDown = (e: MouseEvent) => {
+      const el = linkedNotesMenuRef.current
+      if (el && !el.contains(e.target as Node)) setLinkedNotesMenuOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setLinkedNotesMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onDocMouseDown)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDocMouseDown)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [linkedNotesMenuOpen])
+
+  useEffect(() => {
+    if (route !== 'bookshelf') {
+      if (openNoteMenuId) setOpenNoteMenuId(null)
+      return
+    }
+    if (!openNoteMenuId) return
+    const onDocMouseDown = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null
+      if (target?.closest('[data-shelf-note-actions]')) return
+      setOpenNoteMenuId(null)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpenNoteMenuId(null)
+    }
+    document.addEventListener('mousedown', onDocMouseDown)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDocMouseDown)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [openNoteMenuId, route])
+
+  useEffect(() => {
+    if (route !== 'write') setLinkedNotesMenuOpen(false)
+  }, [route])
+
   const bumpHistory = useCallback(() => setHistoryRev((n) => (n + 1) % 1_000_000), [])
 
   const clearPersistIdleTimer = useCallback(() => {
@@ -256,6 +380,16 @@ export default function App() {
     setProject(saved)
     return saved
   }, [clearPersistIdleTimer])
+
+  const openLinkedNotePopout = useCallback(
+    (noteId: string) => {
+      syncPersistedState()
+      setStickyNotePopoutId(noteId)
+      setLinkedNotesMenuOpen(false)
+      setBookToolsOpen(false)
+    },
+    [syncPersistedState],
+  )
 
   const scheduleIdlePersist = useCallback(() => {
     if (persistIdleTimerRef.current != null) {
@@ -346,7 +480,7 @@ export default function App() {
 
   useEffect(() => {
     if (!stickyNotePopoutId) return
-    if (project.kind !== 'book') {
+    if (project.kind !== 'book' && project.kind !== 'note') {
       setStickyNotePopoutId(null)
       return
     }
@@ -679,8 +813,11 @@ export default function App() {
   const deleteShelfProject = useCallback(
     (id: string, e: React.MouseEvent) => {
       e.stopPropagation()
+      setShelfDropHoverTrash(false)
       if (!window.confirm('Delete this project from this device?')) return
       const blob = loadProject(id)
+      clearProjectChildPins(id)
+      removeChildNoteFromAllProjectPins(id)
       deleteProject(id)
       lastDeletedProjectRef.current = blob ? { blob } : null
       if (project.id === id) {
@@ -706,42 +843,196 @@ export default function App() {
     [project.id, showToast, undoDeleteProject],
   )
 
-  const linkNoteToBook = useCallback(
-    (noteId: string, bookId: string) => {
-      const p = loadProject(noteId)
-      if (!p || p.kind !== 'note' || !bookId) return
-      saveProject({ ...p, linkedBookId: bookId })
-      setStickNoteId(null)
-      showToast('Note linked to book')
+  const deleteShelfProjectById = useCallback(
+    (id: string) => {
+      setShelfDropHoverTrash(false)
+      if (!window.confirm('Delete this project from this device?')) return
+      const blob = loadProject(id)
+      clearProjectChildPins(id)
+      removeChildNoteFromAllProjectPins(id)
+      deleteProject(id)
+      lastDeletedProjectRef.current = blob ? { blob } : null
+      if (project.id === id) {
+        const next = ensureAtLeastOneProject()
+        setProject(next)
+        setCurrentId(resolveResumeChapterId(next))
+      }
+      setOpenNoteMenuId(null)
+      showToast(
+        <span className="flex flex-wrap items-center gap-2">
+          Project deleted
+          <button
+            type="button"
+            className="rounded-full bg-white/20 px-3 py-1 text-xs font-semibold hover:bg-white/30"
+            onClick={() => undoDeleteProject()}
+          >
+            Undo
+          </button>
+        </span>,
+        4500,
+      )
     },
-    [showToast],
+    [project.id, showToast, undoDeleteProject],
   )
 
-  const unlinkNoteToGeneral = useCallback(
+  /** Collapse an expanded book card when it no longer has linked notes. */
+  const collapseBookCardIfNoLinkedNotes = useCallback((parentShelfId: string) => {
+    const p = loadProject(parentShelfId)
+    if (p?.kind !== 'book') return
+    if (listLinkedNotesForBook(parentShelfId).length > 0) return
+    setExpandedShelfParentId((cur) => (cur === parentShelfId ? null : cur))
+  }, [])
+
+  const deleteShelfLinkedChildNote = useCallback(
     (noteId: string) => {
-      const p = loadProject(noteId)
-      if (!p || p.kind !== 'note') return
-      saveProject({ ...p, linkedBookId: null })
+      setShelfDropHoverTrash(false)
+      if (!window.confirm('Delete this note from this device?')) return
+      const blob = loadProject(noteId)
+      const formerParentId =
+        blob?.kind === 'note' && blob.linkedBookId ? String(blob.linkedBookId) : null
+      clearProjectChildPins(noteId)
+      removeChildNoteFromAllProjectPins(noteId)
+      deleteProject(noteId)
+      lastDeletedProjectRef.current = blob ? { blob } : null
+      if (project.id === noteId) {
+        const next = ensureAtLeastOneProject()
+        setProject(next)
+        setCurrentId(resolveResumeChapterId(next))
+      }
       setOpenNoteMenuId(null)
-      showToast('Note moved to Notes')
+      if (formerParentId) collapseBookCardIfNoLinkedNotes(formerParentId)
+      showToast(
+        <span className="flex flex-wrap items-center gap-2">
+          Note deleted
+          <button
+            type="button"
+            className="rounded-full bg-white/20 px-3 py-1 text-xs font-semibold hover:bg-white/30"
+            onClick={() => undoDeleteProject()}
+          >
+            Undo
+          </button>
+        </span>,
+        4500,
+      )
+      setShelfUiTick((n) => n + 1)
     },
-    [showToast],
+    [collapseBookCardIfNoLinkedNotes, project.id, showToast, undoDeleteProject],
+  )
+
+  const spawnBookOnShelf = useCallback(() => {
+    syncPersistedState()
+    createBookProject({ activate: false })
+    setShelfUiTick((n) => n + 1)
+    showToast('Book added to shelf')
+  }, [syncPersistedState, showToast])
+
+  const spawnProjectOnShelf = useCallback(() => {
+    syncPersistedState()
+    const p = createNoteProject({ activate: false })
+    pinProjectNote(p.id)
+    setShelfUiTick((n) => n + 1)
+    showToast('Project added to shelf')
+  }, [syncPersistedState, showToast])
+
+  const spawnNoteOnShelf = useCallback(() => {
+    syncPersistedState()
+    createNoteProject({ activate: false })
+    setShelfUiTick((n) => n + 1)
+    showToast('Note added to shelf')
+  }, [syncPersistedState, showToast])
+
+  const moveNoteUnderParent = useCallback(
+    (noteId: string, parentId: string) => {
+      const proj = loadProject(noteId)
+      if (!proj || proj.kind !== 'note' || !parentId) return false
+      const parent = loadProject(parentId)
+      if (!parent || (parent.kind !== 'book' && parent.kind !== 'note')) return false
+      if (wouldCreateNoteAttachmentCycle(noteId, parentId)) {
+        showToast('Cannot attach a note under its own sub-note')
+        return false
+      }
+      if (proj.linkedBookId === parentId) {
+        showToast('Note is already attached here')
+        return false
+      }
+
+      const previousParent = proj.linkedBookId
+      const wasPinnedMaster = proj.linkedBookId == null && isProjectNotePinned(noteId)
+      const kidsBeforeMove = wasPinnedMaster ? listLinkedNotesForBook(noteId, listProjects()) : []
+
+      saveProject({ ...proj, linkedBookId: parentId })
+      if (previousParent && previousParent !== parentId) {
+        purgeChildNoteFromProjectShelfLists(previousParent, noteId)
+      }
+      if (parent.kind === 'note') pinProjectNote(parentId)
+
+      if (wasPinnedMaster) {
+        if (kidsBeforeMove.length === 0) {
+          // Master was the only note; project should disappear.
+          clearProjectChildPins(noteId)
+          unpinProjectNote(noteId)
+        } else {
+          const sortedKids = kidsBeforeMove.slice().sort((a, b) => b.updatedAt - a.updatedAt)
+          const newMasterId = sortedKids[0]!.id
+          const newMaster = loadProject(newMasterId)
+          if (newMaster && newMaster.kind === 'note') {
+            saveProject({ ...newMaster, linkedBookId: null })
+            pinProjectNote(newMasterId)
+            migrateProjectChildPins(noteId, newMasterId)
+            for (const k of sortedKids) {
+              if (k.id === newMasterId) continue
+              const child = loadProject(k.id)
+              if (!child || child.kind !== 'note') continue
+              saveProject({ ...child, linkedBookId: newMasterId })
+            }
+          }
+          unpinProjectNote(noteId)
+        }
+      }
+
+      registerNoteAttachedUnderMaster(parentId, noteId)
+      if (previousParent && previousParent !== parentId) {
+        collapseBookCardIfNoLinkedNotes(String(previousParent))
+      }
+      return true
+    },
+    [collapseBookCardIfNoLinkedNotes, showToast],
+  )
+
+  const linkNoteToParent = useCallback(
+    (noteId: string, parentId: string) => {
+      if (!moveNoteUnderParent(noteId, parentId)) return
+      setStickNoteId(null)
+      showToast('Note attached')
+    },
+    [moveNoteUnderParent, showToast],
   )
 
   const openStickModalForNote = useCallback(
     (noteId: string) => {
       const books = listBookMetas()
-      if (books.length === 0) {
-        showToast('Create a book first')
+      const metas = listProjects()
+      const eligibleNotes = metas.filter(
+        (m) =>
+          m.kind === 'note' && m.id !== noteId && !wouldCreateNoteAttachmentCycle(noteId, m.id),
+      )
+      if (books.length === 0 && eligibleNotes.length === 0) {
+        showToast('Create another book or note first')
         return
       }
       const note = loadProject(noteId)
-      const preferred =
-        note?.kind === 'note' && note.linkedBookId && books.some((b) => b.id === note.linkedBookId)
-          ? note.linkedBookId!
-          : books[0]!.id
+      let preferred = ''
+      if (note?.kind === 'note' && note.linkedBookId) {
+        const lid = note.linkedBookId
+        if (books.some((b) => b.id === lid) || eligibleNotes.some((n) => n.id === lid)) {
+          preferred = lid
+        }
+      }
+      if (!preferred) {
+        preferred = books[0]?.id ?? eligibleNotes[0]?.id ?? ''
+      }
       setStickNoteId(noteId)
-      setStickSelectBookId(preferred)
+      setStickSelectParentId(preferred)
       setOpenNoteMenuId(null)
     },
     [showToast],
@@ -774,56 +1065,88 @@ export default function App() {
     const el = e.currentTarget as HTMLElement
     el.classList.remove('inkwell-drag-source-lift')
     shelfDraggingNoteIdRef.current = null
-    setShelfDropHoverBookId(null)
+    setShelfDropHoverAttachId(null)
     setShelfDropHoverNotesSection(false)
+    setShelfDropHoverProjectsSection(false)
+    setShelfDropHoverTrash(false)
+    setShelfProjectChildDropTarget(null)
     window.setTimeout(() => {
       shelfNoteHadDragRef.current = false
     }, 0)
   }, [])
 
-  const shelfBookDragOver = useCallback((e: React.DragEvent, bookId: string) => {
-    if (!shelfDraggingNoteIdRef.current) return
+  const shelfAttachTargetDragOver = useCallback((e: React.DragEvent, parentId: string) => {
+    e.stopPropagation()
+    const draggedId = readShelfDragNoteId(e.dataTransfer) ?? shelfDraggingNoteIdRef.current
+    if (!draggedId) return
+    // If the drag started somewhere we didn't track (or a browser cleared state), recover from dataTransfer.
+    shelfDraggingNoteIdRef.current = draggedId
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
     setShelfDropHoverNotesSection(false)
-    setShelfDropHoverBookId(bookId)
+    setShelfDropHoverProjectsSection(false)
+    setShelfDropHoverAttachId(parentId)
   }, [])
 
-  const shelfBookDragLeave = useCallback((e: React.DragEvent, bookId: string) => {
+  const shelfAttachTargetDragLeave = useCallback((e: React.DragEvent, parentId: string) => {
+    e.stopPropagation()
     const next = e.relatedTarget as Node | null
     if (next && e.currentTarget.contains(next)) return
-    setShelfDropHoverBookId((cur) => (cur === bookId ? null : cur))
+    setShelfDropHoverAttachId((cur) => (cur === parentId ? null : cur))
   }, [])
 
-  const shelfBookDrop = useCallback(
-    (e: React.DragEvent, bookId: string) => {
+  const shelfAttachNoteDrop = useCallback(
+    (e: React.DragEvent, parentId: string) => {
+      e.stopPropagation()
       e.preventDefault()
       const noteId = readShelfDragNoteId(e.dataTransfer) ?? shelfDraggingNoteIdRef.current
       shelfDraggingNoteIdRef.current = null
-      setShelfDropHoverBookId(null)
+      setShelfDropHoverAttachId(null)
       setShelfDropHoverNotesSection(false)
+      setShelfDropHoverProjectsSection(false)
       if (!noteId) return
-      const proj = loadProject(noteId)
-      if (!proj || proj.kind !== 'note') return
-      if (proj.linkedBookId === bookId) {
-        showToast('Note is already on this book')
+      const drag = loadProject(noteId)
+      const parent = loadProject(parentId)
+      if (!drag || drag.kind !== 'note' || !parent) return
+      if (parent.kind !== 'book' && parent.kind !== 'note') return
+
+      // Linked note dropped onto a loose note card in Notes: return it to the loose list (don't nest under the card).
+      if (
+        parent.kind === 'note' &&
+        parent.linkedBookId == null &&
+        !isProjectNotePinned(parent.id) &&
+        !noteHasChildren(parent.id, listProjects()) &&
+        drag.linkedBookId != null &&
+        drag.linkedBookId !== ''
+      ) {
+        const prev = drag.linkedBookId
+        saveProject({ ...drag, linkedBookId: null })
+        purgeChildNoteFromProjectShelfLists(prev, noteId)
+        collapseBookCardIfNoLinkedNotes(String(prev))
+        showToast('Note moved to Notes')
         return
       }
-      saveProject({ ...proj, linkedBookId: bookId })
-      showToast('Note linked to book')
+
+      if (!moveNoteUnderParent(noteId, parentId)) return
+      showToast('Note attached')
     },
-    [showToast],
+    [collapseBookCardIfNoLinkedNotes, moveNoteUnderParent, showToast],
   )
 
   const shelfNotesSectionDragOver = useCallback((e: React.DragEvent) => {
-    if (!shelfDraggingNoteIdRef.current) return
+    e.stopPropagation()
+    const draggedId = readShelfDragNoteId(e.dataTransfer) ?? shelfDraggingNoteIdRef.current
+    if (!draggedId) return
+    shelfDraggingNoteIdRef.current = draggedId
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
-    setShelfDropHoverBookId(null)
+    setShelfDropHoverAttachId(null)
     setShelfDropHoverNotesSection(true)
+    setShelfDropHoverProjectsSection(false)
   }, [])
 
   const shelfNotesSectionDragLeave = useCallback((e: React.DragEvent) => {
+    e.stopPropagation()
     const next = e.relatedTarget as Node | null
     if (next && e.currentTarget.contains(next)) return
     setShelfDropHoverNotesSection(false)
@@ -831,11 +1154,13 @@ export default function App() {
 
   const shelfNotesSectionDrop = useCallback(
     (e: React.DragEvent) => {
+      e.stopPropagation()
       e.preventDefault()
       const noteId = readShelfDragNoteId(e.dataTransfer) ?? shelfDraggingNoteIdRef.current
       shelfDraggingNoteIdRef.current = null
-      setShelfDropHoverBookId(null)
+      setShelfDropHoverAttachId(null)
       setShelfDropHoverNotesSection(false)
+      setShelfDropHoverProjectsSection(false)
       if (!noteId) return
       const proj = loadProject(noteId)
       if (!proj || proj.kind !== 'note') return
@@ -843,15 +1168,122 @@ export default function App() {
         showToast('Note is already in Notes')
         return
       }
+      const prev = proj.linkedBookId
       saveProject({ ...proj, linkedBookId: null })
+      purgeChildNoteFromProjectShelfLists(prev, noteId)
+      collapseBookCardIfNoLinkedNotes(String(prev))
       showToast('Note moved to Notes')
+    },
+    [collapseBookCardIfNoLinkedNotes, showToast],
+  )
+
+  const shelfProjectsSectionDragOver = useCallback((e: React.DragEvent) => {
+    const draggedId = readShelfDragNoteId(e.dataTransfer) ?? shelfDraggingNoteIdRef.current
+    if (!draggedId) return
+    shelfDraggingNoteIdRef.current = draggedId
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    setShelfDropHoverAttachId(null)
+    setShelfDropHoverNotesSection(false)
+    setShelfDropHoverProjectsSection(true)
+  }, [])
+
+  const shelfProjectsSectionDragLeave = useCallback((e: React.DragEvent) => {
+    const next = e.relatedTarget as Node | null
+    if (next && e.currentTarget.contains(next)) return
+    setShelfDropHoverProjectsSection(false)
+  }, [])
+
+  const shelfProjectsSectionDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault()
+      const noteId = readShelfDragNoteId(e.dataTransfer) ?? shelfDraggingNoteIdRef.current
+      shelfDraggingNoteIdRef.current = null
+      setShelfDropHoverAttachId(null)
+      setShelfDropHoverNotesSection(false)
+      setShelfDropHoverProjectsSection(false)
+      setShelfDropHoverTrash(false)
+      if (!noteId) return
+      const proj = loadProject(noteId)
+      if (!proj || proj.kind !== 'note') return
+      if (proj.linkedBookId) {
+        showToast('Only loose notes can be promoted to a project')
+        return
+      }
+      if (noteHasChildren(noteId, listProjects()) || isProjectNotePinned(noteId)) {
+        showToast('Already a project')
+        return
+      }
+      pinProjectNote(noteId)
+      showToast('Project created')
     },
     [showToast],
   )
 
+  const shelfTrashDragOver = useCallback((e: React.DragEvent) => {
+    const draggedId = readShelfDragNoteId(e.dataTransfer) ?? shelfDraggingNoteIdRef.current
+    if (!draggedId) return
+    shelfDraggingNoteIdRef.current = draggedId
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    setShelfDropHoverAttachId(null)
+    setShelfDropHoverNotesSection(false)
+    setShelfDropHoverProjectsSection(false)
+    setShelfDropHoverTrash(true)
+
+    // "Magnetism": gently pull the bin toward the cursor.
+    const el = trashDropRef.current
+    if (el) {
+      const r = el.getBoundingClientRect()
+      const cx = r.left + r.width / 2
+      const cy = r.top + r.height / 2
+      const dx = (e.clientX ?? cx) - cx
+      const dy = (e.clientY ?? cy) - cy
+      const max = 14
+      const dist = Math.max(1, Math.hypot(dx, dy))
+      const strength = Math.min(1, 110 / dist)
+      const x = Math.max(-max, Math.min(max, (dx / dist) * max * strength))
+      const y = Math.max(-max, Math.min(max, (dy / dist) * max * strength))
+      setTrashPull({ x, y })
+    }
+  }, [])
+
+  const shelfTrashDragLeave = useCallback((e: React.DragEvent) => {
+    const next = e.relatedTarget as Node | null
+    if (next && e.currentTarget.contains(next)) return
+    setShelfDropHoverTrash(false)
+    setTrashPull({ x: 0, y: 0 })
+  }, [])
+
+  const shelfTrashDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault()
+      const id = readShelfDragNoteId(e.dataTransfer) ?? shelfDraggingNoteIdRef.current
+      shelfDraggingNoteIdRef.current = null
+      setShelfDropHoverAttachId(null)
+      setShelfDropHoverNotesSection(false)
+      setShelfDropHoverProjectsSection(false)
+      setShelfDropHoverTrash(false)
+      setTrashPull({ x: 0, y: 0 })
+      if (!id) return
+      deleteShelfProjectById(id)
+    },
+    [deleteShelfProjectById],
+  )
+
   const shelfMetas = listProjects()
   const shelfBooks = listBookMetas(shelfMetas)
-  const shelfGeneralNotes = listGeneralNoteMetas(shelfMetas)
+  const shelfProjectNotes = listProjectNoteMetas(shelfMetas)
+  const shelfLooseNotes = listLooseNoteMetas(shelfMetas)
+  const stickModalEligibleNotes =
+    stickNoteId == null
+      ? []
+      : shelfMetas.filter(
+          (m) =>
+            m.kind === 'note' &&
+            m.id !== stickNoteId &&
+            !wouldCreateNoteAttachmentCycle(stickNoteId, m.id),
+        )
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-parchment text-ink transition-colors dark:bg-panel-dark dark:text-ink-dark">
@@ -985,9 +1417,20 @@ export default function App() {
           </div>
 
           <section className="mt-8 space-y-3">
-            <h2 className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
-              Books
-            </h2>
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
+                Books
+              </h2>
+              <button
+                type="button"
+                title="Add book"
+                aria-label="Add book"
+                onClick={spawnBookOnShelf}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl border border-dust bg-white/70 text-ink shadow-sm transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
+              >
+                <Plus className="h-4 w-4" strokeWidth={2.5} />
+              </button>
+            </div>
             <div
               className={`grid items-start gap-3 sm:grid-cols-2 lg:grid-cols-3 ${
                 shelfBooks.length === 0
@@ -1004,15 +1447,18 @@ export default function App() {
                 </div>
               ) : null}
               {shelfBooks.map((p) => {
-                const linked = listLinkedNotesForBook(p.id, shelfMetas)
+                const kidsOrdered = listLinkedNotesForBookInShelfOrder(p.id, shelfMetas)
+                const top = kidsOrdered.slice(0, 3)
+                const expanded = expandedShelfParentId === p.id
                 return (
                   <div
                     key={p.id}
-                    onDragOver={(e) => shelfBookDragOver(e, p.id)}
-                    onDragLeave={(e) => shelfBookDragLeave(e, p.id)}
-                    onDrop={(e) => shelfBookDrop(e, p.id)}
+                    onDragEnter={(e) => shelfAttachTargetDragOver(e, p.id)}
+                    onDragOver={(e) => shelfAttachTargetDragOver(e, p.id)}
+                    onDragLeave={(e) => shelfAttachTargetDragLeave(e, p.id)}
+                    onDrop={(e) => shelfAttachNoteDrop(e, p.id)}
                     className={`inkwell-shelf-card flex flex-col rounded-3xl border border-dust bg-white/70 text-left ease-out hover:-translate-y-px hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:hover:bg-panel-dark/90 ${
-                      shelfDropHoverBookId === p.id
+                      shelfDropHoverAttachId === p.id
                         ? 'inkwell-shelf-drop-target z-10 scale-[1.02] shadow-xl ring-2 ring-walnut ring-offset-2 ring-offset-parchment dark:ring-accent-warm dark:ring-offset-panel-dark'
                         : ''
                     }`}
@@ -1021,26 +1467,60 @@ export default function App() {
                       <div
                         role="button"
                         tabIndex={0}
-                        onClick={() => openProject(p.id)}
+                        onClick={() => {
+                          if (kidsOrdered.length > 0) {
+                            setExpandedShelfParentId((cur) => (cur === p.id ? null : p.id))
+                          } else {
+                            openProject(p.id)
+                          }
+                        }}
                         onKeyDown={(e) => {
                           if (e.key !== 'Enter' && e.key !== ' ') return
                           e.preventDefault()
-                          openProject(p.id)
+                          if (kidsOrdered.length > 0) {
+                            setExpandedShelfParentId((cur) => (cur === p.id ? null : p.id))
+                          } else {
+                            openProject(p.id)
+                          }
                         }}
                         className="min-w-0 flex-1 cursor-pointer rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-walnut focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark"
                       >
-                        <div className="truncate font-serif text-lg font-semibold">
-                          {p.title || 'Untitled book'}
-                        </div>
-                        <div className="mt-1 text-xs text-ink/55 dark:text-ink-dark/55">
-                          Updated {new Date(p.updatedAt).toLocaleString()}
+                        <div className="flex items-start gap-3">
+                          <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-dust/60 text-walnut dark:bg-border-dark/60 dark:text-accent-warm">
+                            <BookOpen className="h-5 w-5" strokeWidth={2} />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate font-serif text-lg font-semibold">{p.title || 'Untitled book'}</div>
+                            <div className="mt-1 text-xs text-ink/55 dark:text-ink-dark/55">
+                              Updated {new Date(p.updatedAt).toLocaleString()}
+                            </div>
+                          </div>
                         </div>
                       </div>
                       <div
-                        className="flex shrink-0 items-start gap-1"
+                        className="flex shrink-0 items-start gap-2"
                         onClick={(e) => e.stopPropagation()}
                         onKeyDown={(e) => e.stopPropagation()}
                       >
+                        {kidsOrdered.length > 0 ? (
+                          <button
+                            type="button"
+                            title={expanded ? 'Collapse' : 'Expand linked notes'}
+                            aria-label={expanded ? 'Collapse linked notes' : 'Expand linked notes'}
+                            className="rounded-xl p-2 text-ink/50 hover:bg-dust/50 dark:text-ink-dark/50 dark:hover:bg-border-dark/50"
+                            onClick={() => setExpandedShelfParentId((cur) => (cur === p.id ? null : p.id))}
+                          >
+                            <ChevronDown
+                              className={`h-4 w-4 transition-transform ${expanded ? 'rotate-180' : ''}`}
+                              strokeWidth={2.5}
+                            />
+                          </button>
+                        ) : null}
+                        <div className="rounded-2xl bg-dust/40 px-2 py-1 text-[11px] font-semibold text-walnut dark:bg-border-dark/60 dark:text-accent-warm">
+                          {kidsOrdered.length > 0
+                            ? `${kidsOrdered.length} note${kidsOrdered.length === 1 ? '' : 's'}`
+                            : 'Local'}
+                        </div>
                         <button
                           type="button"
                           title="Delete book"
@@ -1049,90 +1529,296 @@ export default function App() {
                         >
                           <Trash2 className="h-4 w-4" strokeWidth={2} />
                         </button>
-                        <div className="rounded-2xl bg-dust/40 px-2 py-1 text-[11px] font-semibold text-walnut dark:bg-border-dark/60 dark:text-accent-warm">
-                          Local
-                        </div>
                       </div>
                     </div>
-                    {linked.length > 0 ? (
-                      <div className="border-t border-dust px-5 pb-4 pt-2 dark:border-border-dark">
-                        <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-ink/45 dark:text-ink-dark/45">
-                          Notes for this book
+
+                    {expanded ? (
+                      <div
+                        className="border-t border-dust px-3 pb-3 pt-3 dark:border-border-dark"
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
+                      >
+                        <div className="px-2 pb-2">
+                          <div
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => {
+                              openProject(p.id)
+                              setExpandedShelfParentId(null)
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key !== 'Enter' && e.key !== ' ') return
+                              e.preventDefault()
+                              openProject(p.id)
+                              setExpandedShelfParentId(null)
+                            }}
+                            className="w-full cursor-pointer rounded-2xl border border-dust bg-white/70 px-4 py-3 text-left outline-none transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:hover:bg-panel-dark/90 focus-visible:ring-2 focus-visible:ring-walnut focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0 flex-1">
+                                <div className="truncate text-sm font-semibold text-ink dark:text-ink-dark">
+                                  {p.title || 'Untitled book'}
+                                </div>
+                                <div className="mt-0.5 text-[11px] text-ink/45 dark:text-ink-dark/45">
+                                  Open manuscript
+                                </div>
+                              </div>
+                              <div className="shrink-0 rounded-full bg-dust/50 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-walnut dark:bg-border-dark/60 dark:text-accent-warm">
+                                Book
+                              </div>
+                            </div>
+                          </div>
                         </div>
-                        <ul className="space-y-1">
-                          {linked.map((n) => (
-                            <li
-                              key={n.id}
-                              draggable
-                              title="Drag onto another book or into Notes"
-                              aria-label={`Note: ${n.title || 'Untitled note'}. Drag to move, or activate to open.`}
-                              onDragStart={(e) =>
-                                shelfNoteDragStart(e, n.id, n.title || 'Untitled note')
-                              }
-                              onDragEnd={shelfNoteDragEnd}
-                              onClick={(e) => {
-                                if ((e.target as HTMLElement).closest('[data-shelf-note-actions]')) return
-                                tryOpenShelfNote(n.id)
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key !== 'Enter' && e.key !== ' ') return
-                                if ((e.target as HTMLElement).closest('[data-shelf-note-actions]')) return
-                                e.preventDefault()
-                                tryOpenShelfNote(n.id)
-                              }}
-                              tabIndex={0}
-                              role="button"
-                              className="flex cursor-grab touch-none items-center gap-1 rounded-xl border border-transparent px-1 py-0.5 outline-none transition-[transform,box-shadow,background-color,border-color] duration-200 ease-out hover:border-dust/70 hover:bg-dust/25 active:cursor-grabbing dark:hover:border-border-dark/60 dark:hover:bg-border-dark/35 focus-visible:ring-2 focus-visible:ring-walnut focus-visible:ring-offset-1 focus-visible:ring-offset-white dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark"
-                            >
-                              <div className="min-w-0 flex-1 truncate px-2 py-1.5 text-left text-xs font-medium text-ink dark:text-ink-dark">
-                                {n.title || 'Untitled note'}
-                              </div>
-                              <div data-shelf-note-actions className="relative shrink-0">
-                                <button
-                                  type="button"
-                                  className="rounded-lg p-1.5 text-ink/45 hover:bg-dust/40 dark:text-ink-dark/45 dark:hover:bg-border-dark/40"
-                                  title="Note actions"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    setOpenNoteMenuId((cur) => (cur === n.id ? null : n.id))
-                                  }}
-                                >
-                                  <MoreVertical className="h-4 w-4" />
-                                </button>
-                                {openNoteMenuId === n.id ? (
-                                  <div
-                                    className="absolute right-0 top-full z-[80] mt-1 w-44 rounded-xl border border-dust bg-white py-1 shadow-lg dark:border-border-dark dark:bg-panel-dark"
-                                    onMouseDown={(e) => e.stopPropagation()}
-                                  >
-                                    <button
-                                      type="button"
-                                      className="block w-full px-3 py-2 text-left text-xs font-medium hover:bg-dust/30 dark:hover:bg-border-dark/50"
-                                      onClick={() => {
-                                        unlinkNoteToGeneral(n.id)
-                                      }}
-                                    >
-                                      Move to Notes
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="block w-full px-3 py-2 text-left text-xs font-medium hover:bg-dust/30 dark:hover:bg-border-dark/50"
-                                      onClick={() => openStickModalForNote(n.id)}
-                                    >
-                                      Change book…
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="block w-full px-3 py-2 text-left text-xs font-medium text-red-700 hover:bg-dust/30 dark:text-red-400 dark:hover:bg-border-dark/50"
-                                      onClick={(ev) => deleteShelfProject(n.id, ev)}
-                                    >
-                                      Delete
-                                    </button>
-                                  </div>
-                                ) : null}
-                              </div>
-                            </li>
+                        {kidsOrdered.length === 0 ? (
+                          <div className="px-4 py-2 text-xs text-ink/55 dark:text-ink-dark/55">
+                            No linked notes yet. Drag notes here to attach them.
+                          </div>
+                        ) : (
+                          <ShelfLinkedNotesList
+                            masterId={p.id}
+                            kidsOrdered={kidsOrdered}
+                            parentLabel="book"
+                            shelfProjectChildDropTarget={shelfProjectChildDropTarget}
+                            setShelfProjectChildDropTarget={setShelfProjectChildDropTarget}
+                            shelfDraggingNoteIdRef={shelfDraggingNoteIdRef}
+                            onLinkedNoteOpen={(id) => {
+                              tryOpenShelfNote(id)
+                              setExpandedShelfParentId(null)
+                            }}
+                            setShelfUiTick={setShelfUiTick}
+                            setShelfDropHoverAttachId={setShelfDropHoverAttachId}
+                            setShelfDropHoverNotesSection={setShelfDropHoverNotesSection}
+                            setShelfDropHoverProjectsSection={setShelfDropHoverProjectsSection}
+                            moveNoteUnderParent={moveNoteUnderParent}
+                            showToast={showToast}
+                            shelfNoteDragStart={shelfNoteDragStart}
+                            shelfNoteDragEnd={shelfNoteDragEnd}
+                            setShelfPinRev={setShelfPinRev}
+                            onDeleteLinkedNote={deleteShelfLinkedChildNote}
+                          />
+                        )}
+                      </div>
+                    ) : top.length > 0 ? (
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setExpandedShelfParentId((cur) => (cur === p.id ? null : p.id))}
+                        onKeyDown={(e) => {
+                          if (e.key !== 'Enter' && e.key !== ' ') return
+                          e.preventDefault()
+                          setExpandedShelfParentId((cur) => (cur === p.id ? null : p.id))
+                        }}
+                        className="cursor-pointer border-t border-dust px-5 pb-4 pt-3 text-left outline-none hover:bg-dust/20 dark:border-border-dark dark:hover:bg-border-dark/35 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-walnut dark:focus-visible:ring-cream"
+                      >
+                        <div className="space-y-1">
+                          {top.map((n) => (
+                            <div key={n.id} className="truncate text-xs text-ink/55 dark:text-ink-dark/55">
+                              {n.title || 'Untitled note'}
+                            </div>
                           ))}
-                        </ul>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+
+          <section
+            className={`mt-10 space-y-3 rounded-3xl transition-[transform,box-shadow] duration-300 ease-out ${
+              shelfDropHoverProjectsSection
+                ? 'inkwell-shelf-drop-target scale-[1.01] shadow-lg ring-2 ring-walnut ring-offset-2 ring-offset-parchment dark:ring-accent-warm dark:ring-offset-panel-dark'
+                : ''
+            }`}
+            onDragOver={shelfProjectsSectionDragOver}
+            onDragLeave={shelfProjectsSectionDragLeave}
+            onDrop={shelfProjectsSectionDrop}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
+                Projects
+              </h2>
+              <button
+                type="button"
+                title="Add project"
+                aria-label="Add project"
+                onClick={spawnProjectOnShelf}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl border border-dust bg-white/70 text-ink shadow-sm transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
+              >
+                <Plus className="h-4 w-4" strokeWidth={2.5} />
+              </button>
+            </div>
+            <div
+              className={`grid items-start gap-3 sm:grid-cols-2 lg:grid-cols-3 ${
+                shelfProjectNotes.length === 0
+                  ? 'min-h-[14rem] rounded-3xl border-2 border-dashed border-dust/90 bg-white/60 px-5 py-6 dark:border-border-dark dark:bg-panel-dark/55'
+                  : ''
+              }`}
+            >
+              {shelfProjectNotes.length === 0 ? (
+                <div className="col-span-full flex min-h-[11rem] flex-col items-center justify-center gap-3 px-4 text-center sm:min-h-[12rem]">
+                  <p className="max-w-lg text-sm leading-relaxed text-ink/65 dark:text-ink-dark/60">
+                    Projects appear automatically when a note has other notes attached under it. Drag a note onto
+                    another note to create one.
+                  </p>
+                </div>
+              ) : null}
+
+              {shelfProjectNotes.map((p) => {
+                const kidsOrdered = listLinkedNotesForBookInShelfOrder(p.id, shelfMetas)
+                const top = kidsOrdered.slice(0, 3)
+                const expanded = expandedShelfParentId === p.id
+                return (
+                  <div
+                    key={p.id}
+                    onDragEnter={(e) => shelfAttachTargetDragOver(e, p.id)}
+                    onDragOver={(e) => shelfAttachTargetDragOver(e, p.id)}
+                    onDragLeave={(e) => shelfAttachTargetDragLeave(e, p.id)}
+                    onDrop={(e) => shelfAttachNoteDrop(e, p.id)}
+                    className={`inkwell-shelf-card flex flex-col rounded-3xl border border-dust bg-white/70 text-left ease-out hover:-translate-y-px hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:hover:bg-panel-dark/90 ${
+                      shelfDropHoverAttachId === p.id
+                        ? 'inkwell-shelf-drop-target z-10 scale-[1.02] shadow-xl ring-2 ring-walnut ring-offset-2 ring-offset-parchment dark:ring-accent-warm dark:ring-offset-panel-dark'
+                        : ''
+                    }`}
+                  >
+                    <div className="flex w-full items-start justify-between gap-3 p-5">
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setExpandedShelfParentId((cur) => (cur === p.id ? null : p.id))}
+                        onKeyDown={(e) => {
+                          if (e.key !== 'Enter' && e.key !== ' ') return
+                          e.preventDefault()
+                          setExpandedShelfParentId((cur) => (cur === p.id ? null : p.id))
+                        }}
+                        className="min-w-0 flex-1 cursor-pointer rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-walnut focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-dust/60 text-walnut dark:bg-border-dark/60 dark:text-accent-warm">
+                            <Folders className="h-5 w-5" strokeWidth={2} />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate font-serif text-lg font-semibold">{p.title || 'Untitled project'}</div>
+                            <div className="mt-1 text-xs text-ink/55 dark:text-ink-dark/55">
+                              Updated {new Date(p.updatedAt).toLocaleString()}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div
+                        className="flex shrink-0 items-start gap-2"
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          title={expanded ? 'Collapse' : 'Expand'}
+                          aria-label={expanded ? 'Collapse project' : 'Expand project'}
+                          className="rounded-xl p-2 text-ink/50 hover:bg-dust/50 dark:text-ink-dark/50 dark:hover:bg-border-dark/50"
+                          onClick={() => setExpandedShelfParentId((cur) => (cur === p.id ? null : p.id))}
+                        >
+                          <ChevronDown
+                            className={`h-4 w-4 transition-transform ${expanded ? 'rotate-180' : ''}`}
+                            strokeWidth={2.5}
+                          />
+                        </button>
+                        <div className="rounded-2xl bg-dust/40 px-2 py-1 text-[11px] font-semibold text-walnut dark:bg-border-dark/60 dark:text-accent-warm">
+                          {kidsOrdered.length} note{kidsOrdered.length === 1 ? '' : 's'}
+                        </div>
+                        <button
+                          type="button"
+                          title="Delete project"
+                          className="rounded-xl p-2 text-ink/50 hover:bg-red-500/10 hover:text-red-600 dark:text-ink-dark/50 dark:hover:bg-red-400/10 dark:hover:text-red-400"
+                          onClick={(e) => deleteShelfProject(p.id, e)}
+                        >
+                          <Trash2 className="h-4 w-4" strokeWidth={2} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {expanded ? (
+                      <div
+                        className="border-t border-dust px-3 pb-3 pt-3 dark:border-border-dark"
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
+                      >
+                        <div className="px-2 pb-2">
+                          <div
+                            draggable
+                            title="Drag onto a book, project, note, or into Notes"
+                            aria-label={`Master note: ${p.title || 'Untitled note'}. Drag to move, or activate to open.`}
+                            onDragStart={(e) => shelfNoteDragStart(e, p.id, p.title || 'Untitled note')}
+                            onDragEnd={shelfNoteDragEnd}
+                            className="w-full cursor-grab rounded-2xl border border-dust bg-white/70 px-4 py-3 text-left outline-none transition-colors hover:bg-white active:cursor-grabbing dark:border-border-dark dark:bg-panel-dark/70 dark:hover:bg-panel-dark/90 focus-visible:ring-2 focus-visible:ring-walnut focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark"
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => {
+                              tryOpenShelfNote(p.id)
+                              setExpandedShelfParentId(null)
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault()
+                                tryOpenShelfNote(p.id)
+                                setExpandedShelfParentId(null)
+                              }
+                            }}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0 flex-1">
+                                <div className="truncate text-sm font-semibold text-ink dark:text-ink-dark">
+                                  {p.title || 'Untitled note'}
+                                </div>
+                                <div className="mt-0.5 text-[11px] text-ink/45 dark:text-ink-dark/45">
+                                  Updated {new Date(p.updatedAt).toLocaleString()}
+                                </div>
+                              </div>
+                              <div className="shrink-0 rounded-full bg-dust/50 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-walnut dark:bg-border-dark/60 dark:text-accent-warm">
+                                Master
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        {kidsOrdered.length === 0 ? (
+                          <div className="px-4 py-2 text-xs text-ink/55 dark:text-ink-dark/55">
+                            No notes in this project yet.
+                          </div>
+                        ) : (
+                          <ShelfLinkedNotesList
+                            masterId={p.id}
+                            kidsOrdered={kidsOrdered}
+                            parentLabel="project"
+                            shelfProjectChildDropTarget={shelfProjectChildDropTarget}
+                            setShelfProjectChildDropTarget={setShelfProjectChildDropTarget}
+                            shelfDraggingNoteIdRef={shelfDraggingNoteIdRef}
+                            onLinkedNoteOpen={(id) => {
+                              tryOpenShelfNote(id)
+                              setExpandedShelfParentId(null)
+                            }}
+                            setShelfUiTick={setShelfUiTick}
+                            setShelfDropHoverAttachId={setShelfDropHoverAttachId}
+                            setShelfDropHoverNotesSection={setShelfDropHoverNotesSection}
+                            setShelfDropHoverProjectsSection={setShelfDropHoverProjectsSection}
+                            moveNoteUnderParent={moveNoteUnderParent}
+                            showToast={showToast}
+                            shelfNoteDragStart={shelfNoteDragStart}
+                            shelfNoteDragEnd={shelfNoteDragEnd}
+                            setShelfPinRev={setShelfPinRev}
+                            onDeleteLinkedNote={deleteShelfLinkedChildNote}
+                          />
+                        )}
+                      </div>
+                    ) : top.length > 0 ? (
+                      <div className="border-t border-dust px-5 pb-4 pt-3 dark:border-border-dark">
+                        <div className="space-y-1">
+                          {top.map((n) => (
+                            <div key={n.id} className="truncate text-xs text-ink/55 dark:text-ink-dark/55">
+                              {n.title || 'Untitled note'}
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     ) : null}
                   </div>
@@ -1147,114 +1833,146 @@ export default function App() {
                 ? 'inkwell-shelf-drop-target scale-[1.01] shadow-lg ring-2 ring-walnut ring-offset-2 ring-offset-parchment dark:ring-accent-warm dark:ring-offset-panel-dark'
                 : ''
             }`}
+            onDragEnter={shelfNotesSectionDragOver}
             onDragOver={shelfNotesSectionDragOver}
             onDragLeave={shelfNotesSectionDragLeave}
             onDrop={shelfNotesSectionDrop}
           >
             <div>
-              <h2 className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
-                Notes
-              </h2>
-              {shelfGeneralNotes.length > 0 ? (
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
+                  Notes
+                </h2>
+                <button
+                  type="button"
+                  title="Add note"
+                  aria-label="Add note"
+                  onClick={spawnNoteOnShelf}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl border border-dust bg-white/70 text-ink shadow-sm transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
+                >
+                  <Plus className="h-4 w-4" strokeWidth={2.5} />
+                </button>
+              </div>
+              {shelfLooseNotes.length > 0 ? (
                 <p className="mt-1 text-sm text-ink/55 dark:text-ink-dark/55">
-                  Drag a note onto a book to attach it, or drop here to move a linked note back into Notes.
+                  Drag a note onto a book or another note to attach it, or drop here to move a linked note back into
+                  Notes.
                 </p>
               ) : null}
             </div>
             <div
-              className={`grid gap-3 sm:grid-cols-2 lg:grid-cols-3 ${
-                shelfGeneralNotes.length === 0
+              className={`grid items-start gap-3 sm:grid-cols-2 lg:grid-cols-3 ${
+                shelfLooseNotes.length === 0
                   ? 'min-h-[14rem] rounded-3xl border-2 border-dashed border-dust/90 bg-white/60 px-5 py-6 dark:border-border-dark dark:bg-panel-dark/55'
                   : ''
               }`}
             >
-              {shelfGeneralNotes.length === 0 ? (
+              {shelfLooseNotes.length === 0 ? (
                 <div className="col-span-full flex min-h-[11rem] flex-col items-center justify-center gap-3 px-4 text-center sm:min-h-[12rem]">
                   <p className="max-w-lg text-sm leading-relaxed text-ink/65 dark:text-ink-dark/60">
-                    Drag a note onto a book to attach it, or drop here to move a linked note back into Notes.
+                    Drag a note onto a book or another note to attach it, or drop here to move a linked note back into
+                    Notes.
                   </p>
                   <p className="text-xs font-medium text-walnut/80 dark:text-accent-warm/85">
                     Drop zone — park linked notes here when the list is empty
                   </p>
                 </div>
               ) : null}
-              {shelfGeneralNotes.map((p) => (
-                <div
-                  key={p.id}
-                  draggable
-                  title="Drag onto a book to link"
-                  aria-label={`Note: ${p.title || 'Untitled note'}. Drag to move, or activate to open.`}
-                  onDragStart={(e) =>
-                    shelfNoteDragStart(e, p.id, p.title || 'Untitled note')
-                  }
-                  onDragEnd={shelfNoteDragEnd}
-                  onClick={() => tryOpenShelfNote(p.id)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault()
-                      tryOpenShelfNote(p.id)
-                    }
-                  }}
-                  tabIndex={0}
-                  role="button"
-                  className="inkwell-shelf-card group flex cursor-grab rounded-3xl border border-dust bg-white/70 outline-none ease-out hover:-translate-y-px hover:bg-white active:cursor-grabbing dark:border-border-dark dark:bg-panel-dark/70 dark:hover:bg-panel-dark/90 focus-visible:ring-2 focus-visible:ring-walnut focus-visible:ring-offset-2 focus-visible:ring-offset-parchment dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark"
-                >
-                  <div className="min-w-0 flex-1 p-5 text-left">
-                    <div className="truncate font-serif text-lg font-semibold">{p.title || 'Untitled note'}</div>
-                    <div className="mt-1 text-xs text-ink/55 dark:text-ink-dark/55">
-                      Updated {new Date(p.updatedAt).toLocaleString()}
-                    </div>
-                  </div>
+              {shelfLooseNotes.map((p) => {
+                return (
                   <div
-                    className="flex shrink-0 flex-col items-end gap-1 p-3"
-                    onClick={(e) => e.stopPropagation()}
-                    onKeyDown={(e) => e.stopPropagation()}
+                    key={p.id}
+                    onDragEnter={(e) => shelfAttachTargetDragOver(e, p.id)}
+                    onDragOver={(e) => shelfAttachTargetDragOver(e, p.id)}
+                    onDragLeave={(e) => shelfAttachTargetDragLeave(e, p.id)}
+                    onDrop={(e) => shelfAttachNoteDrop(e, p.id)}
+                    className={`inkwell-shelf-card flex flex-col rounded-3xl border border-dust bg-white/70 text-left ease-out hover:-translate-y-px hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:hover:bg-panel-dark/90 ${
+                      shelfDropHoverAttachId === p.id
+                        ? 'inkwell-shelf-drop-target z-10 scale-[1.02] shadow-xl ring-2 ring-walnut ring-offset-2 ring-offset-parchment dark:ring-accent-warm dark:ring-offset-panel-dark'
+                        : ''
+                    }`}
                   >
-                    <button
-                      type="button"
-                      title="Delete note"
-                      className="rounded-xl p-2 text-ink/50 hover:bg-red-500/10 hover:text-red-600 dark:text-ink-dark/50 dark:hover:bg-red-400/10 dark:hover:text-red-400"
-                      onClick={(e) => deleteShelfProject(p.id, e)}
-                    >
-                      <Trash2 className="h-4 w-4" strokeWidth={2} />
-                    </button>
-                    <div className="relative">
-                      <button
-                        type="button"
-                        className="rounded-xl p-2 text-ink/50 hover:bg-dust/50 dark:text-ink-dark/50 dark:hover:bg-border-dark/50"
-                        title="More"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setOpenNoteMenuId((cur) => (cur === p.id ? null : p.id))
+                    <div className="flex w-full items-start justify-between gap-3 p-5">
+                      <div
+                        draggable
+                        title="Drag onto a book or note to attach"
+                        aria-label={`Note: ${p.title || 'Untitled note'}. Drag to move, or activate to open.`}
+                        onDragStart={(e) => shelfNoteDragStart(e, p.id, p.title || 'Untitled note')}
+                        onDragEnd={shelfNoteDragEnd}
+                        className="group min-w-0 flex-1 cursor-grab rounded-xl text-left outline-none active:cursor-grabbing focus-visible:ring-2 focus-visible:ring-walnut focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => tryOpenShelfNote(p.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            tryOpenShelfNote(p.id)
+                          }
                         }}
                       >
-                        <MoreVertical className="h-4 w-4" />
-                      </button>
-                      {openNoteMenuId === p.id ? (
-                        <div
-                          className="absolute right-0 top-full z-[80] mt-1 w-44 rounded-xl border border-dust bg-white py-1 shadow-lg dark:border-border-dark dark:bg-panel-dark"
-                          onMouseDown={(e) => e.stopPropagation()}
-                        >
-                          <button
-                            type="button"
-                            className="block w-full px-3 py-2 text-left text-xs font-medium hover:bg-dust/30 dark:hover:bg-border-dark/50"
-                            onClick={() => openStickModalForNote(p.id)}
-                          >
-                            Stick to book…
-                          </button>
-                          <button
-                            type="button"
-                            className="block w-full px-3 py-2 text-left text-xs font-medium text-red-700 hover:bg-dust/30 dark:text-red-400 dark:hover:bg-border-dark/50"
-                            onClick={(ev) => deleteShelfProject(p.id, ev)}
-                          >
-                            Delete
-                          </button>
+                        <div className="truncate font-serif text-lg font-semibold">{p.title || 'Untitled note'}</div>
+                        <div className="mt-1 text-xs text-ink/55 dark:text-ink-dark/55">
+                          Updated {new Date(p.updatedAt).toLocaleString()}
                         </div>
-                      ) : null}
+                      </div>
+
+                      <div
+                        className="flex shrink-0 flex-col items-end gap-1"
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
+                      >
+                        <OpenProjectInNewTabLink
+                          projectId={p.id}
+                          label="Open note in new tab"
+                          className="min-h-0 h-9 w-9 rounded-xl"
+                        />
+                        <button
+                          type="button"
+                          title="Delete note"
+                          className="rounded-xl p-2 text-ink/50 hover:bg-red-500/10 hover:text-red-600 dark:text-ink-dark/50 dark:hover:bg-red-400/10 dark:hover:text-red-400"
+                          onClick={(e) => deleteShelfProject(p.id, e)}
+                        >
+                          <Trash2 className="h-4 w-4" strokeWidth={2} />
+                        </button>
+                        <div className="relative">
+                          <button
+                            type="button"
+                            className="rounded-xl p-2 text-ink/50 hover:bg-dust/50 dark:text-ink-dark/50 dark:hover:bg-border-dark/50"
+                            title="More"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setOpenNoteMenuId((cur) => (cur === p.id ? null : p.id))
+                            }}
+                          >
+                            <MoreVertical className="h-4 w-4" />
+                          </button>
+                          {openNoteMenuId === p.id ? (
+                            <div
+                              className="absolute right-0 top-full z-[80] mt-1 w-44 rounded-xl border border-dust bg-white py-1 shadow-lg dark:border-border-dark dark:bg-panel-dark"
+                              onMouseDown={(e) => e.stopPropagation()}
+                            >
+                              <button
+                                type="button"
+                                className="block w-full px-3 py-2 text-left text-xs font-medium hover:bg-dust/30 dark:hover:bg-border-dark/50"
+                                onClick={() => openStickModalForNote(p.id)}
+                              >
+                                Attach to book or note…
+                              </button>
+                              <button
+                                type="button"
+                                className="block w-full px-3 py-2 text-left text-xs font-medium text-red-700 hover:bg-dust/30 dark:text-red-400 dark:hover:bg-border-dark/50"
+                                onClick={(ev) => deleteShelfProject(p.id, ev)}
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </section>
 
@@ -1272,23 +1990,36 @@ export default function App() {
                 onMouseDown={(e) => e.stopPropagation()}
               >
                 <h3 id="stick-note-title" className="font-serif text-lg font-semibold text-ink dark:text-ink-dark">
-                  Link note to book
+                  Attach note
                 </h3>
                 <p className="mt-1 text-sm text-ink/65 dark:text-ink-dark/65">
-                  Choose which book this note appears under on the shelf.
+                  Choose a book or note this entry appears under on the shelf (like pinning a sheet to another).
                 </p>
                 <label className="mt-4 block text-xs font-medium text-ink/70 dark:text-ink-dark/70">
-                  Book
+                  Attach under
                   <select
-                    value={stickSelectBookId}
-                    onChange={(e) => setStickSelectBookId(e.target.value)}
+                    value={stickSelectParentId}
+                    onChange={(e) => setStickSelectParentId(e.target.value)}
                     className="mt-1 w-full rounded-2xl border border-dust bg-parchment px-3 py-2.5 text-sm dark:border-border-dark dark:bg-panel-dark"
                   >
-                    {shelfBooks.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.title || 'Untitled book'}
-                      </option>
-                    ))}
+                    {shelfBooks.length > 0 ? (
+                      <optgroup label="Books">
+                        {shelfBooks.map((b) => (
+                          <option key={b.id} value={b.id}>
+                            {b.title || 'Untitled book'}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ) : null}
+                    {stickModalEligibleNotes.length > 0 ? (
+                      <optgroup label="Notes">
+                        {stickModalEligibleNotes.map((n) => (
+                          <option key={n.id} value={n.id}>
+                            {n.title || 'Untitled note'}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ) : null}
                   </select>
                 </label>
                 <div className="mt-6 flex justify-end gap-2">
@@ -1302,7 +2033,7 @@ export default function App() {
                   <button
                     type="button"
                     className="rounded-2xl bg-ink px-4 py-2 text-sm font-semibold text-parchment dark:bg-cream dark:text-ink"
-                    onClick={() => linkNoteToBook(stickNoteId, stickSelectBookId)}
+                    onClick={() => linkNoteToParent(stickNoteId, stickSelectParentId)}
                   >
                     Save
                   </button>
@@ -1310,6 +2041,55 @@ export default function App() {
               </div>
             </div>
           ) : null}
+
+          <div className="pointer-events-none fixed bottom-4 right-4 z-[250] sm:bottom-6 sm:right-6">
+            <div
+              ref={trashDropRef}
+              onDragOver={shelfTrashDragOver}
+              onDragEnter={shelfTrashDragOver}
+              onDragLeave={shelfTrashDragLeave}
+              onDrop={shelfTrashDrop}
+              className="pointer-events-auto relative h-44 w-44 sm:h-52 sm:w-52"
+              role="button"
+              tabIndex={-1}
+              aria-label="Drag here to delete"
+              title="Drag here to delete"
+            >
+              {/* Aura hitbox + glow */}
+              <div
+                className={`absolute inset-0 rounded-full transition-[opacity,transform,filter] duration-150 ${
+                  shelfDropHoverTrash ? 'opacity-100' : 'opacity-0'
+                }`}
+                style={{
+                  background:
+                    'radial-gradient(circle at center, rgba(239,68,68,0.20) 0%, rgba(239,68,68,0.10) 34%, rgba(239,68,68,0.00) 70%)',
+                  transform: `translate3d(${trashPull.x * 0.35}px, ${trashPull.y * 0.35}px, 0) scale(1.02)`,
+                  filter: 'blur(0.2px)',
+                }}
+              />
+
+              {/* The bin itself — light mode: darker icon + stronger fill so it reads on parchment */}
+              <div
+                className={`absolute bottom-2 right-2 flex h-20 w-20 items-center justify-center rounded-3xl shadow-xl transition-[transform,box-shadow,background-color,border-color] duration-150 sm:bottom-3 sm:right-3 sm:h-24 sm:w-24 ${
+                  shelfDropHoverTrash
+                    ? 'scale-[1.08] bg-red-200/95 ring-2 ring-red-600/55 dark:bg-red-500/25 dark:ring-red-500/60'
+                    : 'bg-red-100/95 ring-1 ring-red-500/45 dark:bg-red-500/14 dark:ring-red-500/25'
+                }`}
+                style={{
+                  transform: `translate3d(${trashPull.x}px, ${trashPull.y}px, 0) scale(${shelfDropHoverTrash ? 1.08 : 1})`,
+                }}
+              >
+                <Trash2
+                  className={`h-10 w-10 sm:h-12 sm:w-12 ${
+                    shelfDropHoverTrash
+                      ? 'text-red-900 dark:text-red-100'
+                      : 'text-red-800 dark:text-red-100/90'
+                  }`}
+                  strokeWidth={2.35}
+                />
+              </div>
+            </div>
+          </div>
         </div>
       ) : (
         <>
@@ -1321,7 +2101,7 @@ export default function App() {
                   syncPersistedState()
                   setRoute('bookshelf')
                 }}
-                className="group inline-flex w-fit items-center gap-2 rounded-2xl pr-2 transition-colors hover:bg-dust/30 focus:outline-none dark:hover:bg-border-dark/50 sm:gap-3"
+                className="inkwell-header-brand group inline-flex w-fit items-center gap-2 rounded-2xl px-2 py-1.5 focus:outline-none sm:gap-3"
                 aria-label="Back to Bookshelf"
                 title="Bookshelf"
               >
@@ -1364,6 +2144,53 @@ export default function App() {
 
               <div className="flex items-center justify-end gap-1 sm:gap-2">
                 <div className="flex items-center gap-0 sm:gap-0.5">
+                  {linkedNotesUnderWorkspace.length > 0 && route === 'write' ? (
+                    <div className="relative" ref={linkedNotesMenuRef}>
+                      <button
+                        type="button"
+                        onClick={() => setLinkedNotesMenuOpen((o) => !o)}
+                        className={`flex h-10 w-10 items-center justify-center rounded-2xl text-ink transition-colors hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50 ${
+                          linkedNotesMenuOpen ? 'bg-dust/40 dark:bg-border-dark/45' : ''
+                        }`}
+                        aria-label="Linked notes — open in floating editor"
+                        title="Linked notes — open in floating editor"
+                      >
+                        <StickyNote className="h-5 w-5" strokeWidth={2} />
+                      </button>
+                      {linkedNotesMenuOpen ? (
+                        <div
+                          role="menu"
+                          className="absolute right-0 top-full z-[60] mt-2 max-h-[min(70vh,22rem)] w-[min(calc(100vw-2rem),17rem)] overflow-auto rounded-2xl border border-dust bg-white py-2 shadow-xl dark:border-border-dark dark:bg-panel-dark"
+                        >
+                          <div className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-walnut dark:text-accent-warm">
+                            Linked notes
+                          </div>
+                          <ul className="px-1">
+                            {linkedNotesUnderWorkspace.map((n) => (
+                              <li key={n.id} className="flex items-stretch gap-1 pr-1">
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="min-w-0 flex-1 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-ink hover:bg-dust/35 dark:text-ink-dark dark:hover:bg-border-dark/50"
+                                  onClick={() => openLinkedNotePopout(n.id)}
+                                >
+                                  <span className="block truncate">{n.title || 'Untitled note'}</span>
+                                  <span className="mt-0.5 block text-[11px] font-normal text-ink/45 dark:text-ink-dark/45">
+                                    Floating editor
+                                  </span>
+                                </button>
+                                <OpenProjectInNewTabLink
+                                  projectId={n.id}
+                                  label="Open note in new tab"
+                                  className="h-full min-h-0 w-9 shrink-0 rounded-xl"
+                                />
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => {
@@ -1474,6 +2301,11 @@ export default function App() {
                           chapterTitle={current.title}
                           onChapterTitleChange={updateCurrentTitle}
                           showChapterTitleOnPage
+                          mentionItems={mentionItems}
+                          totalBookWords={liveTotalBookWords}
+                          statsBookLabel={isNote ? 'Entire note' : 'Entire book'}
+                          statsScopeLabel={isNote ? 'Note' : 'Chapter'}
+                          wordStatStorageKey={project.id}
                         />
                       ) : (
                         <div className="flex flex-1 items-center justify-center p-8 font-serif text-lg text-walnut/80 dark:text-accent-warm/80">
@@ -1505,6 +2337,11 @@ export default function App() {
                   chapterTitle={current.title}
                   onChapterTitleChange={updateCurrentTitle}
                   showChapterTitleOnPage
+                  mentionItems={mentionItems}
+                  totalBookWords={liveTotalBookWords}
+                  statsBookLabel={isNote ? 'Entire note' : 'Entire book'}
+                  statsScopeLabel={isNote ? 'Note' : 'Chapter'}
+                  wordStatStorageKey={project.id}
                 />
               ) : (
                 <div className="flex flex-1 items-center justify-center p-8 font-serif text-lg text-walnut/80 dark:text-accent-warm/80">
@@ -1557,10 +2394,10 @@ export default function App() {
             }}
             onClearHistory={clearHistory}
             onNewNoteForBook={
-              project.kind === 'book'
+              project.kind === 'book' || project.kind === 'note'
                 ? () => {
                     syncPersistedState()
-                    const p = createNoteProject({ linkedBookId: project.id })
+                    const p = createNoteProject({ linkedBookId: shelfParentIdForLinkedNotes })
                     setProject(p)
                     setCurrentId(p.chapters[0]?.id ?? null)
                     setEbookEditOpen(false)
@@ -1569,14 +2406,24 @@ export default function App() {
                   }
                 : undefined
             }
-            linkedNotesForBook={project.kind === 'book' ? listLinkedNotesForBook(project.id) : []}
-            onPopoutLinkedNote={(noteId) => setStickyNotePopoutId(noteId)}
+            linkedNotesForBook={linkedNotesForBookPanel}
+            onPopoutLinkedNote={openLinkedNotePopout}
+            notesProjectMaster={notesProjectMaster}
+            onOpenProjectInMain={(id) => {
+              syncPersistedState()
+              openProject(id)
+              setBookToolsOpen(false)
+            }}
           />
 
-          {stickyNotePopoutId && project.kind === 'book' ? (
+          {stickyNotePopoutId && (project.kind === 'book' || project.kind === 'note') ? (
             <StickyNotePopout
               noteId={stickyNotePopoutId}
-              bookTitle={project.book.title.trim() || 'Untitled book'}
+              bookTitle={
+                project.kind === 'book'
+                  ? project.book.title.trim() || 'Untitled book'
+                  : deriveNoteMetaTitle(project)
+              }
               onClose={() => setStickyNotePopoutId(null)}
               onOpenInMainEditor={(id) => {
                 syncPersistedState()

@@ -19,6 +19,11 @@ const STORAGE_ACTIVE_ID = 'inkwell-active-project-id'
 const STORAGE_LAST_CHAPTER_BY_PROJECT = 'inkwell-last-chapter-by-project-v1'
 const STORAGE_PROJECT_PREFIX = 'inkwell-project-v3:'
 const STORAGE_HISTORY_PREFIX = 'inkwell-history:'
+const STORAGE_PINNED_PROJECT_NOTES = 'inkwell-pinned-project-notes-v1'
+/** Per-project master id → ordered list of child note ids pinned inside that project. */
+const STORAGE_PROJECT_CHILD_PINS = 'inkwell-project-child-pins-v1'
+/** Per-project master id → stable order of unpinned child note ids (shelf / BookTools). */
+const STORAGE_PROJECT_CHILD_UNPINNED_ORDER = 'inkwell-project-child-unpinned-order-v1'
 /** Full snapshots are large; keep the cap modest for typical ~5MB localStorage quotas. */
 const HISTORY_MAX_ENTRIES = 35
 const HISTORY_REPLACE_WITHIN_MS = 12_000
@@ -266,8 +271,359 @@ export function listGeneralNoteMetas(metas = listProjects()): ProjectMeta[] {
   return metas.filter((m) => m.kind === 'note' && !m.linkedBookId)
 }
 
+/** Notes whose parent on the shelf is this project id (book or note). */
 export function listLinkedNotesForBook(bookId: string, metas = listProjects()): ProjectMeta[] {
   return metas.filter((m) => m.kind === 'note' && m.linkedBookId === bookId)
+}
+
+function loadPinnedProjectNotesRaw(): string[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_PINNED_PROJECT_NOTES)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as unknown
+    return Array.isArray(parsed) ? parsed.filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim()) : []
+  } catch {
+    return []
+  }
+}
+
+function savePinnedProjectNotesRaw(ids: string[]): void {
+  try {
+    localStorage.setItem(STORAGE_PINNED_PROJECT_NOTES, JSON.stringify(Array.from(new Set(ids)).sort()))
+  } catch {
+    /* ignore */
+  }
+}
+
+export function isProjectNotePinned(noteId: string): boolean {
+  return loadPinnedProjectNotesRaw().includes(noteId)
+}
+
+/** Keeps a project-note in the Projects section even if it has no children. */
+export function pinProjectNote(noteId: string): void {
+  const cur = loadPinnedProjectNotesRaw()
+  if (cur.includes(noteId)) return
+  cur.push(noteId)
+  savePinnedProjectNotesRaw(cur)
+}
+
+export function unpinProjectNote(noteId: string): void {
+  const cur = loadPinnedProjectNotesRaw()
+  if (!cur.includes(noteId)) return
+  savePinnedProjectNotesRaw(cur.filter((id) => id !== noteId))
+}
+
+function loadProjectChildPinsMap(): Record<string, string[]> {
+  try {
+    const raw = localStorage.getItem(STORAGE_PROJECT_CHILD_PINS)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+    const out: Record<string, string[]> = {}
+    for (const [k, v] of Object.entries(parsed)) {
+      if (typeof k !== 'string' || !Array.isArray(v)) continue
+      out[k] = v
+        .filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
+        .map((x) => x.trim())
+    }
+    return out
+  } catch {
+    return {}
+  }
+}
+
+function saveProjectChildPinsMap(map: Record<string, string[]>): void {
+  try {
+    localStorage.setItem(STORAGE_PROJECT_CHILD_PINS, JSON.stringify(map))
+  } catch {
+    /* ignore */
+  }
+}
+
+function loadProjectChildUnpinnedOrderMap(): Record<string, string[]> {
+  try {
+    const raw = localStorage.getItem(STORAGE_PROJECT_CHILD_UNPINNED_ORDER)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+    const out: Record<string, string[]> = {}
+    for (const [k, v] of Object.entries(parsed)) {
+      if (typeof k !== 'string' || !Array.isArray(v)) continue
+      out[k] = v
+        .filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
+        .map((x) => x.trim())
+    }
+    return out
+  } catch {
+    return {}
+  }
+}
+
+function saveProjectChildUnpinnedOrderMap(map: Record<string, string[]>): void {
+  try {
+    localStorage.setItem(STORAGE_PROJECT_CHILD_UNPINNED_ORDER, JSON.stringify(map))
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Ordered ids of child notes pinned under this project master (shelf note id). */
+export function getPinnedChildNoteIdsForProject(masterId: string): string[] {
+  return loadProjectChildPinsMap()[masterId] ?? []
+}
+
+function removeChildNoteIdFromUnpinnedOrder(masterId: string, childNoteId: string): void {
+  const um = loadProjectChildUnpinnedOrderMap()
+  const list = um[masterId]
+  if (!list) return
+  const next = list.filter((id) => id !== childNoteId)
+  if (next.length === 0) delete um[masterId]
+  else um[masterId] = next
+  saveProjectChildUnpinnedOrderMap(um)
+}
+
+function appendChildNoteToUnpinnedOrder(masterId: string, childNoteId: string): void {
+  const um = loadProjectChildUnpinnedOrderMap()
+  const list = [...(um[masterId] ?? [])].filter((id) => id !== childNoteId)
+  list.push(childNoteId)
+  um[masterId] = list
+  saveProjectChildUnpinnedOrderMap(um)
+}
+
+/**
+ * When a child note is attached under `masterId`, append it to the unpinned order (unless it is pinned in-project).
+ */
+export function registerNoteAttachedUnderMaster(masterId: string, childNoteId: string): void {
+  const child = loadProject(childNoteId)
+  if (!child || child.kind !== 'note' || child.linkedBookId !== masterId) return
+  if (getPinnedChildNoteIdsForProject(masterId).includes(childNoteId)) return
+  appendChildNoteToUnpinnedOrder(masterId, childNoteId)
+}
+
+/**
+ * Remove a child id from pinned + unpinned shelf lists for this master (note left the project entirely).
+ */
+export function purgeChildNoteFromProjectShelfLists(masterId: string, childNoteId: string): void {
+  const m = loadProjectChildPinsMap()
+  const plist = m[masterId]
+  if (plist) {
+    const next = plist.filter((id) => id !== childNoteId)
+    if (next.length === 0) delete m[masterId]
+    else m[masterId] = next
+    saveProjectChildPinsMap(m)
+  }
+  removeChildNoteIdFromUnpinnedOrder(masterId, childNoteId)
+}
+
+/**
+ * Unpinned child notes in stable user order; seeds once from `updatedAt` when storage is empty.
+ */
+export function resolveUnpinnedChildOrder(masterId: string, unpinnedKids: ProjectMeta[]): ProjectMeta[] {
+  if (unpinnedKids.length === 0) return []
+  const validIds = new Set(unpinnedKids.map((k) => k.id))
+  const byId = new Map(unpinnedKids.map((k) => [k.id, k]))
+  const um = loadProjectChildUnpinnedOrderMap()
+  let stored = um[masterId]
+  let dirty = false
+  if (!stored || stored.length === 0) {
+    stored = unpinnedKids.slice().sort((a, b) => b.updatedAt - a.updatedAt).map((k) => k.id)
+    um[masterId] = stored
+    saveProjectChildUnpinnedOrderMap(um)
+    dirty = false
+  }
+  let ordered = stored.filter((id) => validIds.has(id))
+  if (ordered.length !== stored.length) dirty = true
+  for (const k of unpinnedKids) {
+    if (!ordered.includes(k.id)) {
+      ordered.push(k.id)
+      dirty = true
+    }
+  }
+  if (dirty) {
+    um[masterId] = ordered
+    saveProjectChildUnpinnedOrderMap(um)
+  }
+  return ordered.map((id) => byId.get(id)!).filter(Boolean)
+}
+
+export function listLinkedNotesForBookInShelfOrder(bookId: string, metas = listProjects()): ProjectMeta[] {
+  const all = listLinkedNotesForBook(bookId, metas)
+  const kidById = new Map(all.map((k) => [k.id, k]))
+  const pinnedOrder = getPinnedChildNoteIdsForProject(bookId)
+  const pinnedKids = pinnedOrder.map((id) => kidById.get(id)).filter((k): k is ProjectMeta => k != null)
+  const pinnedSet = new Set(pinnedKids.map((k) => k.id))
+  const unpinnedRaw = all.filter((k) => !pinnedSet.has(k.id))
+  const unpinnedKids = resolveUnpinnedChildOrder(bookId, unpinnedRaw)
+  return [...pinnedKids, ...unpinnedKids]
+}
+
+export function reorderPinnedChildNotesInProject(
+  masterId: string,
+  draggedId: string,
+  referenceId: string,
+  place: 'before' | 'after',
+): void {
+  const m = loadProjectChildPinsMap()
+  let list = [...(m[masterId] ?? [])]
+  if (!list.includes(draggedId) || !list.includes(referenceId) || draggedId === referenceId) return
+  list = list.filter((id) => id !== draggedId)
+  const refIdx = list.indexOf(referenceId)
+  if (refIdx < 0) return
+  const insertAt = place === 'before' ? refIdx : refIdx + 1
+  list.splice(insertAt, 0, draggedId)
+  m[masterId] = list
+  saveProjectChildPinsMap(m)
+}
+
+export function reorderUnpinnedChildNotesInProject(
+  masterId: string,
+  draggedId: string,
+  referenceId: string,
+  place: 'before' | 'after',
+): void {
+  const um = loadProjectChildUnpinnedOrderMap()
+  let list = [...(um[masterId] ?? [])]
+  if (!list.includes(draggedId) || !list.includes(referenceId) || draggedId === referenceId) return
+  list = list.filter((id) => id !== draggedId)
+  const refIdx = list.indexOf(referenceId)
+  if (refIdx < 0) return
+  const insertAt = place === 'before' ? refIdx : refIdx + 1
+  list.splice(insertAt, 0, draggedId)
+  um[masterId] = list
+  saveProjectChildUnpinnedOrderMap(um)
+}
+
+export function pinChildNoteInProject(masterId: string, childNoteId: string): void {
+  const child = loadProject(childNoteId)
+  if (!child || child.kind !== 'note' || child.linkedBookId !== masterId) return
+  removeChildNoteIdFromUnpinnedOrder(masterId, childNoteId)
+  const m = loadProjectChildPinsMap()
+  const list = [...(m[masterId] ?? [])]
+  if (list.includes(childNoteId)) return
+  list.push(childNoteId)
+  m[masterId] = list
+  saveProjectChildPinsMap(m)
+}
+
+export function unpinChildNoteInProject(masterId: string, childNoteId: string): void {
+  const m = loadProjectChildPinsMap()
+  const list = m[masterId]
+  if (!list) return
+  const next = list.filter((id) => id !== childNoteId)
+  if (next.length === 0) delete m[masterId]
+  else m[masterId] = next
+  saveProjectChildPinsMap(m)
+  const child = loadProject(childNoteId)
+  if (child && child.kind === 'note' && child.linkedBookId === masterId) {
+    appendChildNoteToUnpinnedOrder(masterId, childNoteId)
+  }
+}
+
+export function removeChildNoteFromAllProjectPins(childNoteId: string): void {
+  const m = loadProjectChildPinsMap()
+  let dirty = false
+  for (const key of Object.keys(m)) {
+    const cur = m[key]!
+    const next = cur.filter((id) => id !== childNoteId)
+    if (next.length !== cur.length) dirty = true
+    if (next.length === 0) delete m[key]
+    else m[key] = next
+  }
+  if (dirty) saveProjectChildPinsMap(m)
+
+  const um = loadProjectChildUnpinnedOrderMap()
+  let uDirty = false
+  for (const key of Object.keys(um)) {
+    const cur = um[key]!
+    const next = cur.filter((id) => id !== childNoteId)
+    if (next.length !== cur.length) uDirty = true
+    if (next.length === 0) delete um[key]
+    else um[key] = next
+  }
+  if (uDirty) saveProjectChildUnpinnedOrderMap(um)
+}
+
+export function migrateProjectChildPins(oldMasterId: string, newMasterId: string): void {
+  const m = loadProjectChildPinsMap()
+  const oldList = m[oldMasterId]
+  if (oldList && oldList.length > 0) {
+    const merged = [...(m[newMasterId] ?? [])]
+    for (const id of oldList) {
+      if (!merged.includes(id)) merged.push(id)
+    }
+    m[newMasterId] = merged
+    delete m[oldMasterId]
+    saveProjectChildPinsMap(m)
+  }
+
+  const um = loadProjectChildUnpinnedOrderMap()
+  const oldU = um[oldMasterId]
+  if (oldU && oldU.length > 0) {
+    const mergedU = [...(um[newMasterId] ?? [])]
+    for (const id of oldU) {
+      if (!mergedU.includes(id)) mergedU.push(id)
+    }
+    um[newMasterId] = mergedU
+    delete um[oldMasterId]
+    saveProjectChildUnpinnedOrderMap(um)
+  } else if (um[oldMasterId]) {
+    delete um[oldMasterId]
+    saveProjectChildUnpinnedOrderMap(um)
+  }
+}
+
+export function clearProjectChildPins(masterId: string): void {
+  const m = loadProjectChildPinsMap()
+  if (m[masterId]) {
+    delete m[masterId]
+    saveProjectChildPinsMap(m)
+  }
+  const um = loadProjectChildUnpinnedOrderMap()
+  if (um[masterId]) {
+    delete um[masterId]
+    saveProjectChildUnpinnedOrderMap(um)
+  }
+}
+
+export function noteHasChildren(noteId: string, metas = listProjects()): boolean {
+  return metas.some((m) => m.kind === 'note' && m.linkedBookId === noteId)
+}
+
+export function listProjectNoteMetas(metas = listProjects()): ProjectMeta[] {
+  const pinned = new Set(loadPinnedProjectNotesRaw())
+  const rows = metas.filter(
+    (m) => m.kind === 'note' && !m.linkedBookId && (noteHasChildren(m.id, metas) || pinned.has(m.id)),
+  )
+  return rows.slice().sort((a, b) => {
+    const ca = listLinkedNotesForBook(a.id, metas).length
+    const cb = listLinkedNotesForBook(b.id, metas).length
+    if (cb !== ca) return cb - ca
+    return b.updatedAt - a.updatedAt
+  })
+}
+
+export function listLooseNoteMetas(metas = listProjects()): ProjectMeta[] {
+  const pinned = new Set(loadPinnedProjectNotesRaw())
+  return metas.filter(
+    (m) => m.kind === 'note' && !m.linkedBookId && !noteHasChildren(m.id, metas) && !pinned.has(m.id),
+  )
+}
+
+/**
+ * True if assigning `noteId`'s parent to `newParentId` would put the note under its own descendant
+ * (infinite loop). `newParentId` may be a book or note project id.
+ */
+export function wouldCreateNoteAttachmentCycle(noteId: string, newParentId: string): boolean {
+  if (noteId === newParentId) return true
+  let walk: string | null = newParentId
+  for (let i = 0; i < 4096 && walk; i++) {
+    if (walk === noteId) return true
+    const p = loadProject(walk)
+    if (!p) break
+    const next = p.linkedBookId
+    walk = next === undefined || next === null || next === '' ? null : String(next)
+  }
+  return false
 }
 
 export function setActiveProjectId(id: string | null): void {
@@ -284,6 +640,36 @@ export function getActiveProjectId(): string | null {
     return localStorage.getItem(STORAGE_ACTIVE_ID)
   } catch {
     return null
+  }
+}
+
+/** Query string key for opening a specific book/note on load (`?project=<id>`). */
+export const INKWELL_OPEN_PROJECT_QUERY_KEY = 'project'
+
+/** Read project id from the current page URL (for new-tab / shareable links). */
+export function readOpenProjectIdFromLocation(): string | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = new URLSearchParams(window.location.search).get(INKWELL_OPEN_PROJECT_QUERY_KEY)
+    const id = typeof raw === 'string' ? raw.trim() : ''
+    return id.length > 0 ? id : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Full URL to open a book or note in another tab (same origin; project data is read from localStorage there).
+ */
+export function buildInkwellUrlForProject(projectId: string): string {
+  if (typeof window === 'undefined') return ''
+  try {
+    const u = new URL(window.location.href)
+    u.searchParams.set(INKWELL_OPEN_PROJECT_QUERY_KEY, projectId)
+    u.hash = '#write'
+    return u.toString()
+  } catch {
+    return ''
   }
 }
 
@@ -564,11 +950,11 @@ export function nextManuscriptId(chapters: Manuscript[]): number {
   return chapters.reduce((max, m) => Math.max(max, m.id), 0) + 1
 }
 
-export function createBookProject(): InkwellProject {
+export function createBookProject(options?: { activate?: boolean }): InkwellProject {
   const id = newId()
   const project = seedBookProject(id)
   saveProject(project)
-  setActiveProjectId(id)
+  if (options?.activate !== false) setActiveProjectId(id)
   return project
 }
 
@@ -577,7 +963,10 @@ export function createProject(): InkwellProject {
   return createBookProject()
 }
 
-export function createNoteProject(options?: { linkedBookId?: string | null }): InkwellProject {
+export function createNoteProject(options?: {
+  linkedBookId?: string | null
+  activate?: boolean
+}): InkwellProject {
   const id = newId()
   const linked =
     options?.linkedBookId === undefined || options?.linkedBookId === null || options?.linkedBookId === ''
@@ -600,7 +989,34 @@ export function createNoteProject(options?: { linkedBookId?: string | null }): I
     theme: defaultTheme(),
   })
   saveProject(project)
-  setActiveProjectId(id)
+  if (linked) registerNoteAttachedUnderMaster(linked, id)
+  if (options?.activate !== false) setActiveProjectId(id)
+  return project
+}
+
+/** Creates a new note linked under `parentId` without changing the active project. */
+export function createChildNoteProject(parentId: string): InkwellProject | null {
+  const parent = loadProject(parentId)
+  if (!parent || (parent.kind !== 'book' && parent.kind !== 'note')) return null
+  const id = newId()
+  const project = withAlignedGoals({
+    version: 3,
+    id,
+    kind: 'note',
+    linkedBookId: parentId,
+    book: defaultBookMeta(),
+    goals: defaultWritingGoals(),
+    chapters: [
+      {
+        id: 1,
+        title: '',
+        content: defaultDoc(),
+      },
+    ],
+    theme: defaultTheme(),
+  })
+  saveProject(project)
+  registerNoteAttachedUnderMaster(parentId, id)
   return project
 }
 

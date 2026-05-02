@@ -109,7 +109,7 @@ export type ProjectMeta = {
   updatedAt: number
   createdAt: number
   kind: ProjectKind
-  /** When kind is note: optional attachment to a book project id */
+  /** When kind is note: optional parent on the shelf (book or note project id) */
   linkedBookId?: string | null
 }
 
@@ -122,6 +122,7 @@ export type InkwellProject = {
   version: 3
   id: string
   kind: ProjectKind
+  /** When kind is note: parent book or note project id */
   linkedBookId?: string | null
   book: BookMeta
   goals: WritingGoals

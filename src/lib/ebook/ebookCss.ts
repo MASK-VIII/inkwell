@@ -46,6 +46,8 @@ export function ebookCss(theme: EbookTheme): string {
   margin: ${paraSpaceEm}em 0;
   text-align: ${align};
   text-indent: ${indentEm}em;
+  white-space: break-spaces;
+  tab-size: 8;
 }
 .inkwell-ebook-preview a {
   color: var(--color-walnut);
@@ -71,6 +73,20 @@ export function ebookCss(theme: EbookTheme): string {
 .inkwell-ebook-preview ol { margin: 0.75em 0 0.75em 1.25em; padding: 0; }
 .inkwell-ebook-preview li { margin: 0.25em 0; }
 .inkwell-ebook-preview hr { border: 0; border-top: 1px solid #c8bdb7; margin: 1.25em 0; }
+.inkwell-ebook-preview .inkwell-figure { margin: 1em auto; text-align: center; max-width: 100%; }
+.inkwell-ebook-preview .inkwell-figure img { max-width: 100%; height: auto; }
+.inkwell-ebook-preview .inkwell-export-comment {
+  background: color-mix(in srgb, var(--color-walnut) 12%, transparent);
+}
+.dark .inkwell-ebook-preview .inkwell-export-comment {
+  background: color-mix(in srgb, var(--color-accent-warm) 14%, transparent);
+}
+.inkwell-ebook-preview .inkwell-mention-export { font-weight: 600; color: var(--color-walnut); }
+.dark .inkwell-ebook-preview .inkwell-mention-export { color: var(--color-accent-warm); }
+.inkwell-ebook-preview .inkwell-fn-ref { font-size: 0.85em; }
+.inkwell-ebook-preview .inkwell-footnotes { margin-top: 2em; font-size: 0.9em; }
+.inkwell-ebook-preview .inkwell-footnotes ol { padding-left: 1.25em; }
+.inkwell-ebook-preview .inkwell-footnotes li { margin: 0.5em 0; }
 `
     .trim()
     .replace(/\n{3,}/g, '\n\n')

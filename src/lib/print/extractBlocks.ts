@@ -9,8 +9,14 @@ export type PrintBlock =
 function textFromNode(node: JSONContent | null | undefined): string {
   if (!node) return ''
   if (node.type === 'text') return node.text ?? ''
-  // TipTap hard breaks; ebook HTML preserves <br/> — approximate for print measurement.
   if (node.type === 'hardBreak') return ' '
+  if (node.type === 'mention') {
+    const label =
+      (node.attrs as { label?: string; id?: string } | undefined)?.label ??
+      (node.attrs as { id?: string } | undefined)?.id ??
+      ''
+    return `@${label}`
+  }
   const parts = (node.content ?? []).map(textFromNode)
   return parts.join('')
 }
@@ -18,6 +24,12 @@ function textFromNode(node: JSONContent | null | undefined): string {
 function visit(node: JSONContent, out: PrintBlock[]) {
   if (node.type === 'pageBreak') {
     out.push({ type: 'pageBreak' })
+    return
+  }
+
+  if (node.type === 'image') {
+    const alt = String((node.attrs as { alt?: string } | undefined)?.alt ?? 'Image').trim() || 'Image'
+    out.push({ type: 'paragraph', text: `[${alt}]` })
     return
   }
 

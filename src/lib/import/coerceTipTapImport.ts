@@ -1,17 +1,12 @@
 import { Editor } from '@tiptap/core'
-import CharacterCount from '@tiptap/extension-character-count'
-import StarterKit from '@tiptap/starter-kit'
-import Underline from '@tiptap/extension-underline'
 import type { JSONContent } from '@tiptap/core'
-import { PageBreak } from '../tiptap/extensions/PageBreak'
+import { createManuscriptTipTapExtensions } from '../tiptap/manuscriptExtensions'
 
 /** Same stack as `ManuscriptEditor` so imported JSON matches the live schema. */
-const importExtensions = [
-  StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
-  Underline,
-  PageBreak,
-  CharacterCount.configure({ limit: null }),
-]
+const importExtensions = createManuscriptTipTapExtensions({
+  getMentionItems: () => [],
+  mentionMode: 'import',
+})
 
 function fallbackDoc(message: string): JSONContent {
   return {

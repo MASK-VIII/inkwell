@@ -1,3 +1,4 @@
+import DOMPurify from 'dompurify'
 import { startTransition, useEffect, useMemo, useRef, useState } from 'react'
 import type { EbookTheme, Manuscript } from '../types'
 import { ebookCss } from '../lib/ebook/ebookCss'
@@ -20,6 +21,39 @@ export function EbookReview({ chapters, theme, activeChapterId, onPrevChapter, o
   const [css, setCss] = useState(() => ebookCss(theme.ebook))
   const [html, setHtml] = useState<string>('')
   const [status, setStatus] = useState<'idle' | 'rendering' | 'error'>('idle')
+
+  const safeHtml = useMemo(() => {
+    if (!html) return ''
+    return DOMPurify.sanitize(html, {
+      USE_PROFILES: { html: true },
+      ALLOWED_TAGS: [
+        'p',
+        'h1',
+        'h2',
+        'h3',
+        'em',
+        'strong',
+        'u',
+        's',
+        'blockquote',
+        'ul',
+        'ol',
+        'li',
+        'hr',
+        'br',
+        'a',
+        'img',
+        'figure',
+        'sup',
+        'mark',
+        'section',
+        'span',
+      ],
+      ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'class', 'id', 'data-id'],
+      ALLOW_UNKNOWN_PROTOCOLS: false,
+      FORBID_TAGS: ['style', 'script', 'iframe', 'object', 'embed'],
+    })
+  }, [html])
 
   const { width, height } = useMemo(() => {
     if (device === 'phone') return { width: 360, height: 740 }
@@ -117,7 +151,7 @@ export function EbookReview({ chapters, theme, activeChapterId, onPrevChapter, o
                       Preview failed to render.
                     </div>
                   ) : (
-                    <div dangerouslySetInnerHTML={{ __html: html }} />
+                    <div dangerouslySetInnerHTML={{ __html: safeHtml }} />
                   )}
                 </div>
               </div>
