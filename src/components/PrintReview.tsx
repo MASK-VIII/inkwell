@@ -1,5 +1,4 @@
 import {
-  startTransition,
   useCallback,
   useEffect,
   useMemo,
@@ -20,7 +19,7 @@ import {
   type WorkerErrorMsg,
   type WorkerResponse,
 } from '../lib/workerClient'
-import '../printPreviewFont.css'
+import { buildPrintPreviewFontFaceCss, printPreviewFontFamilyStack } from '../lib/fonts/fontCatalog'
 
 const PX_PER_PT = 96 / 72
 
@@ -101,28 +100,58 @@ export function PrintReview({
   const layoutEpochRef = useRef(0)
   const pendingPageIndexRef = useRef<number | null>(null)
   const [localChapterId, setLocalChapterId] = useState<number | null>(null)
+  const activeChapterIdRef = useRef<number | null>(null)
+  const gapFillEpochRef = useRef(0)
 
   const trim = TRIM_PRESETS[theme.print.trimPreset]
   const pageWidthPx = trim.widthIn * 96
   const pageHeightPx = trim.heightIn * 96
+
+  const printFontFaceCss = useMemo(
+    () => buildPrintPreviewFontFaceCss(theme.print.bodyFontId),
+    [theme.print.bodyFontId],
+  )
+  const printFontStack = useMemo(
+    () => printPreviewFontFamilyStack(theme.print.bodyFontId),
+    [theme.print.bodyFontId],
+  )
 
   useEffect(() => {
     setLocalChapterId(null)
   }, [scrollToChapterId])
 
   const activeChapterId = localChapterId ?? scrollToChapterId ?? chapters[0]?.id ?? null
+  activeChapterIdRef.current = activeChapterId
 
   const meta = useMemo(
     () => ({ bookTitle: book.title, authorName: book.authorName }),
     [book.title, book.authorName],
   )
 
-  const layoutDepsKey = useMemo(() => {
+  const contentLayoutKey = useMemo(() => {
     const chapterSig = chapters
       .map((c) => `${c.id}:${hashStringDjb2(JSON.stringify(c.content))}:${hashStringDjb2(c.title)}`)
       .join('|')
-    return `${chapterSig}|${hashStringDjb2(JSON.stringify(theme))}|${meta.bookTitle}|${meta.authorName}`
-  }, [chapters, theme, meta.bookTitle, meta.authorName])
+    return `${chapterSig}|${meta.bookTitle}|${meta.authorName}`
+  }, [chapters, meta.bookTitle, meta.authorName])
+
+  const printThemeKey = useMemo(
+    () => hashStringDjb2(JSON.stringify(theme.print)),
+    [theme.print],
+  )
+
+  const layoutBasisKey = useMemo(
+    () => `${contentLayoutKey}|${printThemeKey}`,
+    [contentLayoutKey, printThemeKey],
+  )
+
+  const layoutBasisKeyRef = useRef(layoutBasisKey)
+  layoutBasisKeyRef.current = layoutBasisKey
+
+  const [appliedFullLayoutBasisKey, setAppliedFullLayoutBasisKey] = useState<string | null>(null)
+  const [applyingFullLayout, setApplyingFullLayout] = useState(false)
+
+  const prevContentLayoutKeyRef = useRef<string | null>(null)
 
   useEffect(() => {
     const unsub = onWorkerMessage((msg: WorkerResponse) => {
@@ -145,16 +174,122 @@ export function PrintReview({
     setPageIndexInChapter(0)
   }, [scrollToChapterId, localChapterId])
 
+  const applyFullBookLayout = useCallback(async () => {
+    if (chapters.length === 0) return
+    layoutEpochRef.current += 1
+    const epoch = layoutEpochRef.current
+    setApplyingFullLayout(true)
+    setErr(null)
+
+    setChapterPages(new Map())
+    setInflight(new Set())
+    setPageIndexInChapter(0)
+
+    const inflightLocal = new Set<number>()
+    const pagesLocal = new Map<number, PrintPage[]>()
+    const sequentialAuthoritativeStart = new Map<number, number>()
+
+    const pushInflight = () => {
+      if (epoch !== layoutEpochRef.current) return
+      setInflight(new Set(inflightLocal))
+    }
+
+    const pushPages = () => {
+      if (epoch !== layoutEpochRef.current) return
+      setChapterPages(new Map(pagesLocal))
+    }
+
+    const maybeApplyPrefetch = (msg: PrintChapterResultMsg) => {
+      const auth = sequentialAuthoritativeStart.get(msg.chapterId)
+      if (auth != null && auth !== msg.startPageNumber) return
+      pagesLocal.set(msg.chapterId, msg.pages)
+      pushPages()
+    }
+
+    try {
+      const priorityId = activeChapterIdRef.current ?? chapters[0]!.id
+      const pidx = chapters.findIndex((c) => c.id === priorityId)
+      if (pidx >= 0) {
+        const pch = chapters[pidx]!
+        inflightLocal.add(pch.id)
+        pushInflight()
+        try {
+          const msg = await printChapterPromise(
+            pendingHandlers.current,
+            pidx,
+            pch,
+            chapters,
+            theme,
+            meta,
+            1,
+          )
+          if (epoch !== layoutEpochRef.current) return
+          maybeApplyPrefetch(msg)
+        } finally {
+          inflightLocal.delete(pch.id)
+          pushInflight()
+        }
+      }
+
+      let nextStart = 1
+      for (let i = 0; i < chapters.length; i++) {
+        if (epoch !== layoutEpochRef.current) return
+        const ch = chapters[i]!
+        const start = nextStart
+        inflightLocal.add(ch.id)
+        pushInflight()
+        let msg: PrintChapterResultMsg
+        try {
+          msg = await printChapterPromise(pendingHandlers.current, i, ch, chapters, theme, meta, start)
+        } finally {
+          inflightLocal.delete(ch.id)
+          pushInflight()
+        }
+        if (epoch !== layoutEpochRef.current) return
+        sequentialAuthoritativeStart.set(ch.id, start)
+        pagesLocal.set(ch.id, msg.pages)
+        nextStart = msg.nextPageNumber
+        pushPages()
+      }
+
+      if (epoch === layoutEpochRef.current) {
+        setAppliedFullLayoutBasisKey(layoutBasisKeyRef.current)
+      }
+    } catch (e) {
+      if (epoch === layoutEpochRef.current) {
+        setErr(e instanceof Error ? e.message : 'Print pagination failed')
+      }
+    } finally {
+      if (epoch === layoutEpochRef.current) setApplyingFullLayout(false)
+    }
+  }, [chapters, theme, meta])
+
   useEffect(() => {
     layoutEpochRef.current += 1
     const epoch = layoutEpochRef.current
 
-    startTransition(() => {
+    const contentChanged =
+      prevContentLayoutKeyRef.current === null || prevContentLayoutKeyRef.current !== contentLayoutKey
+    prevContentLayoutKeyRef.current = contentLayoutKey
+
+    const themeOnlyMultiChapter = !contentChanged && chapters.length > 1
+
+    if (themeOnlyMultiChapter) {
+      setErr(null)
+      setInflight(new Set())
+      const keepId = activeChapterIdRef.current ?? chapters[0]!.id
+      setChapterPages((prev) => {
+        const cur = prev.get(keepId)
+        const next = new Map<number, PrintPage[]>()
+        if (cur) next.set(keepId, cur)
+        return next
+      })
+    } else {
       setChapterPages(new Map())
       setInflight(new Set())
       setErr(null)
       setPageIndexInChapter(0)
-    })
+    }
 
     if (chapters.length === 0) return
 
@@ -181,63 +316,148 @@ export function PrintReview({
       pushPages()
     }
 
-    const run = async () => {
-      try {
-        const priorityId = scrollToChapterId ?? chapters[0]!.id
-        const pidx = chapters.findIndex((c) => c.id === priorityId)
-        if (pidx >= 0) {
-          const pch = chapters[pidx]!
-          inflightLocal.add(pch.id)
+    const runFullSequential = async () => {
+      const priorityId = activeChapterIdRef.current ?? chapters[0]!.id
+      const pidx = chapters.findIndex((c) => c.id === priorityId)
+      if (pidx >= 0) {
+        const pch = chapters[pidx]!
+        inflightLocal.add(pch.id)
+        pushInflight()
+        try {
+          const msg = await printChapterPromise(
+            pendingHandlers.current,
+            pidx,
+            pch,
+            chapters,
+            theme,
+            meta,
+            1,
+          )
+          if (cancelled || epoch !== layoutEpochRef.current) return
+          maybeApplyPrefetch(msg)
+        } finally {
+          inflightLocal.delete(pch.id)
           pushInflight()
-          try {
-            const msg = await printChapterPromise(
-              pendingHandlers.current,
-              pidx,
-              pch,
-              chapters,
-              theme,
-              meta,
-              1,
-            )
-            if (cancelled || epoch !== layoutEpochRef.current) return
-            maybeApplyPrefetch(msg)
-          } finally {
-            inflightLocal.delete(pch.id)
-            pushInflight()
-          }
         }
+      }
 
-        let nextStart = 1
-        for (let i = 0; i < chapters.length; i++) {
-          if (cancelled || epoch !== layoutEpochRef.current) return
-          const ch = chapters[i]!
-          const start = nextStart
-          inflightLocal.add(ch.id)
+      let nextStart = 1
+      for (let i = 0; i < chapters.length; i++) {
+        if (cancelled || epoch !== layoutEpochRef.current) return
+        const ch = chapters[i]!
+        const start = nextStart
+        inflightLocal.add(ch.id)
+        pushInflight()
+        let msg: PrintChapterResultMsg
+        try {
+          msg = await printChapterPromise(pendingHandlers.current, i, ch, chapters, theme, meta, start)
+        } finally {
+          inflightLocal.delete(ch.id)
           pushInflight()
-          let msg: PrintChapterResultMsg
-          try {
-            msg = await printChapterPromise(pendingHandlers.current, i, ch, chapters, theme, meta, start)
-          } finally {
-            inflightLocal.delete(ch.id)
-            pushInflight()
+        }
+        if (cancelled || epoch !== layoutEpochRef.current) return
+        sequentialAuthoritativeStart.set(ch.id, start)
+        pagesLocal.set(ch.id, msg.pages)
+        nextStart = msg.nextPageNumber
+        pushPages()
+      }
+    }
+
+    const runFastActiveChapterOnly = async () => {
+      const aid = activeChapterIdRef.current ?? chapters[0]!.id
+      const pidx = chapters.findIndex((c) => c.id === aid)
+      if (pidx < 0) return
+      const pch = chapters[pidx]!
+      inflightLocal.add(pch.id)
+      pushInflight()
+      try {
+        const msg = await printChapterPromise(
+          pendingHandlers.current,
+          pidx,
+          pch,
+          chapters,
+          theme,
+          meta,
+          1,
+        )
+        if (cancelled || epoch !== layoutEpochRef.current) return
+        pagesLocal.clear()
+        pagesLocal.set(msg.chapterId, msg.pages)
+        pushPages()
+      } finally {
+        inflightLocal.delete(pch.id)
+        pushInflight()
+      }
+    }
+
+    void (async () => {
+      try {
+        if (contentChanged) {
+          await runFullSequential()
+          if (!cancelled && epoch === layoutEpochRef.current) {
+            setAppliedFullLayoutBasisKey(layoutBasisKey)
           }
-          if (cancelled || epoch !== layoutEpochRef.current) return
-          sequentialAuthoritativeStart.set(ch.id, start)
-          pagesLocal.set(ch.id, msg.pages)
-          nextStart = msg.nextPageNumber
-          pushPages()
+        } else {
+          await runFastActiveChapterOnly()
+          if (!cancelled && epoch === layoutEpochRef.current && chapters.length <= 1) {
+            setAppliedFullLayoutBasisKey(layoutBasisKey)
+          }
         }
       } catch (e) {
         if (cancelled || epoch !== layoutEpochRef.current) return
         setErr(e instanceof Error ? e.message : 'Print pagination failed')
       }
-    }
+    })()
 
-    void run()
     return () => {
       cancelled = true
     }
-  }, [layoutDepsKey, chapters, theme, meta])
+  }, [contentLayoutKey, printThemeKey, chapters, theme, meta, layoutBasisKey])
+
+  const activeChapterPagesMissing = useMemo(
+    () =>
+      activeChapterId != null && chapters.length > 0 && !chapterPages.has(activeChapterId),
+    [activeChapterId, chapters.length, chapterPages],
+  )
+
+  useEffect(() => {
+    if (!activeChapterPagesMissing || activeChapterId == null) return
+    const aid = activeChapterId
+
+    gapFillEpochRef.current += 1
+    const gapEpoch = gapFillEpochRef.current
+    let cancelled = false
+
+    void (async () => {
+      try {
+        const pidx = chapters.findIndex((c) => c.id === aid)
+        if (pidx < 0) return
+        const pch = chapters[pidx]!
+        const msg = await printChapterPromise(
+          pendingHandlers.current,
+          pidx,
+          pch,
+          chapters,
+          theme,
+          meta,
+          1,
+        )
+        if (cancelled || gapEpoch !== gapFillEpochRef.current) return
+        setChapterPages((prev) => {
+          if (prev.has(aid)) return prev
+          const next = new Map(prev)
+          next.set(msg.chapterId, msg.pages)
+          return next
+        })
+      } catch {
+        /* full-book pass will recover */
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeChapterPagesMissing, activeChapterId, chapters, theme, meta])
 
   useEffect(() => {
     const el = viewportRef.current
@@ -272,6 +492,14 @@ export function PrintReview({
     }
     return true
   }, [chapters, chapterPages])
+
+  const needsApplyFullBookLayout = useMemo(
+    () =>
+      chapters.length > 1 &&
+      appliedFullLayoutBasisKey !== null &&
+      appliedFullLayoutBasisKey !== layoutBasisKey,
+    [chapters.length, appliedFullLayoutBasisKey, layoutBasisKey],
+  )
 
   const totalPagesDisplay = useMemo(() => {
     if (chapters.length === 0) return { exact: 0, partialPlus: null as number | null }
@@ -378,12 +606,13 @@ export function PrintReview({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col outline-none" tabIndex={0}>
-      <div className="shrink-0 border-b border-dust bg-white/90 px-4 py-3 backdrop-blur-sm dark:border-border-dark dark:bg-panel-dark/90">
-        <div className="mx-auto flex w-full max-w-[min(64rem,100%)] items-center gap-3">
-          <div className="min-w-0 flex-1" aria-hidden />
-          <div className="flex shrink-0 justify-center">{formatModeBar}</div>
+      <style dangerouslySetInnerHTML={{ __html: printFontFaceCss }} />
+      <div className="shrink-0 border-b border-dust bg-white/90 px-4 py-3 backdrop-blur-sm dark:border-border-dark dark:bg-panel-dark/90 sm:px-5">
+        <div className="mx-auto grid w-full max-w-[min(64rem,100%)] grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
+          <div className="min-w-0" aria-hidden />
+          <div className="flex justify-center">{formatModeBar}</div>
 
-          <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
+          <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
             <span className="text-xs text-ink/65 dark:text-ink-dark/65 sm:text-sm">
               Page {bookPageLabel}
               {!sequentialPrefixComplete
@@ -420,9 +649,26 @@ export function PrintReview({
             </div>
           </div>
         </div>
-        <div className="mx-auto mt-1 max-w-[min(64rem,100%)] text-[11px] text-ink/55 dark:text-ink-dark/55">
-          Trim {trim.widthIn}" × {trim.heightIn}"
-          {sequentialPrefixComplete ? ` · ${totalPagesDisplay.exact.toLocaleString()} pages` : null}
+        <div className="mx-auto mt-1 flex max-w-[min(64rem,100%)] flex-wrap items-center gap-x-3 gap-y-2 text-[11px] text-ink/55 dark:text-ink-dark/55">
+          <span>
+            Trim {trim.widthIn}" × {trim.heightIn}"
+            {sequentialPrefixComplete ? ` · ${totalPagesDisplay.exact.toLocaleString()} pages` : null}
+          </span>
+          {needsApplyFullBookLayout ? (
+            <>
+              <span className="text-ink/45 dark:text-ink-dark/45">
+                Preview is the open chapter only. Apply when you want page counts and other chapters to match.
+              </span>
+              <button
+                type="button"
+                disabled={applyingFullLayout}
+                onClick={() => void applyFullBookLayout()}
+                className="rounded-xl border border-walnut/40 bg-walnut/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-walnut transition-colors hover:bg-walnut/18 disabled:opacity-45 dark:border-accent-warm/50 dark:bg-accent-warm/15 dark:text-accent-warm dark:hover:bg-accent-warm/25"
+              >
+                {applyingFullLayout ? 'Applying…' : 'Apply layout to whole book'}
+              </button>
+            </>
+          ) : null}
         </div>
       </div>
 
@@ -478,7 +724,7 @@ export function PrintReview({
                           style={{
                             left,
                             top,
-                            fontFamily: '"InkwellPrintDejaVuSerif", "DejaVu Serif", serif',
+                            fontFamily: printFontStack,
                             fontSize: `${fontSizePx}px`,
                             lineHeight: `${theme.print.lineHeight}`,
                           }}

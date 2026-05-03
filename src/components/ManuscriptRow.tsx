@@ -94,7 +94,7 @@ function ManuscriptRowInner({
       aria-grabbed={dragging}
       aria-label={`Section: ${displayTitle}. Drag the grip to reorder or activate to open.`}
       title="Drag the grip to reorder"
-      className={`flex cursor-default touch-none flex-col gap-2 rounded-3xl py-3 pl-2 pr-2.5 outline-none transition-[transform,background-color,box-shadow,filter] duration-200 ease-out focus-visible:ring-2 focus-visible:ring-walnut focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark sm:pl-2.5 sm:pr-3 ${
+      className={`flex cursor-default touch-none flex-col gap-2 rounded-3xl px-2.5 py-3 outline-none transition-[transform,background-color,box-shadow,filter] duration-200 ease-out focus-visible:ring-2 focus-visible:ring-walnut focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark sm:px-3 ${
         active
           ? 'bg-ink text-parchment dark:bg-cream dark:text-ink'
           : 'hover:bg-dust/30 dark:hover:bg-border-dark/50'

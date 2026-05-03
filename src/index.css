@@ -30,6 +30,12 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Manuscript toolbar customize: clearer drag session (dnd-kit) */
+body.inkwell-toolbar-dnd {
+  cursor: grabbing !important;
+  user-select: none;
+}
+
 /* WebKit/Blink number spinners inherit color-scheme from :root / .dark above */
 input[type='number']::-webkit-inner-spin-button,
 input[type='number']::-webkit-outer-spin-button {
@@ -46,6 +52,9 @@ button:not(:disabled):not(.cursor-grab) {
   scrollbar-color: color-mix(in srgb, var(--color-walnut) 55%, transparent)
     color-mix(in srgb, var(--color-dust) 55%, transparent);
   scrollbar-width: thin;
+  /* BookTools drawer + Write chapters overlay — keep timing aligned */
+  --inkwell-motion-duration: 520ms;
+  --inkwell-motion-ease: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .dark {
@@ -250,12 +259,88 @@ body {
 
 /* BookTools drawer motion */
 .inkwell-drawer-backdrop {
-  transition: opacity 520ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition: opacity var(--inkwell-motion-duration) var(--inkwell-motion-ease);
 }
 
 .inkwell-drawer-panel {
-  transition: transform 520ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform var(--inkwell-motion-duration) var(--inkwell-motion-ease);
   will-change: transform;
+}
+
+/* Write workspace: chapters overlay (explicit width on clip so abspos-only children don’t collapse to 0) */
+.inkwell-chapters-overlay-clip {
+  --inkwell-chapters-rail-w: 2.75rem;
+  transition:
+    width var(--inkwell-motion-duration) var(--inkwell-motion-ease),
+    max-width var(--inkwell-motion-duration) var(--inkwell-motion-ease);
+}
+
+@media (min-width: 640px) {
+  .inkwell-chapters-overlay-clip {
+    --inkwell-chapters-rail-w: 3rem;
+  }
+}
+
+.inkwell-chapters-overlay-clip--collapsed {
+  width: var(--inkwell-chapters-rail-w);
+  max-width: var(--inkwell-chapters-rail-w);
+}
+
+/* Matches FORMAT_WORKSPACE_SIDE_PANEL_WIDTH_CLASS */
+.inkwell-chapters-overlay-clip--expanded {
+  width: min(18.72rem, calc(100vw - 4.5rem));
+  max-width: min(18.72rem, calc(100vw - 4.5rem));
+}
+
+@media (min-width: 640px) {
+  .inkwell-chapters-overlay-clip--expanded {
+    width: 20.16rem;
+    max-width: 20.16rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .inkwell-chapters-overlay-clip--expanded {
+    width: 23.04rem;
+    max-width: 23.04rem;
+  }
+}
+
+@media (min-width: 1280px) {
+  .inkwell-chapters-overlay-clip--expanded {
+    width: 24.48rem;
+    max-width: 24.48rem;
+  }
+}
+
+.inkwell-chapters-overlay-rail {
+  transition: transform var(--inkwell-motion-duration) var(--inkwell-motion-ease);
+  will-change: transform;
+  backface-visibility: hidden;
+}
+
+.inkwell-chapters-overlay-clip--expanded .inkwell-chapters-overlay-rail {
+  transform: translate3d(-100%, 0, 0);
+  pointer-events: none;
+}
+
+.inkwell-chapters-overlay-panel {
+  transition: transform var(--inkwell-motion-duration) var(--inkwell-motion-ease);
+  transform: translate3d(-100%, 0, 0);
+  will-change: transform;
+  backface-visibility: hidden;
+  pointer-events: none;
+}
+
+/* Collapsed: panel must not steal clicks from the rail (Tailwind utilities must not override). */
+.inkwell-chapters-overlay-clip--collapsed .inkwell-chapters-overlay-panel {
+  pointer-events: none;
+}
+
+.inkwell-chapters-overlay-clip--expanded .inkwell-chapters-overlay-panel {
+  transform: translate3d(0, 0, 0);
+  pointer-events: auto;
+  z-index: 30;
 }
 
 /* TipTap surface */

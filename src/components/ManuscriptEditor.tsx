@@ -1,28 +1,6 @@
 import { EditorContent, useEditor } from '@tiptap/react'
 import type { Editor, JSONContent } from '@tiptap/core'
-import {
-  AlignCenter,
-  AlignJustify,
-  AlignLeft,
-  AlignRight,
-  AtSign,
-  Bold,
-  ChevronDown,
-  Feather,
-  ImagePlus,
-  Italic,
-  Link2,
-  List,
-  ListOrdered,
-  MessageSquare,
-  Minus,
-  NotebookPen,
-  Quote,
-  Redo2,
-  Strikethrough,
-  Underline as UnderlineIcon,
-  Undo2,
-} from 'lucide-react'
+import { Feather } from 'lucide-react'
 import {
   memo,
   useCallback,
@@ -31,23 +9,11 @@ import {
   useRef,
   useState,
   type MutableRefObject,
+  type ReactNode,
 } from 'react'
 import { createManuscriptTipTapExtensions } from '../lib/tiptap/manuscriptExtensions'
-
-const SCENE_BREAK_OPTIONS: { value: string; label: string }[] = [
-  { value: 'orn:❧', label: 'Fleuron' },
-  { value: 'orn:✦ · ✦ · ✦', label: 'Stars' },
-  { value: 'orn:* * *', label: 'Asterism' },
-  { value: 'orn:— — —', label: 'Emdashes' },
-]
 import type { MentionItem } from '../lib/tiptap/mentionUi'
-
-const HEADINGS = [
-  { value: '', label: 'Normal text' },
-  { value: '1', label: 'Heading 1 — Large & stately' },
-  { value: '2', label: 'Heading 2 — Chapter title' },
-  { value: '3', label: 'Heading 3 — Section break' },
-] as const
+import { ManuscriptToolbar } from './ManuscriptToolbar'
 
 function mentionItemsEqual(a: MentionItem[], b: MentionItem[]): boolean {
   if (a === b) return true
@@ -56,29 +22,6 @@ function mentionItemsEqual(a: MentionItem[], b: MentionItem[]): boolean {
     if (a[i].id !== b[i].id || a[i].label !== b[i].label) return false
   }
   return true
-}
-
-function headingSelectValue(editor: Editor): string {
-  if (editor.isActive('heading', { level: 1 })) return '1'
-  if (editor.isActive('heading', { level: 2 })) return '2'
-  if (editor.isActive('heading', { level: 3 })) return '3'
-  return ''
-}
-
-function isTextAlignActive(editor: Editor, alignment: 'left' | 'center' | 'right' | 'justify'): boolean {
-  if (alignment === 'left') {
-    return !(['center', 'right', 'justify'] as const).some((a) => editor.isActive({ textAlign: a }))
-  }
-  return editor.isActive({ textAlign: alignment })
-}
-
-/** listItem schema requires a paragraph; toggling a list inside a heading fails unless we normalize first. */
-function chainToggleList(editor: Editor, kind: 'bullet' | 'ordered') {
-  const c = editor.chain().focus()
-  if (editor.isActive('heading')) {
-    return kind === 'bullet' ? c.setParagraph().toggleBulletList().run() : c.setParagraph().toggleOrderedList().run()
-  }
-  return kind === 'bullet' ? c.toggleBulletList().run() : c.toggleOrderedList().run()
 }
 
 type Props = {
@@ -106,6 +49,10 @@ type Props = {
   wordStatStorageKey?: string | null
   /** Slim one-row bar for main Write workspace; full bar for format/ebook editor and popouts. */
   toolbarVariant?: 'writeMinimal' | 'full'
+  /** Shown in the Write toolbar next to Undo/Redo when using `writeMinimal`. */
+  onOpenFindReplace?: () => void
+  /** Optional overlay rendered just below the toolbar, layered over the editor shell. Used for the Write Chapters drawer. */
+  leftOverlay?: ReactNode
 }
 
 /** Offset from sticky top-right anchor (negative x moves left, positive y moves down). */
@@ -132,19 +79,6 @@ function clampWordStatOffset(
 const WORDSTAT_POS_V2 = (id: string) => `inkwell-wordstat-pos-v2:${id}`
 const WORDSTAT_POS_LEGACY = (id: string) => `inkwell-wordstat-pos:${id}`
 
-function countFootnoteMarkers(doc: Editor['state']['doc']): number {
-  let n = 0
-  doc.descendants((node) => {
-    if (node.isText && node.marks.some((m) => m.type.name === 'writerFootnote')) n += 1
-  })
-  return n
-}
-
-function newFootnoteId(): string {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID()
-  return `fn_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
-}
-
 function ManuscriptEditorInner({
   manuscriptId,
   content,
@@ -161,24 +95,13 @@ function ManuscriptEditorInner({
   statsScopeLabel = 'Chapter',
   wordStatStorageKey = null,
   toolbarVariant = 'full',
+  onOpenFindReplace,
+  leftOverlay,
 }: Props) {
   const minimalBar = toolbarVariant === 'writeMinimal'
   const [, setToolbarVersion] = useState(0)
   const bumpToolbar = useCallback(() => setToolbarVersion((v) => v + 1), [])
 
-  const [linkOpen, setLinkOpen] = useState(false)
-  const [linkUrlDraft, setLinkUrlDraft] = useState('')
-  const linkPanelRef = useRef<HTMLDivElement | null>(null)
-
-  const [commentOpen, setCommentOpen] = useState(false)
-  const [commentDraft, setCommentDraft] = useState('')
-  const commentPanelRef = useRef<HTMLDivElement | null>(null)
-
-  const [footnoteOpen, setFootnoteOpen] = useState(false)
-  const [footnoteDraft, setFootnoteDraft] = useState('')
-  const footnotePanelRef = useRef<HTMLDivElement | null>(null)
-
-  const imageInputRef = useRef<HTMLInputElement | null>(null)
   const shellRef = useRef<HTMLDivElement | null>(null)
   const floatClusterRef = useRef<HTMLDivElement | null>(null)
 
@@ -315,137 +238,6 @@ function ManuscriptEditorInner({
     return () => ro.disconnect()
   }, [wordStatStorageKey])
 
-  useEffect(() => {
-    if (!linkOpen) return
-    const close = (e: MouseEvent) => {
-      const el = linkPanelRef.current
-      if (el && !el.contains(e.target as Node)) setLinkOpen(false)
-    }
-    document.addEventListener('mousedown', close)
-    return () => document.removeEventListener('mousedown', close)
-  }, [linkOpen])
-
-  const openLinkPanel = useCallback(() => {
-    if (!editor) return
-    const href = (editor.getAttributes('link') as { href?: string }).href ?? ''
-    setLinkUrlDraft(typeof href === 'string' ? href : '')
-    setLinkOpen(true)
-  }, [editor])
-
-  const applyLink = useCallback(() => {
-    if (!editor) return
-    const raw = linkUrlDraft.trim()
-    if (!raw) {
-      editor.chain().focus().extendMarkRange('link').unsetLink().run()
-      setLinkOpen(false)
-      bumpToolbar()
-      return
-    }
-    editor.chain().focus().extendMarkRange('link').setLink({ href: raw }).run()
-    setLinkOpen(false)
-    bumpToolbar()
-  }, [editor, linkUrlDraft, bumpToolbar])
-
-  const removeLink = useCallback(() => {
-    if (!editor) return
-    editor.chain().focus().extendMarkRange('link').unsetLink().run()
-    setLinkOpen(false)
-    bumpToolbar()
-  }, [editor, bumpToolbar])
-
-  useEffect(() => {
-    if (!commentOpen) return
-    const close = (e: MouseEvent) => {
-      const el = commentPanelRef.current
-      if (el && !el.contains(e.target as Node)) setCommentOpen(false)
-    }
-    document.addEventListener('mousedown', close)
-    return () => document.removeEventListener('mousedown', close)
-  }, [commentOpen])
-
-  useEffect(() => {
-    if (!footnoteOpen) return
-    const close = (e: MouseEvent) => {
-      const el = footnotePanelRef.current
-      if (el && !el.contains(e.target as Node)) setFootnoteOpen(false)
-    }
-    document.addEventListener('mousedown', close)
-    return () => document.removeEventListener('mousedown', close)
-  }, [footnoteOpen])
-
-  const openCommentPanel = useCallback(() => {
-    if (!editor) return
-    const mark = editor.getAttributes('writerComment') as { body?: string }
-    setCommentDraft(typeof mark.body === 'string' ? mark.body : '')
-    setCommentOpen(true)
-  }, [editor])
-
-  const applyComment = useCallback(() => {
-    if (!editor) return
-    const body = commentDraft.trim()
-    if (!body) {
-      editor.chain().focus().extendMarkRange('writerComment').unsetMark('writerComment').run()
-      setCommentOpen(false)
-      bumpToolbar()
-      return
-    }
-    if (editor.state.selection.empty) {
-      setCommentOpen(false)
-      return
-    }
-    editor.chain().focus().setMark('writerComment', { body }).run()
-    setCommentOpen(false)
-    bumpToolbar()
-  }, [editor, commentDraft, bumpToolbar])
-
-  const removeComment = useCallback(() => {
-    if (!editor) return
-    editor.chain().focus().extendMarkRange('writerComment').unsetMark('writerComment').run()
-    setCommentOpen(false)
-    bumpToolbar()
-  }, [editor, bumpToolbar])
-
-  const applyFootnote = useCallback(() => {
-    if (!editor) return
-    const content = footnoteDraft.trim()
-    if (!content) {
-      setFootnoteOpen(false)
-      return
-    }
-    const id = newFootnoteId()
-    const n = countFootnoteMarkers(editor.state.doc) + 1
-    editor
-      .chain()
-      .focus()
-      .insertContent({
-        type: 'text',
-        text: String(n),
-        marks: [{ type: 'writerFootnote', attrs: { id, content } }],
-      })
-      .run()
-    setFootnoteOpen(false)
-    setFootnoteDraft('')
-    bumpToolbar()
-  }, [editor, footnoteDraft, bumpToolbar])
-
-  const onPickImage = useCallback(
-    (fileList: FileList | null) => {
-      if (!editor || !fileList?.[0]) return
-      const file = fileList[0]
-      if (!file.type.startsWith('image/')) return
-      const reader = new FileReader()
-      reader.onload = () => {
-        const src = typeof reader.result === 'string' ? reader.result : ''
-        if (!src) return
-        editor.chain().focus().setImage({ src, alt: file.name }).run()
-        bumpToolbar()
-      }
-      reader.readAsDataURL(file)
-      if (imageInputRef.current) imageInputRef.current.value = ''
-    },
-    [editor, bumpToolbar],
-  )
-
   const words = editor ? editor.storage.characterCount.words() : 0
   const minutes = words === 0 ? 0 : Math.max(1, Math.round(words / 200))
   const bookWords =
@@ -529,631 +321,22 @@ function ManuscriptEditorInner({
     [floatPos, wordStatStorageKey, toggleWordstatPinned],
   )
 
-  const toolBtn = (active: boolean) =>
-    `flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl transition-colors ${
-      active
-        ? 'bg-ink text-parchment dark:bg-cream dark:text-ink'
-        : 'text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50'
-    }`
-
   const shellPad = embedded ? 'p-3 sm:p-4' : 'p-6 sm:p-12'
   const editorMinH = embedded ? 'min-h-[9rem]' : 'min-h-[50vh]'
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div
-        className={`flex flex-wrap items-center gap-2 border-b border-dust bg-white/50 dark:border-border-dark dark:bg-panel-dark/50 ${
-          embedded ? 'px-2 py-2 sm:px-3 sm:py-2.5' : 'px-4 py-2.5 sm:px-8 sm:py-3'
-        }`}
-      >
-        <select
-          value={editor ? headingSelectValue(editor) : ''}
-          onChange={(e) => {
-            if (!editor) return
-            const v = e.target.value
-            const chain = editor.chain().focus()
-            if (v === '') chain.setParagraph().run()
-            else {
-              const level = Number(v) as 1 | 2 | 3
-              chain.toggleHeading({ level }).run()
-            }
-            bumpToolbar()
-          }}
-          className="rounded-full border-2 border-dust bg-parchment px-3 py-2 text-sm font-medium text-ink focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:text-ink-dark dark:focus:border-cream sm:px-4 sm:py-2.5"
-        >
-          {HEADINGS.map((h) => (
-            <option key={h.value || 'p'} value={h.value}>
-              {h.label}
-            </option>
-          ))}
-        </select>
+      <ManuscriptToolbar
+        manuscriptId={manuscriptId}
+        editor={editor}
+        minimalBar={minimalBar}
+        embedded={embedded}
+        bumpToolbar={bumpToolbar}
+        onOpenFindReplace={onOpenFindReplace}
+      />
 
-        <div className="hidden h-6 w-px bg-dust sm:block dark:bg-border-dark" />
-
-        <button
-          type="button"
-          className={toolBtn(editor?.isActive('bold') ?? false)}
-          title="Bold"
-          onClick={() => editor?.chain().focus().toggleBold().run()}
-        >
-          <Bold className="h-4 w-4" strokeWidth={2.25} />
-        </button>
-        <button
-          type="button"
-          className={toolBtn(editor?.isActive('italic') ?? false)}
-          title="Italic"
-          onClick={() => editor?.chain().focus().toggleItalic().run()}
-        >
-          <Italic className="h-4 w-4" strokeWidth={2.25} />
-        </button>
-        <button
-          type="button"
-          className={toolBtn(editor?.isActive('underline') ?? false)}
-          title="Underline"
-          onClick={() => editor?.chain().focus().toggleUnderline().run()}
-        >
-          <UnderlineIcon className="h-4 w-4" strokeWidth={2.25} />
-        </button>
-        {!minimalBar ? (
-          <button
-            type="button"
-            className={toolBtn(editor?.isActive('strike') ?? false)}
-            title="Strikethrough"
-            onClick={() => editor?.chain().focus().toggleStrike().run()}
-          >
-            <Strikethrough className="h-4 w-4" strokeWidth={2.25} />
-          </button>
-        ) : null}
-
-        <div className="hidden h-6 w-px bg-dust sm:block dark:bg-border-dark" />
-
-        <button
-          type="button"
-          className={toolBtn(editor?.isActive('bulletList') ?? false)}
-          title="Bulleted list"
-          onClick={() => {
-            if (!editor) return
-            chainToggleList(editor, 'bullet')
-            bumpToolbar()
-          }}
-        >
-          <List className="h-4 w-4" strokeWidth={2.25} />
-        </button>
-        <button
-          type="button"
-          className={toolBtn(editor?.isActive('orderedList') ?? false)}
-          title="Numbered list"
-          onClick={() => {
-            if (!editor) return
-            chainToggleList(editor, 'ordered')
-            bumpToolbar()
-          }}
-        >
-          <ListOrdered className="h-4 w-4" strokeWidth={2.25} />
-        </button>
-
-        <div className="hidden h-6 w-px bg-dust sm:block dark:bg-border-dark" />
-
-        {!minimalBar ? (
-          <>
-            <button
-              type="button"
-              className={`flex items-center gap-2 rounded-2xl px-3 py-2 text-sm font-medium transition-colors sm:px-4 ${
-                editor?.isActive('blockquote')
-                  ? 'bg-ink text-parchment dark:bg-cream dark:text-ink'
-                  : 'text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50'
-              }`}
-              title="Block quote"
-              onClick={() => editor?.chain().focus().toggleBlockquote().run()}
-            >
-              <Quote className="h-4 w-4" strokeWidth={2.25} />
-              <span className="hidden sm:inline">Quote</span>
-            </button>
-
-            <div className="hidden h-6 w-px bg-dust sm:block dark:bg-border-dark" />
-
-            {editor ? (
-              <>
-                <button
-                  type="button"
-                  className={toolBtn(isTextAlignActive(editor, 'left'))}
-                  title="Align left (Ctrl/Cmd+Shift+L)"
-                  onClick={() => editor.chain().focus().setTextAlign('left').run()}
-                >
-                  <AlignLeft className="h-4 w-4" strokeWidth={2.25} />
-                </button>
-                <button
-                  type="button"
-                  className={toolBtn(isTextAlignActive(editor, 'center'))}
-                  title="Align center (Ctrl/Cmd+Shift+E)"
-                  onClick={() => editor.chain().focus().setTextAlign('center').run()}
-                >
-                  <AlignCenter className="h-4 w-4" strokeWidth={2.25} />
-                </button>
-                <button
-                  type="button"
-                  className={toolBtn(isTextAlignActive(editor, 'right'))}
-                  title="Align right (Ctrl/Cmd+Shift+R)"
-                  onClick={() => editor.chain().focus().setTextAlign('right').run()}
-                >
-                  <AlignRight className="h-4 w-4" strokeWidth={2.25} />
-                </button>
-                <button
-                  type="button"
-                  className={toolBtn(isTextAlignActive(editor, 'justify'))}
-                  title="Justify (Ctrl/Cmd+Shift+J)"
-                  onClick={() => editor.chain().focus().setTextAlign('justify').run()}
-                >
-                  <AlignJustify className="h-4 w-4" strokeWidth={2.25} />
-                </button>
-              </>
-            ) : null}
-
-            <div className="hidden h-6 w-px bg-dust sm:block dark:bg-border-dark" />
-          </>
-        ) : null}
-
-        <div className="relative">
-          <button
-            type="button"
-            className={toolBtn(editor?.isActive('link') ?? false)}
-            title="Link"
-            onClick={openLinkPanel}
-          >
-            <Link2 className="h-4 w-4" strokeWidth={2.25} />
-          </button>
-          {linkOpen && editor ? (
-            <div
-              ref={linkPanelRef}
-              className="absolute left-0 top-full z-50 mt-2 flex min-w-[min(18rem,calc(100vw-2rem))] flex-col gap-2 rounded-2xl border border-dust bg-parchment p-3 shadow-lg dark:border-border-dark dark:bg-panel-dark sm:left-auto sm:right-0"
-              onMouseDown={(e) => e.stopPropagation()}
-            >
-              <label className="text-xs font-semibold text-ink/80 dark:text-ink-dark/80" htmlFor={`inkwell-link-url-${manuscriptId}`}>
-                URL
-              </label>
-              <input
-                id={`inkwell-link-url-${manuscriptId}`}
-                type="url"
-                value={linkUrlDraft}
-                onChange={(e) => setLinkUrlDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    applyLink()
-                  }
-                }}
-                placeholder="https://…"
-                className="rounded-xl border border-dust bg-white px-3 py-2 text-sm text-ink focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:text-ink-dark dark:focus:border-cream"
-                autoFocus
-              />
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  className="rounded-full bg-ink px-4 py-2 text-xs font-semibold text-parchment hover:bg-walnut dark:bg-cream dark:text-ink dark:hover:bg-accent-warm"
-                  onClick={applyLink}
-                >
-                  Apply
-                </button>
-                <button
-                  type="button"
-                  className="rounded-full border border-dust px-4 py-2 text-xs font-semibold text-ink hover:bg-dust/30 dark:border-border-dark dark:text-ink-dark dark:hover:bg-border-dark/50"
-                  onClick={removeLink}
-                >
-                  Remove link
-                </button>
-              </div>
-            </div>
-          ) : null}
-        </div>
-
-        {minimalBar ? (
-          <details className="group relative z-40">
-            <summary className="flex cursor-pointer list-none items-center gap-1 rounded-2xl px-3 py-2 text-sm font-medium text-ink marker:content-none hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50 [&::-webkit-details-marker]:hidden">
-              More
-              <ChevronDown className="h-4 w-4 opacity-70 group-open:rotate-180" strokeWidth={2.25} />
-            </summary>
-            <div className="absolute left-0 top-full z-50 mt-2 flex max-h-[min(70vh,28rem)] w-[min(calc(100vw-2rem),36rem)] flex-col gap-2 overflow-y-auto rounded-2xl border border-dust bg-parchment p-3 shadow-xl dark:border-border-dark dark:bg-panel-dark sm:left-auto sm:right-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  className={toolBtn(editor?.isActive('strike') ?? false)}
-                  title="Strikethrough"
-                  onClick={() => editor?.chain().focus().toggleStrike().run()}
-                >
-                  <Strikethrough className="h-4 w-4" strokeWidth={2.25} />
-                </button>
-                <button
-                  type="button"
-                  className={`flex items-center gap-2 rounded-2xl px-3 py-2 text-sm font-medium transition-colors ${
-                    editor?.isActive('blockquote')
-                      ? 'bg-ink text-parchment dark:bg-cream dark:text-ink'
-                      : 'text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50'
-                  }`}
-                  title="Block quote"
-                  onClick={() => editor?.chain().focus().toggleBlockquote().run()}
-                >
-                  <Quote className="h-4 w-4" strokeWidth={2.25} />
-                  Quote
-                </button>
-              </div>
-              {editor ? (
-                <div className="flex flex-wrap gap-1">
-                  <button
-                    type="button"
-                    className={toolBtn(isTextAlignActive(editor, 'left'))}
-                    title="Align left"
-                    onClick={() => editor.chain().focus().setTextAlign('left').run()}
-                  >
-                    <AlignLeft className="h-4 w-4" strokeWidth={2.25} />
-                  </button>
-                  <button
-                    type="button"
-                    className={toolBtn(isTextAlignActive(editor, 'center'))}
-                    title="Align center"
-                    onClick={() => editor.chain().focus().setTextAlign('center').run()}
-                  >
-                    <AlignCenter className="h-4 w-4" strokeWidth={2.25} />
-                  </button>
-                  <button
-                    type="button"
-                    className={toolBtn(isTextAlignActive(editor, 'right'))}
-                    title="Align right"
-                    onClick={() => editor.chain().focus().setTextAlign('right').run()}
-                  >
-                    <AlignRight className="h-4 w-4" strokeWidth={2.25} />
-                  </button>
-                  <button
-                    type="button"
-                    className={toolBtn(isTextAlignActive(editor, 'justify'))}
-                    title="Justify"
-                    onClick={() => editor.chain().focus().setTextAlign('justify').run()}
-                  >
-                    <AlignJustify className="h-4 w-4" strokeWidth={2.25} />
-                  </button>
-                </div>
-              ) : null}
-              <div className="flex flex-wrap items-center gap-2 border-t border-dust pt-2 dark:border-border-dark">
-                <div className="flex items-center gap-0.5">
-                  <select
-                    className="h-8 max-w-[7rem] rounded-lg border border-dust bg-parchment text-[10px] font-medium text-ink dark:border-border-dark dark:bg-panel-dark dark:text-ink-dark"
-                    defaultValue=""
-                    title="Scene break / ornament"
-                    onChange={(e) => {
-                      const v = e.target.value
-                      if (!editor) return
-                      if (v === 'plain') editor.chain().focus().setHorizontalRule().run()
-                      else if (v.startsWith('orn:')) {
-                        const ornament = v.slice(4)
-                        editor.chain().focus().insertContent({ type: 'horizontalRule', attrs: { ornament } }).run()
-                      }
-                      e.currentTarget.selectedIndex = 0
-                    }}
-                  >
-                    <option value="" disabled>
-                      Scene…
-                    </option>
-                    <option value="plain">Plain rule</option>
-                    {SCENE_BREAK_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    className={toolBtn(false)}
-                    title="Plain horizontal rule"
-                    onClick={() => editor?.chain().focus().setHorizontalRule().run()}
-                  >
-                    <Minus className="h-4 w-4" strokeWidth={2.25} />
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  className={toolBtn(false)}
-                  title="Insert image"
-                  onClick={() => imageInputRef.current?.click()}
-                >
-                  <ImagePlus className="h-4 w-4" strokeWidth={2.25} />
-                </button>
-                <button
-                  type="button"
-                  className={toolBtn(false)}
-                  title="Mention — type @ in text"
-                  onClick={() => editor?.chain().focus().insertContent('@').run()}
-                >
-                  <AtSign className="h-4 w-4" strokeWidth={2.25} />
-                </button>
-              </div>
-              <div className="relative border-t border-dust pt-2 dark:border-border-dark">
-                <button
-                  type="button"
-                  className={toolBtn(editor?.isActive('writerComment') ?? false)}
-                  title="Comment on selection"
-                  onClick={openCommentPanel}
-                >
-                  <MessageSquare className="h-4 w-4" strokeWidth={2.25} />
-                </button>
-                {commentOpen && editor ? (
-                  <div
-                    ref={commentPanelRef}
-                    className="absolute left-0 top-full z-50 mt-2 flex min-w-[min(18rem,calc(100vw-2rem))] flex-col gap-2 rounded-2xl border border-dust bg-parchment p-3 shadow-lg dark:border-border-dark dark:bg-panel-dark"
-                    onMouseDown={(e) => e.stopPropagation()}
-                  >
-                    <label
-                      className="text-xs font-semibold text-ink/80 dark:text-ink-dark/80"
-                      htmlFor={`inkwell-comment-more-${manuscriptId}`}
-                    >
-                      Comment
-                    </label>
-                    <textarea
-                      id={`inkwell-comment-more-${manuscriptId}`}
-                      value={commentDraft}
-                      onChange={(e) => setCommentDraft(e.target.value)}
-                      rows={3}
-                      placeholder="Note to self or editor…"
-                      className="resize-y rounded-xl border border-dust bg-white px-3 py-2 text-sm text-ink focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:text-ink-dark dark:focus:border-cream"
-                      autoFocus
-                    />
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        className="rounded-full bg-ink px-4 py-2 text-xs font-semibold text-parchment hover:bg-walnut dark:bg-cream dark:text-ink dark:hover:bg-accent-warm"
-                        onClick={applyComment}
-                      >
-                        Apply
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded-full border border-dust px-4 py-2 text-xs font-semibold text-ink hover:bg-dust/30 dark:border-border-dark dark:text-ink-dark dark:hover:bg-border-dark/50"
-                        onClick={removeComment}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-              <div className="relative">
-                <button
-                  type="button"
-                  className={toolBtn(false)}
-                  title="Insert footnote"
-                  onClick={() => {
-                    setFootnoteDraft('')
-                    setFootnoteOpen(true)
-                  }}
-                >
-                  <NotebookPen className="h-4 w-4" strokeWidth={2.25} />
-                </button>
-                {footnoteOpen && editor ? (
-                  <div
-                    ref={footnotePanelRef}
-                    className="absolute left-0 top-full z-50 mt-2 flex min-w-[min(18rem,calc(100vw-2rem))] flex-col gap-2 rounded-2xl border border-dust bg-parchment p-3 shadow-lg dark:border-border-dark dark:bg-panel-dark"
-                    onMouseDown={(e) => e.stopPropagation()}
-                  >
-                    <label
-                      className="text-xs font-semibold text-ink/80 dark:text-ink-dark/80"
-                      htmlFor={`inkwell-fn-more-${manuscriptId}`}
-                    >
-                      Footnote text
-                    </label>
-                    <textarea
-                      id={`inkwell-fn-more-${manuscriptId}`}
-                      value={footnoteDraft}
-                      onChange={(e) => setFootnoteDraft(e.target.value)}
-                      rows={3}
-                      className="resize-y rounded-xl border border-dust bg-white px-3 py-2 text-sm text-ink focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:text-ink-dark dark:focus:border-cream"
-                      autoFocus
-                    />
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        className="rounded-full bg-ink px-4 py-2 text-xs font-semibold text-parchment hover:bg-walnut dark:bg-cream dark:text-ink dark:hover:bg-accent-warm"
-                        onClick={applyFootnote}
-                      >
-                        Insert
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          </details>
-        ) : null}
-
-        {!minimalBar ? (
-          <>
-            <div className="flex items-center gap-0.5">
-              <select
-                className="h-8 max-w-[7rem] rounded-lg border border-dust bg-parchment text-[10px] font-medium text-ink dark:border-border-dark dark:bg-panel-dark dark:text-ink-dark"
-                defaultValue=""
-                title="Scene break / ornament"
-                onChange={(e) => {
-                  const v = e.target.value
-                  if (!editor) return
-                  if (v === 'plain') editor.chain().focus().setHorizontalRule().run()
-                  else if (v.startsWith('orn:')) {
-                    const ornament = v.slice(4)
-                    editor.chain().focus().insertContent({ type: 'horizontalRule', attrs: { ornament } }).run()
-                  }
-                  e.currentTarget.selectedIndex = 0
-                }}
-              >
-                <option value="" disabled>
-                  Scene…
-                </option>
-                <option value="plain">Plain rule</option>
-                {SCENE_BREAK_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                className={toolBtn(false)}
-                title="Plain horizontal rule"
-                onClick={() => editor?.chain().focus().setHorizontalRule().run()}
-              >
-                <Minus className="h-4 w-4" strokeWidth={2.25} />
-              </button>
-            </div>
-
-            <button
-              type="button"
-              className={toolBtn(false)}
-              title="Insert image"
-              onClick={() => imageInputRef.current?.click()}
-            >
-              <ImagePlus className="h-4 w-4" strokeWidth={2.25} />
-            </button>
-
-            <div className="relative">
-              <button
-                type="button"
-                className={toolBtn(editor?.isActive('writerComment') ?? false)}
-                title="Comment on selection"
-                onClick={openCommentPanel}
-              >
-                <MessageSquare className="h-4 w-4" strokeWidth={2.25} />
-              </button>
-              {commentOpen && editor ? (
-                <div
-                  ref={commentPanelRef}
-                  className="absolute left-0 top-full z-50 mt-2 flex min-w-[min(18rem,calc(100vw-2rem))] flex-col gap-2 rounded-2xl border border-dust bg-parchment p-3 shadow-lg dark:border-border-dark dark:bg-panel-dark sm:left-auto sm:right-0"
-                  onMouseDown={(e) => e.stopPropagation()}
-                >
-                  <label
-                    className="text-xs font-semibold text-ink/80 dark:text-ink-dark/80"
-                    htmlFor={`inkwell-comment-${manuscriptId}`}
-                  >
-                    Comment
-                  </label>
-                  <textarea
-                    id={`inkwell-comment-${manuscriptId}`}
-                    value={commentDraft}
-                    onChange={(e) => setCommentDraft(e.target.value)}
-                    rows={3}
-                    placeholder="Note to self or editor…"
-                    className="resize-y rounded-xl border border-dust bg-white px-3 py-2 text-sm text-ink focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:text-ink-dark dark:focus:border-cream"
-                    autoFocus
-                  />
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      className="rounded-full bg-ink px-4 py-2 text-xs font-semibold text-parchment hover:bg-walnut dark:bg-cream dark:text-ink dark:hover:bg-accent-warm"
-                      onClick={applyComment}
-                    >
-                      Apply
-                    </button>
-                    <button
-                      type="button"
-                      className="rounded-full border border-dust px-4 py-2 text-xs font-semibold text-ink hover:bg-dust/30 dark:border-border-dark dark:text-ink-dark dark:hover:bg-border-dark/50"
-                      onClick={removeComment}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-
-            <div className="relative">
-              <button
-                type="button"
-                className={toolBtn(false)}
-                title="Insert footnote"
-                onClick={() => {
-                  setFootnoteDraft('')
-                  setFootnoteOpen(true)
-                }}
-              >
-                <NotebookPen className="h-4 w-4" strokeWidth={2.25} />
-              </button>
-              {footnoteOpen && editor ? (
-                <div
-                  ref={footnotePanelRef}
-                  className="absolute left-0 top-full z-50 mt-2 flex min-w-[min(18rem,calc(100vw-2rem))] flex-col gap-2 rounded-2xl border border-dust bg-parchment p-3 shadow-lg dark:border-border-dark dark:bg-panel-dark sm:left-auto sm:right-0"
-                  onMouseDown={(e) => e.stopPropagation()}
-                >
-                  <label
-                    className="text-xs font-semibold text-ink/80 dark:text-ink-dark/80"
-                    htmlFor={`inkwell-fn-${manuscriptId}`}
-                  >
-                    Footnote text
-                  </label>
-                  <textarea
-                    id={`inkwell-fn-${manuscriptId}`}
-                    value={footnoteDraft}
-                    onChange={(e) => setFootnoteDraft(e.target.value)}
-                    rows={3}
-                    className="resize-y rounded-xl border border-dust bg-white px-3 py-2 text-sm text-ink focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:text-ink-dark dark:focus:border-cream"
-                    autoFocus
-                  />
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      className="rounded-full bg-ink px-4 py-2 text-xs font-semibold text-parchment hover:bg-walnut dark:bg-cream dark:text-ink dark:hover:bg-accent-warm"
-                      onClick={applyFootnote}
-                    >
-                      Insert
-                    </button>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          </>
-        ) : null}
-
-        <input
-          ref={imageInputRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={(e) => onPickImage(e.target.files)}
-        />
-
-        <div className="ml-auto flex shrink-0 flex-wrap items-center gap-2">
-          {!minimalBar ? (
-            <button
-              type="button"
-              className={toolBtn(false)}
-              title="Mention — type @ in text"
-              onClick={() => editor?.chain().focus().insertContent('@').run()}
-            >
-              <AtSign className="h-4 w-4" strokeWidth={2.25} />
-            </button>
-          ) : null}
-          <button
-            type="button"
-            disabled={!editor?.can().undo()}
-            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl transition-colors disabled:cursor-default sm:h-10 sm:w-10 ${
-              editor?.can().undo()
-                ? 'text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50'
-                : 'cursor-default text-ink/35 dark:text-ink-dark/35'
-            }`}
-            title="Undo (Ctrl/Cmd+Z)"
-            onClick={() => editor?.chain().focus().undo().run()}
-          >
-            <Undo2 className="h-4 w-4" strokeWidth={2.25} />
-          </button>
-          <button
-            type="button"
-            disabled={!editor?.can().redo()}
-            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl transition-colors disabled:cursor-default sm:h-10 sm:w-10 ${
-              editor?.can().redo()
-                ? 'text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50'
-                : 'cursor-default text-ink/35 dark:text-ink-dark/35'
-            }`}
-            title="Redo (Ctrl/Cmd+Shift+Z)"
-            onClick={() => editor?.chain().focus().redo().run()}
-          >
-            <Redo2 className="h-4 w-4" strokeWidth={2.25} />
-          </button>
-        </div>
-      </div>
-
+      <div className="relative flex min-h-0 flex-1 flex-col">
+      {leftOverlay}
       <div ref={shellRef} className={`inkwell-editor-shell relative flex-1 overflow-auto ${shellPad}`}>
         {floatPos !== null ? (
           <div className="sticky top-2 z-30 flex h-0 w-full justify-end overflow-visible pr-2 pt-1 pointer-events-none">
@@ -1229,6 +412,7 @@ function ManuscriptEditorInner({
           />
         )}
       </div>
+      </div>
     </div>
   )
 }
@@ -1249,6 +433,8 @@ export const ManuscriptEditor = memo(ManuscriptEditorInner, (prev, next) => {
     prev.statsBookLabel === next.statsBookLabel &&
     prev.statsScopeLabel === next.statsScopeLabel &&
     prev.wordStatStorageKey === next.wordStatStorageKey &&
-    prev.toolbarVariant === next.toolbarVariant
+    prev.toolbarVariant === next.toolbarVariant &&
+    prev.onOpenFindReplace === next.onOpenFindReplace &&
+    prev.leftOverlay === next.leftOverlay
   )
 })

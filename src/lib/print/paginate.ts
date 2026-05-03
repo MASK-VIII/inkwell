@@ -283,7 +283,7 @@ export async function paginateForPrintReview(
 ): Promise<PrintPage[]> {
   // Use the same embedded Unicode font strategy as PDF export so Print Review
   // is a true WYSIWYG preview (including diacritics/symbols where glyphs exist).
-  const { font } = await getPrintFontForMeasurement()
+  const { font } = await getPrintFontForMeasurement(theme.print.bodyFontId)
   return paginateWithFont(chapters, theme, font, ctx)
 }
 

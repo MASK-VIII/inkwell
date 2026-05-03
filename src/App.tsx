@@ -3,14 +3,14 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Download,
   Folders,
+  LayoutTemplate,
   Library,
   Moon,
   MoreVertical,
   PenLine,
   Plus,
-  Search,
+  Rocket,
   Sun,
   Trash2,
 } from 'lucide-react'
@@ -22,7 +22,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from 'react'
 import { BookTools } from './components/BookTools'
@@ -34,11 +33,14 @@ import { EbookReview } from './components/EbookReview'
 import { ManuscriptEditor } from './components/ManuscriptEditor'
 import { ManuscriptRow } from './components/ManuscriptRow'
 import { FormatPreviewModeBar } from './components/FormatPreviewModeBar'
-import { FormatThemeSidebar } from './components/FormatThemeSidebar'
+import {
+  FormatThemeSidebar,
+  FORMAT_WORKSPACE_SIDE_PANEL_WIDTH_CLASS,
+  FORMAT_WORKSPACE_SIDE_RAIL_WIDTH_CLASS,
+} from './components/FormatThemeSidebar'
 import { PrintReview } from './components/PrintReview'
 import { attachInkwellDragGhost } from './lib/dragGhost'
 import { NOTE_DRAG_MIME, NOTE_DRAG_TEXT_PREFIX, readShelfDragNoteId } from './lib/shelfDrag'
-import { escapeHtml } from './lib/escapeHtml'
 import {
   createBookProject,
   createNoteProject,
@@ -47,6 +49,7 @@ import {
   deriveNoteMetaTitle,
   ensureAtLeastOneProject,
   hydrateInkwellStorage,
+  buildInkwellUrlForProject,
   listBookMetas,
   listLinkedNotesForBook,
   listLinkedNotesForBookInShelfOrder,
@@ -57,7 +60,6 @@ import {
   migrateProjectChildPins,
   nextManuscriptId,
   noteHasChildren,
-  openInkwellProjectInNewTab,
   isProjectNotePinned,
   pinProjectNote,
   clearProjectChildPins,
@@ -69,11 +71,13 @@ import {
   listProjectHistory,
   loadProjectSnapshot,
   clearProjectHistory,
+  getTabSessionProjectId,
+  loadProjectIndex,
   readOpenProjectIdFromLocation,
   rememberOpenChapter,
   resolveResumeChapterId,
   saveProject,
-  setActiveProjectId,
+  setTabSessionProjectId,
   totalWordsInChapters,
   wouldCreateNoteAttachmentCycle,
 } from './lib/manuscripts'
@@ -93,6 +97,7 @@ import type {
   Manuscript,
   PrintTheme,
   SeriesBibleEntry,
+  Theme,
   WritingGoals,
 } from './types'
 import type { MentionItem } from './lib/tiptap/mentionUi'
@@ -107,6 +112,32 @@ const PERSIST_IDLE_MS = 450
 type DeletedSnapshot = Manuscript & { originalIndex: number }
 
 type Route = 'bookshelf' | 'write' | 'format_print' | 'format_ebook' | 'publish'
+
+type EbookFormatSlice = {
+  ebook: EbookTheme
+  lastEbookInteriorPresetId?: string
+}
+
+type PrintFormatSlice = {
+  print: PrintTheme
+  lastPrintInteriorPresetId?: string
+}
+
+function ebookSliceDirty(slice: EbookFormatSlice | null, theme: Theme): boolean {
+  if (!slice) return false
+  return (
+    JSON.stringify(slice.ebook) !== JSON.stringify(theme.ebook) ||
+    (slice.lastEbookInteriorPresetId ?? '') !== (theme.lastEbookInteriorPresetId ?? '')
+  )
+}
+
+function printSliceDirty(slice: PrintFormatSlice | null, theme: Theme): boolean {
+  if (!slice) return false
+  return (
+    JSON.stringify(slice.print) !== JSON.stringify(theme.print) ||
+    (slice.lastPrintInteriorPresetId ?? '') !== (theme.lastPrintInteriorPresetId ?? '')
+  )
+}
 
 function readInitialDarkMode(): boolean {
   if (typeof window === 'undefined') return false
@@ -145,6 +176,10 @@ function slugDownload(name: string) {
   return name.replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '') || 'manuscript'
 }
 
+function projectIdIsIndexed(id: string): boolean {
+  return loadProjectIndex().projects.some((row) => row.id === id)
+}
+
 function readInitialEditorSession(): {
   project: InkwellProject
   currentId: number | null
@@ -153,11 +188,30 @@ function readInitialEditorSession(): {
   if (fromUrl) {
     const p = loadProject(fromUrl)
     if (p) {
-      setActiveProjectId(fromUrl)
+      setTabSessionProjectId(fromUrl)
       return { project: p, currentId: resolveResumeChapterId(p) }
     }
+    // Project blob may still be loading from IndexedDB; index is already in localStorage.
+    if (projectIdIsIndexed(fromUrl)) {
+      const fallback = ensureAtLeastOneProject()
+      return { project: fallback, currentId: resolveResumeChapterId(fallback) }
+    }
+  }
+  const tabId = getTabSessionProjectId()
+  if (tabId) {
+    const p = loadProject(tabId)
+    if (p) {
+      setTabSessionProjectId(p.id)
+      return { project: p, currentId: resolveResumeChapterId(p) }
+    }
+    if (projectIdIsIndexed(tabId)) {
+      const fallback = ensureAtLeastOneProject()
+      return { project: fallback, currentId: resolveResumeChapterId(fallback) }
+    }
+    setTabSessionProjectId(null)
   }
   const project = ensureAtLeastOneProject()
+  setTabSessionProjectId(project.id)
   return { project, currentId: resolveResumeChapterId(project) }
 }
 
@@ -184,6 +238,12 @@ export default function App() {
       return false
     }
   })
+  const [ebookFormatSlice, setEbookFormatSlice] = useState<EbookFormatSlice | null>(null)
+  const [printFormatSlice, setPrintFormatSlice] = useState<PrintFormatSlice | null>(null)
+  const ebookFormatSliceRef = useRef<EbookFormatSlice | null>(null)
+  const printFormatSliceRef = useRef<PrintFormatSlice | null>(null)
+  const routeRef = useRef<Route>(readRouteFromHash())
+  const prevRouteForSliceInitRef = useRef<Route | null>(null)
   const [findReplaceOpen, setFindReplaceOpen] = useState(false)
   const [stickyNotePopoutId, setStickyNotePopoutId] = useState<string | null>(null)
   const [toast, setToast] = useState<{ node: ReactNode; ms: number } | null>(null)
@@ -196,12 +256,6 @@ export default function App() {
   const [stickNoteId, setStickNoteId] = useState<string | null>(null)
   const [stickSelectParentId, setStickSelectParentId] = useState<string>('')
   const [openNoteMenuId, setOpenNoteMenuId] = useState<string | null>(null)
-  const [shelfContextMenu, setShelfContextMenu] = useState<{
-    x: number
-    y: number
-    projectId: string
-  } | null>(null)
-  const shelfContextMenuRef = useRef<HTMLDivElement | null>(null)
   const [shelfDropHoverAttachId, setShelfDropHoverAttachId] = useState<string | null>(null)
   const [shelfDropHoverNotesSection, setShelfDropHoverNotesSection] = useState(false)
   const [shelfDropHoverProjectsSection, setShelfDropHoverProjectsSection] = useState(false)
@@ -230,6 +284,8 @@ export default function App() {
   /** Bumps when in-place manuscript tree changes but `currentId` can stay the same (DOCX import, history restore). Forces TipTap to remount — otherwise useEditor([manuscriptId]) keeps stale ProseMirror doc and can white-screen. */
   const [editorEpoch, setEditorEpoch] = useState(0)
   const prevProjectIdForEditorRef = useRef(project.id)
+  /** Avoid syncing sessionStorage from a provisional `project` until IDB hydration — wrong id would overwrite the tab binding. */
+  const tabSessionSyncReadyRef = useRef(false)
 
   const chapters = project.chapters
 
@@ -239,7 +295,7 @@ export default function App() {
     return project.id
   }, [project.kind, project.id, project.linkedBookId])
 
-  /** First row in BookTools “Notes in this project” / “Linked notes”; book or note master. */
+  /** First row in BookTools “Notebook” / “Linked notes”; book or note master. */
   const notesProjectMaster = useMemo(() => {
     if (project.kind !== 'book' && project.kind !== 'note') return null
     const parentId = project.linkedBookId?.trim()
@@ -314,6 +370,35 @@ export default function App() {
     return listProjectHistory(project.id)
   }, [project.id, historyRev])
 
+  const displayTheme = useMemo((): Theme => {
+    if (route === 'format_ebook' && ebookFormatSlice) {
+      return {
+        ...project.theme,
+        ebook: ebookFormatSlice.ebook,
+        lastEbookInteriorPresetId:
+          ebookFormatSlice.lastEbookInteriorPresetId ?? project.theme.lastEbookInteriorPresetId,
+      }
+    }
+    if (route === 'format_print' && printFormatSlice) {
+      return {
+        ...project.theme,
+        print: printFormatSlice.print,
+        lastPrintInteriorPresetId:
+          printFormatSlice.lastPrintInteriorPresetId ?? project.theme.lastPrintInteriorPresetId,
+      }
+    }
+    return project.theme
+  }, [route, project.theme, ebookFormatSlice, printFormatSlice])
+
+  const themeCommitDirty =
+    route === 'format_ebook'
+      ? ebookSliceDirty(ebookFormatSlice, project.theme)
+      : route === 'format_print'
+        ? printSliceDirty(printFormatSlice, project.theme)
+        : false
+
+  const isFormatWorkspace = route === 'format_print' || route === 'format_ebook'
+
   useLayoutEffect(() => {
     document.documentElement.classList.toggle('dark', darkMode)
   }, [darkMode])
@@ -321,6 +406,11 @@ export default function App() {
   useLayoutEffect(() => {
     projectRef.current = project
   }, [project])
+
+  useLayoutEffect(() => {
+    if (!tabSessionSyncReadyRef.current) return
+    setTabSessionProjectId(project.id)
+  }, [project.id])
 
   useEffect(() => {
     rememberOpenChapter(project.id, currentId)
@@ -333,12 +423,62 @@ export default function App() {
     }
   }, [project.id])
 
-  const setRoute = useCallback((next: Route) => {
-    setRouteState(next)
-    if (typeof window !== 'undefined') {
-      window.location.hash = routeToHash(next)
+  const tryDiscardFormatDraftsIfNeeded = useCallback((from: Route, to: Route): boolean => {
+    if (from === 'format_ebook' && to !== 'format_ebook') {
+      if (ebookSliceDirty(ebookFormatSliceRef.current, projectRef.current.theme)) {
+        if (!window.confirm('Discard unsaved theme changes?')) return false
+        setEbookFormatSlice(null)
+      }
     }
+    if (from === 'format_print' && to !== 'format_print') {
+      if (printSliceDirty(printFormatSliceRef.current, projectRef.current.theme)) {
+        if (!window.confirm('Discard unsaved theme changes?')) return false
+        setPrintFormatSlice(null)
+      }
+    }
+    return true
   }, [])
+
+  const navigateRoute = useCallback(
+    (next: Route) => {
+      const from = routeRef.current
+      if (!tryDiscardFormatDraftsIfNeeded(from, next)) return
+      routeRef.current = next
+      setRouteState(next)
+      if (typeof window !== 'undefined') window.location.hash = routeToHash(next)
+    },
+    [tryDiscardFormatDraftsIfNeeded],
+  )
+
+  useLayoutEffect(() => {
+    routeRef.current = route
+  }, [route])
+
+  useLayoutEffect(() => {
+    ebookFormatSliceRef.current = ebookFormatSlice
+  }, [ebookFormatSlice])
+
+  useLayoutEffect(() => {
+    printFormatSliceRef.current = printFormatSlice
+  }, [printFormatSlice])
+
+  useEffect(() => {
+    const prev = prevRouteForSliceInitRef.current
+    prevRouteForSliceInitRef.current = route
+    const t = projectRef.current.theme
+    if (route === 'format_ebook' && prev !== 'format_ebook') {
+      setEbookFormatSlice({
+        ebook: structuredClone(t.ebook),
+        lastEbookInteriorPresetId: t.lastEbookInteriorPresetId,
+      })
+    }
+    if (route === 'format_print' && prev !== 'format_print') {
+      setPrintFormatSlice({
+        print: structuredClone(t.print),
+        lastPrintInteriorPresetId: t.lastPrintInteriorPresetId,
+      })
+    }
+  }, [route])
 
   const setChaptersAsideCollapsedPersisted = useCallback((collapsed: boolean) => {
     setChaptersAsideCollapsed(collapsed)
@@ -359,10 +499,21 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    const onHash = () => setRouteState(readRouteFromHash())
+    const onHash = () => {
+      const next = readRouteFromHash()
+      const from = routeRef.current
+      if (next === from) return
+      if (!tryDiscardFormatDraftsIfNeeded(from, next)) {
+        const h = routeToHash(from)
+        if (window.location.hash !== h) window.history.replaceState(null, '', h)
+        return
+      }
+      routeRef.current = next
+      setRouteState(next)
+    }
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)
-  }, [])
+  }, [tryDiscardFormatDraftsIfNeeded])
 
   useEffect(() => {
     if (!newProjectMenuOpen) return
@@ -402,28 +553,6 @@ export default function App() {
       window.removeEventListener('keydown', onKey)
     }
   }, [openNoteMenuId, route])
-
-  useEffect(() => {
-    if (route !== 'bookshelf') setShelfContextMenu(null)
-  }, [route])
-
-  useEffect(() => {
-    if (!shelfContextMenu) return
-    const onDocMouseDown = (e: globalThis.MouseEvent) => {
-      const el = shelfContextMenuRef.current
-      if (el && el.contains(e.target as Node)) return
-      setShelfContextMenu(null)
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setShelfContextMenu(null)
-    }
-    document.addEventListener('mousedown', onDocMouseDown)
-    window.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onDocMouseDown)
-      window.removeEventListener('keydown', onKey)
-    }
-  }, [shelfContextMenu])
 
   const bumpHistory = useCallback(() => setHistoryRev((n) => (n + 1) % 1_000_000), [])
 
@@ -526,16 +655,15 @@ export default function App() {
       syncPersistedState()
       const p = loadProject(id)
       if (!p) return
-      setActiveProjectId(id)
       setProject(p)
       setCurrentId(resolveResumeChapterId(p))
       setEbookEditOpen(false)
-      setRoute('write')
+      navigateRoute('write')
       const force = listProjectHistory(p.id).length === 0
       const entry = pushProjectHistorySnapshot(p, { label: 'Opened', force })
       if (entry) bumpHistory()
     },
-    [bumpHistory, setRoute, syncPersistedState],
+    [bumpHistory, navigateRoute, syncPersistedState],
   )
 
   useEffect(() => {
@@ -574,10 +702,45 @@ export default function App() {
 
   const patchTheme = useCallback(
     (patch: { print?: Partial<PrintTheme>; ebook?: Partial<EbookTheme> }) => {
+      const ebookOnly = patch.ebook !== undefined && patch.print === undefined
+      const printOnly = patch.print !== undefined && patch.ebook === undefined
+      if (route === 'format_ebook' && ebookOnly) {
+        setEbookFormatSlice((prev) => {
+          const t = projectRef.current.theme
+          const base =
+            prev ??
+            ({
+              ebook: structuredClone(t.ebook),
+              lastEbookInteriorPresetId: t.lastEbookInteriorPresetId,
+            } satisfies EbookFormatSlice)
+          return {
+            ebook: { ...base.ebook, ...patch.ebook },
+            lastEbookInteriorPresetId: base.lastEbookInteriorPresetId,
+          }
+        })
+        return
+      }
+      if (route === 'format_print' && printOnly) {
+        setPrintFormatSlice((prev) => {
+          const t = projectRef.current.theme
+          const base =
+            prev ??
+            ({
+              print: structuredClone(t.print),
+              lastPrintInteriorPresetId: t.lastPrintInteriorPresetId,
+            } satisfies PrintFormatSlice)
+          return {
+            print: { ...base.print, ...patch.print },
+            lastPrintInteriorPresetId: base.lastPrintInteriorPresetId,
+          }
+        })
+        return
+      }
       setProject((prev) =>
         saveProject({
           ...prev,
           theme: {
+            ...prev.theme,
             print: { ...prev.theme.print, ...(patch.print ?? {}) },
             ebook: { ...prev.theme.ebook, ...(patch.ebook ?? {}) },
           },
@@ -585,8 +748,42 @@ export default function App() {
       )
       recordHistorySoon('Auto')
     },
-    [recordHistorySoon],
+    [recordHistorySoon, route],
   )
+
+  const commitActiveFormatTheme = useCallback(() => {
+    if (route === 'format_ebook') {
+      const s = ebookFormatSliceRef.current
+      if (!s) return
+      setProject((prev) =>
+        saveProject({
+          ...prev,
+          theme: {
+            ...prev.theme,
+            ebook: s.ebook,
+            lastEbookInteriorPresetId: s.lastEbookInteriorPresetId,
+          },
+        }),
+      )
+      recordHistorySoon('Theme')
+      return
+    }
+    if (route === 'format_print') {
+      const s = printFormatSliceRef.current
+      if (!s) return
+      setProject((prev) =>
+        saveProject({
+          ...prev,
+          theme: {
+            ...prev.theme,
+            print: s.print,
+            lastPrintInteriorPresetId: s.lastPrintInteriorPresetId,
+          },
+        }),
+      )
+      recordHistorySoon('Theme')
+    }
+  }, [route, recordHistorySoon])
 
   const patchAssembly = useCallback(
     (patch: Partial<BookAssembly>) => {
@@ -606,14 +803,54 @@ export default function App() {
 
   const applyInteriorPreset = useCallback(
     (id: ThemePresetId) => {
-      setProject((prev) => saveProject({ ...prev, theme: applyThemePreset(prev.theme, id) }))
+      if (route === 'format_ebook') {
+        setEbookFormatSlice((prev) => {
+          const t = projectRef.current.theme
+          const merged: Theme = prev
+            ? {
+                ...t,
+                ebook: prev.ebook,
+                lastEbookInteriorPresetId: prev.lastEbookInteriorPresetId,
+              }
+            : t
+          const next = applyThemePreset(merged, id, 'ebook')
+          return {
+            ebook: next.ebook,
+            lastEbookInteriorPresetId: next.lastEbookInteriorPresetId,
+          }
+        })
+        return
+      }
+      if (route === 'format_print') {
+        setPrintFormatSlice((prev) => {
+          const t = projectRef.current.theme
+          const merged: Theme = prev
+            ? {
+                ...t,
+                print: prev.print,
+                lastPrintInteriorPresetId: prev.lastPrintInteriorPresetId,
+              }
+            : t
+          const next = applyThemePreset(merged, id, 'print')
+          return {
+            print: next.print,
+            lastPrintInteriorPresetId: next.lastPrintInteriorPresetId,
+          }
+        })
+        return
+      }
+      const scope: 'print' | 'ebook' = 'ebook'
+      setProject((prev) =>
+        saveProject({ ...prev, theme: applyThemePreset(prev.theme, id, scope) }),
+      )
       recordHistorySoon('Auto')
     },
-    [recordHistorySoon],
+    [recordHistorySoon, route],
   )
 
   useEffect(() => {
     void hydrateInkwellStorage().then(() => {
+      tabSessionSyncReadyRef.current = true
       const next = readInitialEditorSession()
       setProject(next.project)
       setCurrentId(next.currentId)
@@ -761,24 +998,6 @@ export default function App() {
     })
   }
 
-  const exportHtml = () => {
-    const ed = editorRef.current
-    const ms = current
-    if (!ed || !ms) return
-    const html = ed.getHTML()
-    const docTitle =
-      project.book.title.trim() || ms.title
-    const wrapped = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>${escapeHtml(docTitle)}</title></head><body>${html}</body></html>`
-    const blob = new Blob([wrapped], { type: 'text/html;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${slugDownload(docTitle)}.html`
-    a.click()
-    URL.revokeObjectURL(url)
-    showToast('Exported as HTML')
-  }
-
   const exportPdfKdp = async () => {
     try {
       const bytes = await buildKdpPdf(project)
@@ -872,7 +1091,6 @@ export default function App() {
           syncPersistedState()
           setProject(res.project)
           setCurrentId(resolveResumeChapterId(res.project))
-          setActiveProjectId(res.project.id)
           setEditorEpoch((e) => e + 1)
           showToast('Imported book')
         } else {
@@ -892,6 +1110,8 @@ export default function App() {
     },
     [recordHistorySoon],
   )
+
+  const openFindReplaceModal = useCallback(() => setFindReplaceOpen(true), [])
 
   const splitChapterAtCursor = useCallback(
     (targetId: number) => {
@@ -979,13 +1199,13 @@ export default function App() {
         setCurrentId(nextChapters[0]?.id ?? null)
         setEditorEpoch((e) => e + 1)
         setEbookEditOpen(false)
-        setRoute('write')
+        navigateRoute('write')
         showToast(`Imported ${nextChapters.length} chapter${nextChapters.length === 1 ? '' : 's'}`)
       } catch {
         showToast('DOCX import failed')
       }
     },
-    [bumpHistory, clearPersistIdleTimer, recordHistorySoon, setRoute, showToast],
+    [bumpHistory, clearPersistIdleTimer, recordHistorySoon, navigateRoute, showToast],
   )
 
   const importDocx = useCallback(
@@ -1021,11 +1241,11 @@ export default function App() {
       setCurrentId(normalized.chapters[0]?.id ?? null)
       setEditorEpoch((e) => e + 1)
       setEbookEditOpen(false)
-      setRoute('write')
+      navigateRoute('write')
       bumpHistory()
       showToast('Restored snapshot')
     },
-    [clearPersistIdleTimer, historyEntries, showToast, bumpHistory, setRoute],
+    [clearPersistIdleTimer, historyEntries, showToast, bumpHistory, navigateRoute],
   )
 
   const clearHistory = useCallback(() => {
@@ -1281,28 +1501,6 @@ export default function App() {
     [openProject],
   )
 
-  const handleBookshelfContextMenu = useCallback((e: ReactMouseEvent<HTMLDivElement>) => {
-    const target = e.target as HTMLElement | null
-    const host = target?.closest('[data-inkwell-shelf-project]') as HTMLElement | null
-    const id = host?.getAttribute('data-inkwell-shelf-project')?.trim()
-    if (!id) {
-      setShelfContextMenu(null)
-      return
-    }
-    e.preventDefault()
-    setShelfContextMenu({ x: e.clientX, y: e.clientY, projectId: id })
-  }, [])
-
-  const shelfContextMenuPosition = useMemo(() => {
-    if (!shelfContextMenu || typeof window === 'undefined') return null
-    const pad = 8
-    const mw = 200
-    const mh = 52
-    const x = Math.min(Math.max(pad, shelfContextMenu.x), window.innerWidth - mw - pad)
-    const y = Math.min(Math.max(pad, shelfContextMenu.y), window.innerHeight - mh - pad)
-    return { x, y }
-  }, [shelfContextMenu])
-
   const shelfNoteDragStart = useCallback((e: React.DragEvent, noteId: string, previewTitle: string) => {
     setOpenNoteMenuId(null)
     shelfDraggingNoteIdRef.current = noteId
@@ -1539,13 +1737,110 @@ export default function App() {
             !wouldCreateNoteAttachmentCycle(stickNoteId, m.id),
         )
 
+  const chaptersChromeBtn =
+    'outline-none transition-colors focus-visible:ring-2 focus-visible:ring-cream focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark'
+  const chaptersPrimaryBtn =
+    `${chaptersChromeBtn} rounded-2xl bg-ink text-parchment transition-transform hover:scale-105 dark:bg-cream dark:text-ink`
+
+  const writeChaptersOverlay = useMemo(() => {
+    if (isNote || route !== 'write') return null
+    return (
+      <div
+        className={`inkwell-chapters-overlay-clip pointer-events-none absolute left-0 top-0 z-40 isolate h-full min-w-0 shrink-0 overflow-hidden ${
+          chaptersAsideCollapsed ? 'inkwell-chapters-overlay-clip--collapsed' : 'inkwell-chapters-overlay-clip--expanded'
+        }`}
+      >
+          <aside
+            className={`inkwell-chapters-overlay-rail pointer-events-auto absolute left-0 top-0 z-20 flex h-full shrink-0 flex-col items-center gap-2 rounded-r-2xl border-r border-dust bg-white/90 py-3 shadow-xl backdrop-blur-md dark:border-border-dark dark:bg-panel-dark/90 sm:py-4 ${FORMAT_WORKSPACE_SIDE_RAIL_WIDTH_CLASS}`}
+          >
+            <button
+              type="button"
+              onClick={() => setChaptersAsideCollapsedPersisted(false)}
+              className={`flex h-9 w-9 items-center justify-center rounded-2xl text-ink hover:bg-dust/40 dark:text-ink-dark dark:hover:bg-border-dark/50 ${chaptersChromeBtn}`}
+              aria-label="Expand chapters list"
+              title="Show chapters"
+            >
+              <ChevronRight className="h-4 w-4" strokeWidth={2.25} />
+            </button>
+            <button
+              type="button"
+              onClick={createManuscript}
+              className={`flex h-9 w-9 items-center justify-center ${chaptersPrimaryBtn}`}
+              aria-label="New chapter"
+              title="New chapter"
+            >
+              <Plus className="h-4 w-4" strokeWidth={2.5} />
+            </button>
+          </aside>
+          <aside
+            className={`inkwell-chapters-overlay-panel absolute left-0 top-0 z-10 flex h-full shrink-0 flex-col rounded-r-2xl border-r border-dust bg-white/90 shadow-2xl backdrop-blur-md dark:border-border-dark dark:bg-panel-dark/90 ${FORMAT_WORKSPACE_SIDE_PANEL_WIDTH_CLASS}`}
+          >
+            <div className="flex items-center gap-1.5 border-b border-dust px-3 py-3 dark:border-border-dark sm:gap-2 sm:px-5 sm:py-5">
+              <div className="flex min-w-0 flex-1 items-center gap-2">
+                <h2 className="min-w-0 truncate text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
+                  Chapters
+                </h2>
+                <button
+                  type="button"
+                  onClick={createManuscript}
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center ${chaptersPrimaryBtn}`}
+                  aria-label="New chapter"
+                  title="New chapter"
+                >
+                  <Plus className="h-4 w-4" strokeWidth={2.5} />
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => setChaptersAsideCollapsedPersisted(true)}
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl text-ink hover:bg-dust/40 dark:text-ink-dark dark:hover:bg-border-dark/50 ${chaptersChromeBtn}`}
+                aria-label="Collapse chapters list"
+                title="Collapse chapters"
+              >
+                <ChevronLeft className="h-4 w-4" strokeWidth={2.25} />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 touch-pan-y space-y-1 overflow-y-auto overscroll-y-contain px-3 py-4 sm:px-5 sm:py-5">
+              {chapters.map((ms, i) => (
+                <ManuscriptRow
+                  key={ms.id}
+                  manuscript={ms}
+                  active={ms.id === currentId}
+                  onSelectChapter={selectChapter}
+                  onDeleteChapter={deleteChapter}
+                  onDropReorder={onReorder}
+                  wordCount={countWordsInDoc(ms.content)}
+                  onSplitChapter={splitChapterAtCursor}
+                  onMergeWithNext={mergeChapterWithNext}
+                  canMergeWithNext={i < chapters.length - 1}
+                />
+              ))}
+            </div>
+            <p className="mt-auto border-t border-dust px-3 py-3 text-[11px] leading-snug text-ink/55 dark:border-border-dark dark:text-ink-dark/55 sm:px-5">
+              Drag a section by its book icon. Split uses the cursor position in the open section.
+            </p>
+          </aside>
+      </div>
+    )
+  }, [
+    isNote,
+    route,
+    chaptersAsideCollapsed,
+    chapters,
+    currentId,
+    setChaptersAsideCollapsedPersisted,
+    createManuscript,
+    selectChapter,
+    deleteChapter,
+    onReorder,
+    splitChapterAtCursor,
+    mergeChapterWithNext,
+  ])
+
   return (
     <div className="flex h-full min-h-0 flex-col bg-parchment text-ink transition-colors dark:bg-panel-dark dark:text-ink-dark">
       {route === 'bookshelf' ? (
-        <div
-          className="inkwell-bookshelf mx-auto flex w-full max-w-screen-2xl flex-1 flex-col px-4 py-6 sm:px-8 sm:py-10"
-          onContextMenu={handleBookshelfContextMenu}
-        >
+        <div className="inkwell-bookshelf mx-auto flex w-full max-w-screen-2xl flex-1 flex-col px-4 py-6 sm:px-8 sm:py-10">
           <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
             <div className="flex min-w-0 items-center gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-ink text-parchment dark:bg-cream dark:text-ink">
@@ -1566,7 +1861,7 @@ export default function App() {
                   setProject(p)
                   setCurrentId(p.chapters[0]?.id ?? null)
                   setEbookEditOpen(false)
-                  setRoute('write')
+                  navigateRoute('write')
                 }}
                 className="flex items-center gap-2 rounded-3xl bg-ink px-5 py-2.5 text-sm font-semibold text-parchment shadow-sm ring-1 ring-ink/10 hover:bg-walnut dark:bg-cream dark:text-ink dark:ring-cream/20 dark:hover:bg-accent-warm sm:px-6 sm:text-base"
               >
@@ -1598,7 +1893,7 @@ export default function App() {
                   setProject(p)
                   setCurrentId(p.chapters[0]?.id ?? null)
                   setEbookEditOpen(false)
-                  setRoute('write')
+                  navigateRoute('write')
                   setNewProjectMenuOpen(false)
                   await importDocxIntoProject(
                     file,
@@ -1635,7 +1930,7 @@ export default function App() {
                         setProject(p)
                         setCurrentId(p.chapters[0]?.id ?? null)
                         setEbookEditOpen(false)
-                        setRoute('write')
+                        navigateRoute('write')
                       }}
                     >
                       Note
@@ -1651,7 +1946,7 @@ export default function App() {
                         setProject(p)
                         setCurrentId(p.chapters[0]?.id ?? null)
                         setEbookEditOpen(false)
-                        setRoute('write')
+                        navigateRoute('write')
                       }}
                     >
                       Book
@@ -1710,7 +2005,6 @@ export default function App() {
                 return (
                   <div
                     key={p.id}
-                    data-inkwell-shelf-project={p.id}
                     onDragEnter={(e) => shelfAttachTargetDragOver(e, p.id)}
                     onDragOver={(e) => shelfAttachTargetDragOver(e, p.id)}
                     onDragLeave={(e) => shelfAttachTargetDragLeave(e, p.id)}
@@ -1722,10 +2016,10 @@ export default function App() {
                     }`}
                   >
                     <div className="flex w-full items-start justify-between gap-3 p-5">
-                      <div
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => {
+                      <a
+                        href={buildInkwellUrlForProject(p.id)}
+                        onClick={(e) => {
+                          e.preventDefault()
                           if (kidsOrdered.length > 0) {
                             setExpandedShelfParentId((cur) => (cur === p.id ? null : p.id))
                           } else {
@@ -1754,7 +2048,7 @@ export default function App() {
                             </div>
                           </div>
                         </div>
-                      </div>
+                      </a>
                       <div
                         className="flex shrink-0 items-start gap-2"
                         onClick={(e) => e.stopPropagation()}
@@ -1797,11 +2091,10 @@ export default function App() {
                         onKeyDown={(e) => e.stopPropagation()}
                       >
                         <div className="px-2 pb-2">
-                          <div
-                            role="button"
-                            tabIndex={0}
-                            data-inkwell-shelf-project={p.id}
-                            onClick={() => {
+                          <a
+                            href={buildInkwellUrlForProject(p.id)}
+                            onClick={(e) => {
+                              e.preventDefault()
                               openProject(p.id)
                               setExpandedShelfParentId(null)
                             }}
@@ -1811,7 +2104,7 @@ export default function App() {
                               openProject(p.id)
                               setExpandedShelfParentId(null)
                             }}
-                            className="w-full cursor-pointer rounded-2xl border border-dust bg-white/70 px-4 py-3 text-left outline-none transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:hover:bg-panel-dark/90 focus-visible:ring-2 focus-visible:ring-cream focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark"
+                            className="block w-full cursor-pointer rounded-2xl border border-dust bg-white/70 px-4 py-3 text-left outline-none transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:hover:bg-panel-dark/90 focus-visible:ring-2 focus-visible:ring-cream focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark"
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0 flex-1">
@@ -1826,7 +2119,7 @@ export default function App() {
                                 Book
                               </div>
                             </div>
-                          </div>
+                          </a>
                         </div>
                         {kidsOrdered.length === 0 ? (
                           <div className="px-4 py-2 text-xs text-ink/55 dark:text-ink-dark/55">
@@ -1871,13 +2164,14 @@ export default function App() {
                       >
                         <div className="space-y-1">
                           {top.map((n) => (
-                            <div
+                            <a
                               key={n.id}
-                              data-inkwell-shelf-project={n.id}
-                              className="truncate text-xs text-ink/55 dark:text-ink-dark/55"
+                              href={buildInkwellUrlForProject(n.id)}
+                              onClick={(e) => e.preventDefault()}
+                              className="block truncate text-xs text-ink/55 dark:text-ink-dark/55"
                             >
                               {n.title || 'Untitled note'}
-                            </div>
+                            </a>
                           ))}
                         </div>
                       </div>
@@ -1935,7 +2229,6 @@ export default function App() {
                 return (
                   <div
                     key={p.id}
-                    data-inkwell-shelf-project={p.id}
                     onDragEnter={(e) => shelfAttachTargetDragOver(e, p.id)}
                     onDragOver={(e) => shelfAttachTargetDragOver(e, p.id)}
                     onDragLeave={(e) => shelfAttachTargetDragLeave(e, p.id)}
@@ -1947,10 +2240,12 @@ export default function App() {
                     }`}
                   >
                     <div className="flex w-full items-start justify-between gap-3 p-5">
-                      <div
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => setExpandedShelfParentId((cur) => (cur === p.id ? null : p.id))}
+                      <a
+                        href={buildInkwellUrlForProject(p.id)}
+                        onClick={(e) => {
+                          e.preventDefault()
+                          setExpandedShelfParentId((cur) => (cur === p.id ? null : p.id))
+                        }}
                         onKeyDown={(e) => {
                           if (e.key !== 'Enter' && e.key !== ' ') return
                           e.preventDefault()
@@ -1969,7 +2264,7 @@ export default function App() {
                             </div>
                           </div>
                         </div>
-                      </div>
+                      </a>
 
                       <div
                         className="flex shrink-0 items-start gap-2"
@@ -2009,17 +2304,16 @@ export default function App() {
                         onKeyDown={(e) => e.stopPropagation()}
                       >
                         <div className="px-2 pb-2">
-                          <div
+                          <a
                             draggable
-                            data-inkwell-shelf-project={p.id}
+                            href={buildInkwellUrlForProject(p.id)}
                             title="Drag onto a book, project, note, or into Notes"
                             aria-label={`Master note: ${p.title || 'Untitled note'}. Drag to move, or activate to open.`}
                             onDragStart={(e) => shelfNoteDragStart(e, p.id, p.title || 'Untitled note')}
                             onDragEnd={shelfNoteDragEnd}
-                            className="w-full cursor-grab rounded-2xl border border-dust bg-white/70 px-4 py-3 text-left outline-none transition-colors hover:bg-white active:cursor-grabbing dark:border-border-dark dark:bg-panel-dark/70 dark:hover:bg-panel-dark/90 focus-visible:ring-2 focus-visible:ring-cream focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark"
-                            role="button"
-                            tabIndex={0}
-                            onClick={() => {
+                            className="block w-full cursor-grab rounded-2xl border border-dust bg-white/70 px-4 py-3 text-left outline-none transition-colors hover:bg-white active:cursor-grabbing dark:border-border-dark dark:bg-panel-dark/70 dark:hover:bg-panel-dark/90 focus-visible:ring-2 focus-visible:ring-cream focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark"
+                            onClick={(e) => {
+                              e.preventDefault()
                               tryOpenShelfNote(p.id)
                               setExpandedShelfParentId(null)
                             }}
@@ -2044,7 +2338,7 @@ export default function App() {
                                 Master
                               </div>
                             </div>
-                          </div>
+                          </a>
                         </div>
                         {kidsOrdered.length === 0 ? (
                           <div className="px-4 py-2 text-xs text-ink/55 dark:text-ink-dark/55">
@@ -2079,13 +2373,14 @@ export default function App() {
                       <div className="border-t border-dust px-5 pb-4 pt-3 dark:border-border-dark">
                         <div className="space-y-1">
                           {top.map((n) => (
-                            <div
+                            <a
                               key={n.id}
-                              data-inkwell-shelf-project={n.id}
-                              className="truncate text-xs text-ink/55 dark:text-ink-dark/55"
+                              href={buildInkwellUrlForProject(n.id)}
+                              onClick={(e) => e.preventDefault()}
+                              className="block truncate text-xs text-ink/55 dark:text-ink-dark/55"
                             >
                               {n.title || 'Untitled note'}
-                            </div>
+                            </a>
                           ))}
                         </div>
                       </div>
@@ -2151,7 +2446,6 @@ export default function App() {
                 return (
                   <div
                     key={p.id}
-                    data-inkwell-shelf-project={p.id}
                     onDragEnter={(e) => shelfAttachTargetDragOver(e, p.id)}
                     onDragOver={(e) => shelfAttachTargetDragOver(e, p.id)}
                     onDragLeave={(e) => shelfAttachTargetDragLeave(e, p.id)}
@@ -2163,16 +2457,18 @@ export default function App() {
                     }`}
                   >
                     <div className="flex w-full items-start justify-between gap-3 p-5">
-                      <div
+                      <a
                         draggable
+                        href={buildInkwellUrlForProject(p.id)}
                         title="Drag onto a book or note to attach"
                         aria-label={`Note: ${p.title || 'Untitled note'}. Drag to move, or activate to open.`}
                         onDragStart={(e) => shelfNoteDragStart(e, p.id, p.title || 'Untitled note')}
                         onDragEnd={shelfNoteDragEnd}
                         className="group min-w-0 flex-1 cursor-grab rounded-xl text-left outline-none active:cursor-grabbing focus-visible:ring-2 focus-visible:ring-cream focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark"
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => tryOpenShelfNote(p.id)}
+                        onClick={(e) => {
+                          e.preventDefault()
+                          tryOpenShelfNote(p.id)
+                        }}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' || e.key === ' ') {
                             e.preventDefault()
@@ -2184,7 +2480,7 @@ export default function App() {
                         <div className="mt-1 text-xs text-ink/55 dark:text-ink-dark/55">
                           Updated {new Date(p.updatedAt).toLocaleString()}
                         </div>
-                      </div>
+                      </a>
 
                       <div
                         className="flex shrink-0 items-start gap-1"
@@ -2307,29 +2603,6 @@ export default function App() {
             </div>
           ) : null}
 
-          {shelfContextMenu && shelfContextMenuPosition ? (
-            <div
-              ref={shelfContextMenuRef}
-              role="menu"
-              aria-label="Bookshelf"
-              className="fixed z-[260] min-w-[12rem] rounded-xl border border-dust bg-white py-1 shadow-xl dark:border-border-dark dark:bg-panel-dark"
-              style={{ left: shelfContextMenuPosition.x, top: shelfContextMenuPosition.y }}
-              onContextMenu={(e) => e.preventDefault()}
-            >
-              <button
-                type="button"
-                role="menuitem"
-                className="block w-full px-4 py-2.5 text-left text-sm font-medium text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
-                onClick={() => {
-                  openInkwellProjectInNewTab(shelfContextMenu.projectId)
-                  setShelfContextMenu(null)
-                }}
-              >
-                Open in new tab
-              </button>
-            </div>
-          ) : null}
-
           <div className="pointer-events-none fixed bottom-4 right-4 z-[250] sm:bottom-6 sm:right-6">
             <div
               ref={trashDropRef}
@@ -2382,116 +2655,149 @@ export default function App() {
       ) : (
         <>
           <header className="sticky top-0 z-50 border-b border-dust bg-white/90 backdrop-blur-md dark:border-border-dark dark:bg-panel-dark/90">
-            <div className="mx-auto grid max-w-screen-2xl grid-cols-[1fr_auto_1fr] items-center gap-3 px-3 py-3 sm:gap-4 sm:px-6">
-              <button
-                type="button"
-                onClick={() => {
-                  syncPersistedState()
-                  setRoute('bookshelf')
-                }}
-                className="inkwell-header-brand group inline-flex w-fit items-center gap-2 rounded-2xl px-2 py-1.5 focus:outline-none sm:gap-3"
-                aria-label="Back to Bookshelf"
-                title="Bookshelf"
-              >
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-ink text-lg text-parchment transition-colors group-hover:bg-cream dark:bg-cream dark:text-ink dark:group-hover:bg-accent-warm sm:text-xl">
-                  🪶
-                </div>
-                <span className="hidden font-serif text-xl font-semibold tracking-tight sm:block sm:text-2xl">
-                  Inkwell
-                </span>
-              </button>
-
-              <div className="min-w-0 px-1 sm:px-4">
-                {isNote ? (
-                  <input
-                    type="text"
-                    value={current?.title ?? ''}
-                    disabled={!current || route !== 'write'}
-                    onChange={(e) => updateCurrentTitle(e.target.value)}
-                    placeholder="Note title"
-                    className="w-[min(44rem,calc(100vw-10rem))] min-w-0 rounded-2xl border border-transparent bg-transparent px-3 py-2 text-center text-base font-medium focus:border-cream focus:outline-none dark:focus:border-cream sm:px-4 sm:text-lg"
-                  />
-                ) : route === 'write' || route === 'publish' ? (
-                  <div
-                    className="mx-auto max-w-[min(44rem,calc(100vw-10rem))] truncate text-center font-serif text-sm font-semibold text-ink/80 dark:text-ink-dark/80 sm:text-base"
-                    title={project.book.title.trim() || 'Untitled book'}
-                  >
-                    {project.book.title.trim() || 'Untitled book'}
+            <div className="relative flex w-full items-stretch">
+              <div className="flex shrink-0 items-center bg-white/70 py-2 pl-3 sm:py-3 sm:pl-5 dark:bg-panel-dark/70">
+                <a
+                  href={buildInkwellUrlForProject(project.id)}
+                  onClick={(e) => {
+                    e.preventDefault()
+                    syncPersistedState()
+                    navigateRoute('bookshelf')
+                  }}
+                  onContextMenu={() => {
+                    syncPersistedState()
+                  }}
+                  onMouseDown={(e) => {
+                    if (e.button === 1 || (e.button === 0 && (e.ctrlKey || e.metaKey))) {
+                      syncPersistedState()
+                    }
+                  }}
+                  className="inkwell-header-brand group inline-flex w-fit max-w-full items-center gap-2 rounded-2xl px-2 py-1.5 focus:outline-none sm:gap-3"
+                  aria-label="Back to Bookshelf"
+                  title="Bookshelf"
+                >
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-ink text-lg text-parchment transition-colors group-hover:bg-cream dark:bg-cream dark:text-ink dark:group-hover:bg-accent-warm sm:text-xl">
+                    🪶
                   </div>
-                ) : (
-                  <input
-                    type="text"
-                    value={current?.title ?? ''}
-                    disabled={!current}
-                    onChange={(e) => updateCurrentTitle(e.target.value)}
-                    placeholder="Chapter title"
-                    className="w-[min(44rem,calc(100vw-10rem))] min-w-0 rounded-2xl border border-transparent bg-transparent px-3 py-2 text-center text-base font-medium focus:border-cream focus:outline-none dark:focus:border-cream sm:px-4 sm:text-lg disabled:opacity-80"
-                  />
-                )}
+                  <span className="hidden font-serif text-xl font-semibold tracking-tight sm:block sm:text-2xl">
+                    Inkwell
+                  </span>
+                </a>
               </div>
 
-              <div className="flex items-center justify-end gap-1 sm:gap-2">
-                <div className="flex items-center gap-0 sm:gap-0.5">
+              <div
+                className={`flex min-h-[3.25rem] min-w-0 flex-1 items-center justify-center py-2 sm:min-h-[3.5rem] sm:py-3 ${
+                  !isNote && isFormatWorkspace ? 'px-3 sm:px-4' : 'px-3 pr-[7.5rem] sm:px-4 sm:pr-[10rem]'
+                }`}
+              >
+                <div className="min-w-0 w-full max-w-[min(44rem,100%)]">
+                  {isNote ? (
+                    <input
+                      type="text"
+                      value={current?.title ?? ''}
+                      disabled={!current || route !== 'write'}
+                      onChange={(e) => updateCurrentTitle(e.target.value)}
+                      placeholder="Note title"
+                      className="w-full min-w-0 rounded-2xl border border-transparent bg-transparent px-3 py-2 text-center text-base font-medium focus:border-cream focus:outline-none dark:focus:border-cream sm:px-4 sm:text-lg"
+                    />
+                  ) : route === 'write' || route === 'publish' ? (
+                    <div
+                      className="truncate text-center font-serif text-sm font-semibold text-ink/80 dark:text-ink-dark/80 sm:text-base"
+                      title={project.book.title.trim() || 'Untitled book'}
+                    >
+                      {project.book.title.trim() || 'Untitled book'}
+                    </div>
+                  ) : (
+                    <input
+                      type="text"
+                      value={current?.title ?? ''}
+                      disabled={!current}
+                      onChange={(e) => updateCurrentTitle(e.target.value)}
+                      placeholder="Chapter title"
+                      className="w-full min-w-0 rounded-2xl border border-transparent bg-transparent px-3 py-2 text-center text-base font-medium focus:border-cream focus:outline-none dark:focus:border-cream sm:px-4 sm:text-lg disabled:opacity-80"
+                    />
+                  )}
+                </div>
+              </div>
+
+              {!isNote && isFormatWorkspace ? (
+                <div
+                  className={`shrink-0 border-l border-dust bg-white/70 transition-[width] duration-300 ease-out dark:border-border-dark dark:bg-panel-dark/70 ${
+                    formatThemeAsideCollapsed ? FORMAT_WORKSPACE_SIDE_RAIL_WIDTH_CLASS : FORMAT_WORKSPACE_SIDE_PANEL_WIDTH_CLASS
+                  }`}
+                  aria-hidden
+                />
+              ) : null}
+
+              <div className="pointer-events-none absolute inset-y-0 right-0 z-10 flex items-center px-3 py-2 sm:px-5">
+                <div className="pointer-events-auto flex flex-wrap items-center justify-end gap-1 sm:gap-2">
                   <button
                     type="button"
                     onClick={() => {
-                      setBookToolsOpen(true)
+                      if (route === 'format_ebook') setEbookEditOpen((v) => !v)
                     }}
-                    className="flex h-10 w-10 items-center justify-center rounded-2xl text-ink transition-colors hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
-                    aria-label={isNote ? 'Note tools' : 'Book tools'}
-                    title={isNote ? 'Note tools' : 'Book tools'}
+                    className={`items-center gap-2 rounded-3xl border border-dust bg-white/70 px-3 py-2 text-sm font-medium text-ink transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90 ${
+                      route === 'format_ebook' ? 'hidden sm:flex' : 'hidden'
+                    }`}
+                    title="Toggle editor for ebook review"
                   >
-                    <Library className="h-5 w-5" />
+                    <BookOpen className="h-4 w-4 shrink-0" />
+                    <span>{ebookEditOpen ? 'Hide editor' : 'Edit'}</span>
                   </button>
+                  <div className="flex items-center gap-0 sm:gap-0.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBookToolsOpen(true)
+                      }}
+                      className="flex h-10 w-10 items-center justify-center rounded-2xl text-ink transition-colors hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
+                      aria-label={isNote ? 'Note tools' : 'Book tools'}
+                      title={isNote ? 'Note tools' : 'Book tools'}
+                    >
+                      <Library className="h-5 w-5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={toggleTheme}
+                      className="flex h-10 w-10 items-center justify-center rounded-2xl text-ink transition-colors hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
+                      aria-label="Toggle theme"
+                    >
+                      {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+                    </button>
+                  </div>
                   <button
                     type="button"
-                    onClick={toggleTheme}
-                    className="flex h-10 w-10 items-center justify-center rounded-2xl text-ink transition-colors hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
-                    aria-label="Toggle theme"
+                    onClick={() => {
+                      if (isFormatWorkspace) navigateRoute('publish')
+                      else {
+                        syncPersistedState()
+                        setEbookEditOpen(false)
+                        navigateRoute('format_ebook')
+                      }
+                    }}
+                    disabled={isFormatWorkspace ? false : !current || route !== 'write'}
+                    className="flex items-center gap-2 rounded-3xl bg-ink px-3 py-2 text-sm font-medium text-parchment transition-colors hover:bg-walnut disabled:opacity-40 dark:bg-cream dark:text-ink dark:hover:bg-accent-warm sm:px-5 sm:py-2.5"
+                    aria-label={isFormatWorkspace ? 'Go to Publish workspace' : 'Open Format workspace'}
+                    title={isFormatWorkspace ? 'Open Publish workspace' : 'Ebook & print previews'}
                   >
-                    {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+                    {isFormatWorkspace ? (
+                      <Rocket className="h-4 w-4 shrink-0" strokeWidth={2.25} />
+                    ) : (
+                      <LayoutTemplate className="h-4 w-4 shrink-0" strokeWidth={2.25} />
+                    )}
+                    <span className="hidden sm:inline">{isFormatWorkspace ? 'Publish!' : 'Format'}</span>
                   </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (route === 'format_ebook') setEbookEditOpen((v) => !v)
-                  }}
-                  className={`items-center gap-2 rounded-3xl border border-dust bg-white/70 px-3 py-2 text-sm font-medium text-ink transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90 ${
-                    route === 'format_ebook' ? 'hidden sm:flex' : 'hidden'
-                  }`}
-                  title="Toggle editor for ebook review"
-                >
-                  <BookOpen className="h-4 w-4 shrink-0" />
-                  <span>{ebookEditOpen ? 'Hide editor' : 'Edit'}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFindReplaceOpen(true)}
-                  disabled={route !== 'write'}
-                  className="flex items-center gap-2 rounded-3xl border border-dust bg-white/80 px-3 py-2 text-sm font-medium text-ink transition-colors hover:bg-white disabled:opacity-40 dark:border-border-dark dark:bg-panel-dark/80 dark:text-ink-dark dark:hover:bg-panel-dark sm:px-4 sm:py-2.5"
-                  title="Find and replace across all sections"
-                >
-                  <Search className="h-4 w-4 shrink-0" />
-                  <span className="hidden sm:inline">Find</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={exportHtml}
-                  disabled={!current || route !== 'write'}
-                  className="flex items-center gap-2 rounded-3xl bg-ink px-3 py-2 text-sm font-medium text-parchment transition-colors hover:bg-walnut disabled:opacity-40 dark:bg-cream dark:text-ink dark:hover:bg-accent-warm sm:px-5 sm:py-2.5"
-                >
-                  <Download className="h-4 w-4 shrink-0" />
-                  <span className="hidden sm:inline">Export</span>
-                </button>
               </div>
             </div>
           </header>
 
-          <div className="mx-auto flex min-h-0 w-full max-w-screen-2xl flex-1">
-            {!isNote ?
+          <div className="flex min-h-0 w-full flex-1">
+            {!isNote && route !== 'write' ?
               chaptersAsideCollapsed ?
-                <aside className="flex w-11 shrink-0 flex-col items-center gap-2 border-r border-dust bg-white/70 py-3 dark:border-border-dark dark:bg-panel-dark/70 sm:w-12 sm:py-4">
+                <aside
+                  className={`flex flex-col items-center gap-2 border-r border-dust bg-white/70 py-3 dark:border-border-dark dark:bg-panel-dark/70 sm:py-4 ${FORMAT_WORKSPACE_SIDE_RAIL_WIDTH_CLASS}`}
+                >
                   <button
                     type="button"
                     onClick={() => setChaptersAsideCollapsedPersisted(false)}
@@ -2511,16 +2817,18 @@ export default function App() {
                     <Plus className="h-4 w-4" strokeWidth={2.5} />
                   </button>
                 </aside>
-              : <aside className="flex w-[15.5rem] shrink-0 flex-col border-r border-dust bg-white/70 p-3 dark:border-border-dark dark:bg-panel-dark/70 sm:w-72 sm:p-5">
-                  <div className="mb-3 flex items-center gap-1.5 sm:mb-5 sm:gap-2">
-                    <div className="flex min-w-0 flex-1 items-center gap-1 sm:gap-1.5">
+              : <aside
+                  className={`flex shrink-0 flex-col border-r border-dust bg-white/70 dark:border-border-dark dark:bg-panel-dark/70 ${FORMAT_WORKSPACE_SIDE_PANEL_WIDTH_CLASS}`}
+                >
+                  <div className="flex items-center gap-1.5 border-b border-dust px-3 py-3 dark:border-border-dark sm:gap-2 sm:px-5 sm:py-5">
+                    <div className="flex min-w-0 flex-1 items-center gap-2">
                       <h2 className="min-w-0 truncate text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
                         Chapters
                       </h2>
                       <button
                         type="button"
                         onClick={createManuscript}
-                        className="flex h-8 w-8 shrink-0 -translate-x-px items-center justify-center rounded-2xl bg-ink text-parchment transition-transform hover:scale-105 dark:bg-cream dark:text-ink sm:translate-x-0"
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl bg-ink text-parchment transition-transform hover:scale-105 dark:bg-cream dark:text-ink"
                         aria-label="New chapter"
                         title="New chapter"
                       >
@@ -2537,7 +2845,7 @@ export default function App() {
                       <ChevronLeft className="h-4 w-4" strokeWidth={2.25} />
                     </button>
                   </div>
-                  <div className="min-h-0 flex-1 space-y-1 overflow-auto">
+                  <div className="min-h-0 flex-1 space-y-1 overflow-auto px-3 py-4 sm:px-5 sm:py-5">
                     {chapters.map((ms, i) => (
                       <ManuscriptRow
                         key={ms.id}
@@ -2553,7 +2861,7 @@ export default function App() {
                       />
                     ))}
                   </div>
-                  <p className="mt-auto border-t border-dust pt-3 text-[11px] leading-snug opacity-60 dark:border-border-dark">
+                  <p className="mt-auto border-t border-dust px-3 py-3 text-[11px] leading-snug text-ink/55 dark:border-border-dark dark:text-ink-dark/55 sm:px-5">
                     Drag a section by its book icon. Split uses the cursor position in the open section.
                   </p>
                 </aside>
@@ -2563,7 +2871,7 @@ export default function App() {
               {route === 'format_print' ? (
                 <PrintReview
                   chapters={chapters}
-                  theme={project.theme}
+                  theme={displayTheme}
                   book={project.book}
                   scrollToChapterId={currentId}
                   onChapterSelect={setCurrentId}
@@ -2572,17 +2880,17 @@ export default function App() {
                       mode="print"
                       onSelectEbook={() => {
                         setEbookEditOpen(false)
-                        setRoute('format_ebook')
+                        navigateRoute('format_ebook')
                       }}
                       onSelectPrint={() => {
                         setEbookEditOpen(false)
-                        setRoute('format_print')
+                        navigateRoute('format_print')
                       }}
                     />
                   }
                   onJumpToChapter={(id) => {
                     setCurrentId(id)
-                    setRoute('write')
+                    navigateRoute('write')
                   }}
                 />
               ) : route === 'format_ebook' ? (
@@ -2619,18 +2927,18 @@ export default function App() {
                   >
                     <EbookReview
                       chapters={chapters}
-                      theme={project.theme}
+                      theme={displayTheme}
                       activeChapterId={currentId}
                       formatModeBar={
                         <FormatPreviewModeBar
                           mode="ebook"
                           onSelectEbook={() => {
                             setEbookEditOpen(false)
-                            setRoute('format_ebook')
+                            navigateRoute('format_ebook')
                           }}
                           onSelectPrint={() => {
                             setEbookEditOpen(false)
-                            setRoute('format_print')
+                            navigateRoute('format_print')
                           }}
                         />
                       }
@@ -2650,10 +2958,10 @@ export default function App() {
                   onExportProjectArchive={() => void exportBookArchive()}
                   onExportLibraryArchive={() => void exportFullLibrary()}
                   onImportProjectArchive={(file) => void importArchiveFile(file)}
-                  onOpenFormatPrint={() => setRoute('format_print')}
+                  onOpenFormatPrint={() => navigateRoute('format_print')}
                   onOpenFormatEbook={() => {
                     setEbookEditOpen(false)
-                    setRoute('format_ebook')
+                    navigateRoute('format_ebook')
                   }}
                 />
               ) : current ? (
@@ -2664,6 +2972,7 @@ export default function App() {
                   onDocumentChange={updateCurrentContent}
                   editorRef={editorRef}
                   toolbarVariant={route === 'write' ? 'writeMinimal' : 'full'}
+                  onOpenFindReplace={route === 'write' ? openFindReplaceModal : undefined}
                   compactFooterStats
                   chapterTitle={current.title}
                   onChapterTitleChange={updateCurrentTitle}
@@ -2673,6 +2982,7 @@ export default function App() {
                   statsBookLabel={isNote ? 'Entire note' : 'Entire book'}
                   statsScopeLabel={isNote ? 'Note' : 'Chapter'}
                   wordStatStorageKey={project.id}
+                  leftOverlay={writeChaptersOverlay}
                 />
               ) : (
                 <div className="flex flex-1 items-center justify-center p-8 font-serif text-lg text-walnut/80 dark:text-accent-warm/80">
@@ -2682,9 +2992,12 @@ export default function App() {
             </main>
             {!isNote && (route === 'format_print' || route === 'format_ebook') ? (
               <FormatThemeSidebar
-                theme={project.theme}
+                theme={displayTheme}
+                formatScope={route === 'format_print' ? 'print' : 'ebook'}
                 onThemeChange={patchTheme}
                 onApplyThemePreset={applyInteriorPreset}
+                themeCommitDirty={themeCommitDirty}
+                onCommitTheme={commitActiveFormatTheme}
                 collapsed={formatThemeAsideCollapsed}
                 onSetCollapsed={setFormatThemeAsideCollapsedPersisted}
               />
@@ -2703,7 +3016,7 @@ export default function App() {
               : route === 'publish' ? 'publish'
               : 'write'
             }
-            onSetWorkspaceRoute={(next) => setRoute(next)}
+            onSetWorkspaceRoute={(next) => navigateRoute(next)}
             book={project.book}
             onBookChange={patchBook}
             goals={project.goals}
@@ -2737,7 +3050,7 @@ export default function App() {
                     setCurrentId(p.chapters[0]?.id ?? null)
                     setEbookEditOpen(false)
                     setBookToolsOpen(false)
-                    setRoute('write')
+                    navigateRoute('write')
                   }
                 : undefined
             }

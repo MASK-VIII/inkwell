@@ -1,27 +1,57 @@
 import { ChevronLeft, ChevronRight, Palette } from 'lucide-react'
 import type { EbookTheme, PrintTheme, Theme } from '../types'
-import { THEME_PRESETS, type ThemePresetId } from '../lib/themePresets'
+import {
+  isThemePresetId,
+  themePresetsGrouped,
+  type ThemePresetId,
+  type ThemePresetScope,
+} from '../lib/themePresets'
 import { EbookThemeForm } from './book-tools/EbookThemeForm'
 import { PrintThemeForm } from './book-tools/PrintThemeForm'
 
+/** Shared by Theme + Chapters panels so the format workspace stays column-symmetrical. */
+export const FORMAT_WORKSPACE_SIDE_PANEL_WIDTH_CLASS =
+  'w-[min(18.72rem,calc(100vw-4.5rem))] sm:w-[20.16rem] lg:w-[23.04rem] xl:w-[24.48rem]'
+
+/** Collapsed Chapters / Theme rails — keep in sync with aside markup. */
+export const FORMAT_WORKSPACE_SIDE_RAIL_WIDTH_CLASS = 'w-11 shrink-0 sm:w-12'
+
 type Props = {
   theme: Theme
+  /** Which Format preview tab is active: only that side’s controls and presets apply. */
+  formatScope: ThemePresetScope
   onThemeChange: (patch: { print?: Partial<PrintTheme>; ebook?: Partial<EbookTheme> }) => void
   onApplyThemePreset: (id: ThemePresetId) => void
+  /** True when the active format tab has theme edits not yet saved to the project. */
+  themeCommitDirty?: boolean
+  /** Persist draft theme to the project (save + history). */
+  onCommitTheme?: () => void
+  themeCommitPending?: boolean
   collapsed: boolean
   onSetCollapsed: (collapsed: boolean) => void
 }
 
 export function FormatThemeSidebar({
   theme,
+  formatScope,
   onThemeChange,
   onApplyThemePreset,
+  themeCommitDirty = false,
+  onCommitTheme,
+  themeCommitPending = false,
   collapsed,
   onSetCollapsed,
 }: Props) {
+  const lastForScope =
+    formatScope === 'print' ? theme.lastPrintInteriorPresetId : theme.lastEbookInteriorPresetId
+  const presetSelectValue =
+    typeof lastForScope === 'string' && isThemePresetId(lastForScope) ? lastForScope : ''
+
   if (collapsed) {
     return (
-      <aside className="flex w-11 shrink-0 flex-col items-center gap-2 border-l border-dust bg-white/70 py-3 dark:border-border-dark dark:bg-panel-dark/70 sm:w-12 sm:py-4">
+      <aside
+        className={`flex flex-col items-center gap-2 border-l border-dust bg-white/70 py-3 dark:border-border-dark dark:bg-panel-dark/70 sm:py-4 ${FORMAT_WORKSPACE_SIDE_RAIL_WIDTH_CLASS}`}
+      >
         <button
           type="button"
           onClick={() => onSetCollapsed(false)}
@@ -39,7 +69,9 @@ export function FormatThemeSidebar({
   }
 
   return (
-    <aside className="flex w-[15.5rem] shrink-0 flex-col border-l border-dust bg-white/70 dark:border-border-dark dark:bg-panel-dark/70 sm:w-72">
+    <aside
+      className={`flex shrink-0 flex-col border-l border-dust bg-white/70 transition-[width] duration-300 ease-out dark:border-border-dark dark:bg-panel-dark/70 ${FORMAT_WORKSPACE_SIDE_PANEL_WIDTH_CLASS}`}
+    >
       <div className="flex items-center gap-1.5 border-b border-dust px-3 py-3 dark:border-border-dark sm:gap-2 sm:px-5 sm:py-5">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <Palette className="h-4 w-4 shrink-0 text-walnut dark:text-accent-warm sm:h-5 sm:w-5" strokeWidth={2} />
@@ -61,34 +93,55 @@ export function FormatThemeSidebar({
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-3 py-4 sm:px-5 sm:py-5">
         <label className="block space-y-1.5">
           <span className="text-[11px] font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
-            Interior preset
+            Interior preset ({formatScope === 'print' ? 'print' : 'ebook'})
           </span>
           <select
-            defaultValue=""
+            value={presetSelectValue}
             className="w-full rounded-2xl border border-dust bg-parchment px-3 py-2.5 text-sm dark:border-border-dark dark:bg-panel-dark"
             onChange={(e) => {
               const v = e.target.value as ThemePresetId
               if (v) onApplyThemePreset(v)
-              e.target.selectedIndex = 0
             }}
           >
             <option value="" disabled>
               Apply genre pack…
             </option>
-            {THEME_PRESETS.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.label}
-              </option>
+            {themePresetsGrouped().map(({ group, presets }) => (
+              <optgroup key={group} label={group}>
+                {presets.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.label}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </label>
 
-        <PrintThemeForm theme={theme} onThemeChange={onThemeChange} />
-        <EbookThemeForm theme={theme} onThemeChange={onThemeChange} />
+        {formatScope === 'print' ? (
+          <PrintThemeForm theme={theme} onThemeChange={onThemeChange} />
+        ) : (
+          <EbookThemeForm theme={theme} onThemeChange={onThemeChange} />
+        )}
+
+        {onCommitTheme ? (
+          <div className="pt-1">
+            <button
+              type="button"
+              disabled={!themeCommitDirty || themeCommitPending}
+              onClick={() => onCommitTheme()}
+              className="w-full rounded-2xl bg-ink px-4 py-2.5 text-sm font-semibold text-parchment shadow-sm transition-opacity enabled:hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-cream dark:text-ink"
+            >
+              {themeCommitPending ? 'Applying…' : 'Apply theme to book'}
+            </button>
+          </div>
+        ) : null}
       </div>
 
       <p className="mt-auto border-t border-dust px-3 py-3 text-[11px] leading-snug text-ink/55 dark:border-border-dark dark:text-ink-dark/55 sm:px-5">
-        Print and ebook sections both affect your exports. Switch preview tabs to check each.
+        {formatScope === 'print' ?
+          'These settings apply to print preview, KDP PDF, and print exports. Switch to Ebook to adjust reflow typography.'
+        : 'These settings apply to the ebook preview and EPUB. Switch to Print for trim, margins, and PDF layout.'}
       </p>
     </aside>
   )

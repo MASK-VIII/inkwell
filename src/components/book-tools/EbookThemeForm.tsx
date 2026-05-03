@@ -1,5 +1,6 @@
 import type { EbookTheme, Theme } from '../../types'
 import { clampNumber } from './clamp'
+import { BodyFontPicker } from './BodyFontPicker'
 import { CollapsibleSection } from './CollapsibleSection'
 
 type Props = {
@@ -18,6 +19,26 @@ export function EbookThemeForm({ theme, onThemeChange }: Props) {
         description="Preview pane and exported ebook styling."
       >
         <div className="space-y-3">
+        <BodyFontPicker
+          id="inkwell-ebook-body-font"
+          label="Body font (preview & EPUB)"
+          value={theme.ebook.bodyFontId}
+          onChange={(bodyFontId) => onThemeChange({ ebook: { bodyFontId } })}
+        />
+        <label className="flex items-center justify-between gap-3 rounded-2xl border border-dust bg-parchment px-4 py-3 text-sm dark:border-border-dark dark:bg-panel-dark">
+          <span className="text-sm font-medium text-ink/80 dark:text-ink-dark/80">
+            Embed font in EPUB
+          </span>
+          <input
+            type="checkbox"
+            checked={theme.ebook.embedFontsInEpub !== false}
+            onChange={(e) => onThemeChange({ ebook: { embedFontsInEpub: e.target.checked } })}
+            className="h-4 w-4 accent-ink dark:accent-cream"
+          />
+        </label>
+        <p className="text-[11px] text-ink/55 dark:text-ink-dark/55">
+          Off uses generic system serif or sans stacks only (fewer reader quirks; less typographic control).
+        </p>
         <div className="grid grid-cols-2 gap-3">
         <label className="block space-y-1">
           <span className="text-xs font-medium text-ink/70 dark:text-ink-dark/70">Base font size (px)</span>

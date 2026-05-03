@@ -7,6 +7,8 @@ import {
 } from '../bookAssembly'
 import { ebookCss } from '../ebook/ebookCss'
 import { tiptapDocToXhtmlBody } from '../ebook/tiptapRender'
+import { DEFAULT_BODY_FONT_ID, FONT_CATALOG, isInkwellFontId } from '../fonts/fontCatalog'
+import { getPrintFontBytes } from '../print/fonts'
 
 function slug(s: string): string {
   return (
@@ -23,6 +25,12 @@ function escXml(s: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
+}
+
+function epubFontMediaType(filename: string): string {
+  if (filename.endsWith('.woff2')) return 'font/woff2'
+  if (filename.endsWith('.woff')) return 'font/woff'
+  return 'font/ttf'
 }
 
 export async function buildEpub(project: InkwellProject): Promise<Uint8Array> {
@@ -42,7 +50,24 @@ export async function buildEpub(project: InkwellProject): Promise<Uint8Array> {
   )
 
   const oebps = zip.folder('OEBPS')!
-  oebps.folder('styles')?.file('book.css', ebookCss(project.theme.ebook))
+
+  const ebookTheme = project.theme.ebook
+  const bodyFontId = isInkwellFontId(ebookTheme.bodyFontId) ? ebookTheme.bodyFontId : DEFAULT_BODY_FONT_ID
+  const fontRow = FONT_CATALOG[bodyFontId]
+  const embedFont = ebookTheme.embedFontsInEpub !== false
+  let bundledFontHref: string | undefined
+  if (embedFont) {
+    const bytes = await getPrintFontBytes(bodyFontId)
+    oebps.folder('fonts')?.file(fontRow.epubFilename, bytes)
+    bundledFontHref = `../fonts/${fontRow.epubFilename}`
+  }
+
+  oebps
+    .folder('styles')
+    ?.file(
+      'book.css',
+      ebookCss(ebookTheme, { kind: 'epub', embedFont, bundledFontHref }),
+    )
 
   const chaptersFolder = oebps.folder('chapters')!
 
@@ -55,6 +80,14 @@ export async function buildEpub(project: InkwellProject): Promise<Uint8Array> {
     `<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>`,
     `<item id="css" href="styles/book.css" media-type="text/css"/>`,
   ]
+  if (embedFont) {
+    const mt = epubFontMediaType(fontRow.epubFilename)
+    const props =
+      mt === 'font/woff2' ? ` properties="font/woff2"` : mt === 'font/woff' ? ` properties="font/woff"` : ''
+    manifestItems.push(
+      `<item id="inkwell-body-font" href="fonts/${fontRow.epubFilename}" media-type="${mt}"${props}/>`,
+    )
+  }
   const spineItems: string[] = []
   const navLi: string[] = []
 

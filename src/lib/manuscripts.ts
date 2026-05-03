@@ -7,8 +7,11 @@ import type {
   ProjectKind,
   ProjectMeta,
   SeriesBibleEntry,
+  Theme,
   WritingGoals,
 } from '../types'
+import { coerceInkwellFontId } from './fonts/fontCatalog'
+import { isThemePresetId } from './themePresets'
 import { defaultBookAssembly, defaultBookMeta, defaultTheme, defaultWritingGoals } from '../types'
 import { idbDelete, idbGet, idbSet, isIndexedDbAvailable } from './storage/projectIdb'
 import { hashStringDjb2 } from './hash'
@@ -18,6 +21,8 @@ const STORAGE_KEY_V1 = 'inkwell-manuscripts-v1'
 const STORAGE_KEY_V2 = 'inkwell-project-v2'
 const STORAGE_INDEX = 'inkwell-project-index-v1'
 const STORAGE_ACTIVE_ID = 'inkwell-active-project-id'
+/** Per browser tab: which project this tab is editing (sessionStorage). */
+const STORAGE_TAB_SESSION_PROJECT_ID = 'inkwell-tab-session-project-id'
 const STORAGE_LAST_CHAPTER_BY_PROJECT = 'inkwell-last-chapter-by-project-v1'
 const STORAGE_PROJECT_PREFIX = 'inkwell-project-v3:'
 const STORAGE_HISTORY_PREFIX = 'inkwell-history:'
@@ -291,16 +296,65 @@ function normalizeSeriesBible(raw: unknown): SeriesBibleEntry[] {
     .filter((x): x is SeriesBibleEntry => x != null)
 }
 
+function normalizeStoredTheme(parsedTheme: Partial<Theme> | undefined): Theme {
+  const d = defaultTheme()
+  const pIn = (parsedTheme?.print ?? {}) as Record<string, unknown>
+  const eIn = (parsedTheme?.ebook ?? {}) as Record<string, unknown>
+  const print: Theme['print'] = {
+    ...d.print,
+    ...(parsedTheme?.print as Partial<Theme['print']>),
+    bodyFontId: coerceInkwellFontId(pIn.bodyFontId, pIn.fontFamily),
+  }
+  const ebook: Theme['ebook'] = {
+    ...d.ebook,
+    ...(parsedTheme?.ebook as Partial<Theme['ebook']>),
+    bodyFontId: coerceInkwellFontId(eIn.bodyFontId, eIn.fontFamily),
+    embedFontsInEpub:
+      typeof eIn.embedFontsInEpub === 'boolean' ? eIn.embedFontsInEpub : d.ebook.embedFontsInEpub,
+  }
+  delete (print as Record<string, unknown>).fontFamily
+  delete (ebook as Record<string, unknown>).fontFamily
+
+  const rawPrintLast =
+    parsedTheme && 'lastPrintInteriorPresetId' in parsedTheme ?
+      parsedTheme.lastPrintInteriorPresetId
+    : undefined
+  const rawEbookLast =
+    parsedTheme && 'lastEbookInteriorPresetId' in parsedTheme ?
+      parsedTheme.lastEbookInteriorPresetId
+    : undefined
+  const rawLegacy =
+    parsedTheme && 'lastInteriorPresetId' in parsedTheme ? parsedTheme.lastInteriorPresetId : undefined
+
+  const normalizePresetKey = (raw: unknown): string | undefined => {
+    if (typeof raw !== 'string') return undefined
+    return isThemePresetId(raw) ? raw : undefined
+  }
+
+  let lastPrintInteriorPresetId = normalizePresetKey(rawPrintLast)
+  let lastEbookInteriorPresetId = normalizePresetKey(rawEbookLast)
+  if (lastPrintInteriorPresetId === undefined && lastEbookInteriorPresetId === undefined) {
+    const leg = normalizePresetKey(rawLegacy)
+    if (leg) {
+      lastPrintInteriorPresetId = leg
+      lastEbookInteriorPresetId = leg
+    }
+  }
+
+  return {
+    print,
+    ebook,
+    ...(lastPrintInteriorPresetId !== undefined ? { lastPrintInteriorPresetId } : {}),
+    ...(lastEbookInteriorPresetId !== undefined ? { lastEbookInteriorPresetId } : {}),
+  }
+}
+
 function normalizeProjectV3(parsed: Partial<InkwellProject>, id: string): InkwellProject {
   const chapters =
     Array.isArray(parsed.chapters) && parsed.chapters.length > 0 ? parsed.chapters : seedChapters()
 
-  const themeDefaults = defaultTheme()
   const parsedTheme = (parsed.theme ?? {}) as Partial<InkwellProject['theme']>
-  const normalizedTheme: InkwellProject['theme'] = {
-    print: { ...themeDefaults.print, ...((parsedTheme.print ?? {}) as Partial<InkwellProject['theme']['print']>) },
-    ebook: { ...themeDefaults.ebook, ...((parsedTheme.ebook ?? {}) as Partial<InkwellProject['theme']['ebook']>) },
-  }
+  const normalizedTheme = normalizeStoredTheme(parsedTheme)
 
   const kind = normalizeKind(parsed.kind)
   const linkedBookId =
@@ -766,6 +820,27 @@ export function getActiveProjectId(): string | null {
     return localStorage.getItem(STORAGE_ACTIVE_ID)
   } catch {
     return null
+  }
+}
+
+export function getTabSessionProjectId(): string | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = sessionStorage.getItem(STORAGE_TAB_SESSION_PROJECT_ID)
+    const id = typeof raw === 'string' ? raw.trim() : ''
+    return id.length > 0 ? id : null
+  } catch {
+    return null
+  }
+}
+
+export function setTabSessionProjectId(id: string | null): void {
+  if (typeof window === 'undefined') return
+  try {
+    if (id) sessionStorage.setItem(STORAGE_TAB_SESSION_PROJECT_ID, id)
+    else sessionStorage.removeItem(STORAGE_TAB_SESSION_PROJECT_ID)
+  } catch {
+    /* ignore */
   }
 }
 

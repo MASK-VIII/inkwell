@@ -1,32 +1,40 @@
 import fontkit from '@pdf-lib/fontkit'
 import { PDFDocument, type PDFFont } from 'pdf-lib'
+import type { InkwellFontId } from '../fonts/fontCatalog'
+import { DEFAULT_BODY_FONT_ID, FONT_CATALOG, isInkwellFontId } from '../fonts/fontCatalog'
 
-// Vite will copy this font file to the build output and give us a URL.
-import dejaVuSerifUrl from 'dejavu-fonts-ttf/ttf/DejaVuSerif.ttf?url'
+const bytesCache = new Map<InkwellFontId, Uint8Array>()
 
-let cachedFontBytes: Uint8Array | null = null
-
-async function loadFontBytes(): Promise<Uint8Array> {
-  if (cachedFontBytes) return cachedFontBytes
-
-  const res = await fetch(dejaVuSerifUrl)
-  if (!res.ok) throw new Error(`Failed to load serif font (${res.status})`)
-  const buf = await res.arrayBuffer()
-  cachedFontBytes = new Uint8Array(buf)
-  return cachedFontBytes
+function resolveFontId(id: InkwellFontId | undefined): InkwellFontId {
+  return id && isInkwellFontId(id) ? id : DEFAULT_BODY_FONT_ID
 }
 
-export async function getPrintFontForMeasurement(): Promise<{ pdf: PDFDocument; font: PDFFont }> {
-  const bytes = await loadFontBytes()
+export async function getPrintFontBytes(id?: InkwellFontId): Promise<Uint8Array> {
+  const fid = resolveFontId(id)
+  const hit = bytesCache.get(fid)
+  if (hit) return hit
+
+  const url = FONT_CATALOG[fid].printFontUrl
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`Failed to load print font ${fid} (${res.status})`)
+  const buf = await res.arrayBuffer()
+  const bytes = new Uint8Array(buf)
+  bytesCache.set(fid, bytes)
+  return bytes
+}
+
+export async function getPrintFontForMeasurement(
+  id?: InkwellFontId,
+): Promise<{ pdf: PDFDocument; font: PDFFont }> {
+  const bytes = await getPrintFontBytes(id)
   const pdf = await PDFDocument.create()
   pdf.registerFontkit(fontkit)
   const font = await pdf.embedFont(bytes, { subset: false })
   return { pdf, font }
 }
 
-export async function getPrintFontForPdf(pdf: PDFDocument): Promise<PDFFont> {
-  const bytes = await loadFontBytes()
+export async function getPrintFontForPdf(pdf: PDFDocument, id?: InkwellFontId): Promise<PDFFont> {
+  const bytes = await getPrintFontBytes(id)
   pdf.registerFontkit(fontkit)
   return await pdf.embedFont(bytes, { subset: false })
 }
-

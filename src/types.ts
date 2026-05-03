@@ -1,4 +1,8 @@
 import type { JSONContent } from '@tiptap/core'
+import type { InkwellFontId } from './lib/fonts/fontCatalog'
+import { DEFAULT_BODY_FONT_ID } from './lib/fonts/fontCatalog'
+
+export type { InkwellFontId } from './lib/fonts/fontCatalog'
 
 export type ManuscriptSectionRole =
   | 'chapter'
@@ -110,9 +114,9 @@ export type PrintTheme = {
   /** Extra trim for print bleed (KDP); added to width/height in PDF export when > 0 */
   bleedIn: number
   binding: PrintBinding
-  /** Shown after export: DejaVu is embedded; KDP may require embedding for custom fonts */
+  /** Shown after export: bundled body font is embedded in PDF; KDP may require embedding for other custom fonts */
   showEmbedFontNote: boolean
-  fontFamily: 'serif'
+  bodyFontId: InkwellFontId
   fontSizePt: number
   lineHeight: number
   hyphenation: boolean
@@ -141,7 +145,9 @@ export type PrintHeaderFooterTheme = {
 }
 
 export type EbookTheme = {
-  fontFamily: 'serif'
+  bodyFontId: InkwellFontId
+  /** When false, EPUB uses generic system serif/sans stacks only (maximum reader compatibility). */
+  embedFontsInEpub: boolean
   baseFontSizePx: number
   lineHeight: number
   /** Reader column width within the preview/export */
@@ -156,6 +162,10 @@ export type EbookTheme = {
 export type Theme = {
   print: PrintTheme
   ebook: EbookTheme
+  /** Last interior preset applied while Print format tab was active (dropdown; matches ThemePresetId). */
+  lastPrintInteriorPresetId?: string
+  /** Last interior preset applied while Ebook format tab was active. */
+  lastEbookInteriorPresetId?: string
 }
 
 export type ProjectKind = 'book' | 'note'
@@ -229,7 +239,7 @@ export function defaultTheme(): Theme {
       bleedIn: 0,
       binding: 'paperback',
       showEmbedFontNote: true,
-      fontFamily: 'serif',
+      bodyFontId: DEFAULT_BODY_FONT_ID,
       fontSizePt: 11,
       lineHeight: 1.5,
       hyphenation: true,
@@ -250,7 +260,8 @@ export function defaultTheme(): Theme {
       },
     },
     ebook: {
-      fontFamily: 'serif',
+      bodyFontId: DEFAULT_BODY_FONT_ID,
+      embedFontsInEpub: true,
       baseFontSizePx: 18,
       lineHeight: 1.7,
       maxWidthPx: 520,

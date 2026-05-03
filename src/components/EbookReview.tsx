@@ -120,10 +120,10 @@ export function EbookReview({
 
   return (
     <div className="inkwell-ebook-review-scroll flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overscroll-y-contain">
-      <div className="sticky top-0 z-10 flex shrink-0 items-center gap-3 border-b border-dust bg-white/90 px-4 py-3 backdrop-blur-sm dark:border-border-dark dark:bg-panel-dark/90 sm:px-8">
-        <div className="min-w-0 flex-1" aria-hidden />
-        <div className="flex shrink-0 justify-center">{formatModeBar}</div>
-        <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
+      <div className="sticky top-0 z-10 grid shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 border-b border-dust bg-white/90 px-4 py-3 backdrop-blur-sm dark:border-border-dark dark:bg-panel-dark/90 sm:px-5">
+        <div className="min-w-0" aria-hidden />
+        <div className="flex justify-center">{formatModeBar}</div>
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
           <label className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
             Device
           </label>
@@ -139,7 +139,7 @@ export function EbookReview({
         </div>
       </div>
 
-      <div className="flex shrink-0 flex-col items-center p-6 pb-20 sm:p-10 sm:pb-28">
+      <div className="flex shrink-0 flex-col items-center px-4 py-6 pb-20 sm:px-5 sm:py-8 sm:pb-28">
         <div className="flex w-full max-w-[1100px] flex-col items-center gap-6">
           <div style={{ width }}>
             <style>{css}</style>

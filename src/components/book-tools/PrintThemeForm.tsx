@@ -1,8 +1,10 @@
 import type { PrintBinding, PrintChapterOpener, PrintTheme, Theme, TrimPresetId } from '../../types'
 import { TRIM_PRESETS } from '../../types'
 import { clampNumber } from './clamp'
+import { BodyFontPicker } from './BodyFontPicker'
 import { CollapsibleSection } from './CollapsibleSection'
 import { HeaderFooterRow } from './HeaderFooterRow'
+import { getFontCatalogEntry } from '../../lib/fonts/fontCatalog'
 
 type Props = {
   theme: Theme
@@ -23,7 +25,14 @@ export function PrintThemeForm({ theme, onThemeChange }: Props) {
         description={`Trim ${printPreset.widthIn}" × ${printPreset.heightIn}" · margins & typography`}
         defaultOpen={false}
       >
-        <label className="mb-4 block space-y-1">
+        <BodyFontPicker
+          id="inkwell-print-body-font"
+          label="Body font (print & PDF)"
+          value={theme.print.bodyFontId}
+          onChange={(bodyFontId) => onThemeChange({ print: { bodyFontId } })}
+        />
+
+        <label className="mb-4 mt-3 block space-y-1">
           <span className="text-[11px] font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
             Trim preset
           </span>
@@ -331,8 +340,8 @@ export function PrintThemeForm({ theme, onThemeChange }: Props) {
         </label>
         {theme.print.showEmbedFontNote !== false ? (
           <p className="mt-2 text-[11px] text-ink/60 dark:text-ink-dark/60">
-            Inkwell embeds DejaVu for PDF. If you switch to a system font KDP cannot access, embed fonts in KDP or
-            flatten to outlines per their checklist.
+            Inkwell embeds your chosen body font in the KDP PDF ({getFontCatalogEntry(theme.print.bodyFontId)?.label ?? 'selected font'}).
+            For fonts outside Inkwell’s catalog, embed or outline on KDP per their checklist.
           </p>
         ) : null}
       </CollapsibleSection>

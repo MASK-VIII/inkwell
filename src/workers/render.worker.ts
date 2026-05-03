@@ -135,7 +135,7 @@ self.onmessage = async (ev: MessageEvent<WorkerRequest>) => {
       )
       let cached = printChapterCache.get(cacheKey)
       if (!cached) {
-        const { font } = await getPrintFontForMeasurement()
+        const { font } = await getPrintFontForMeasurement(req.theme.print.bodyFontId)
         const res = await paginateChapterWithFont(
           req.chapter,
           req.chapterIndex,

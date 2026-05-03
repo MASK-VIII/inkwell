@@ -2,6 +2,7 @@ import { Pin, PinOff, Trash2 } from 'lucide-react'
 import type { Dispatch, DragEvent, MutableRefObject, ReactNode, SetStateAction } from 'react'
 import type { ProjectMeta } from '../types'
 import {
+  buildInkwellUrlForProject,
   getPinnedChildNoteIdsForProject,
   loadProject,
   pinChildNoteInProject,
@@ -81,7 +82,6 @@ export function ShelfLinkedNotesList({
     return (
       <li
         key={n.id}
-        data-inkwell-shelf-project={n.id}
         onDragOver={(e) => {
           const dragId = readShelfDragNoteId(e.dataTransfer) ?? shelfDraggingNoteIdRef.current
           if (!dragId || dragId === n.id) return
@@ -146,8 +146,9 @@ export function ShelfLinkedNotesList({
         className={`rounded-2xl ${dropHint === 'before' ? 'border-t-2 border-walnut dark:border-accent-warm' : ''} ${dropHint === 'after' ? 'border-b-2 border-walnut dark:border-accent-warm' : ''}`}
       >
         <div className="flex items-stretch gap-1 rounded-2xl pr-1 outline-none hover:bg-dust/35 dark:hover:bg-border-dark/45 focus-within:ring-2 focus-within:ring-cream focus-within:ring-offset-2 focus-within:ring-offset-white dark:focus-within:ring-cream dark:focus-within:ring-offset-panel-dark">
-          <div
+          <a
             draggable
+            href={buildInkwellUrlForProject(n.id)}
             title={
               parentLabel === 'book'
                 ? 'Drag to reorder under this book, or onto a book, project, note, or Notes'
@@ -157,9 +158,10 @@ export function ShelfLinkedNotesList({
             onDragStart={(e) => shelfNoteDragStart(e, n.id, n.title || 'Untitled note')}
             onDragEnd={shelfNoteDragEnd}
             className="min-w-0 flex-1 cursor-grab rounded-2xl px-3 py-2 text-left outline-none active:cursor-grabbing"
-            role="button"
-            tabIndex={0}
-            onClick={() => onLinkedNoteOpen(n.id)}
+            onClick={(e) => {
+              e.preventDefault()
+              onLinkedNoteOpen(n.id)
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault()
@@ -180,7 +182,7 @@ export function ShelfLinkedNotesList({
             <span className="mt-0.5 block text-[11px] font-normal text-ink/45 dark:text-ink-dark/45">
               Updated {new Date(n.updatedAt).toLocaleString()}
             </span>
-          </div>
+          </a>
           <button
             type="button"
             title={pinnedInProject ? unpinTitle : pinTitle}

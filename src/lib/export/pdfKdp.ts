@@ -18,7 +18,7 @@ function toWinAnsiFallback(s: string): string {
 
 export async function buildKdpPdf(project: InkwellProject): Promise<Uint8Array> {
   const pdf = await PDFDocument.create()
-  const font = await getPrintFontForPdf(pdf)
+  const font = await getPrintFontForPdf(pdf, project.theme.print.bodyFontId)
 
   const bleedPt = (project.theme.print.bleedIn ?? 0) * 72
 

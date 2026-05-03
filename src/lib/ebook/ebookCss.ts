@@ -1,7 +1,47 @@
 import type { EbookTheme } from '../../types'
+import {
+  DEFAULT_BODY_FONT_ID,
+  FONT_CATALOG,
+  genericFontFallback,
+  isInkwellFontId,
+  type InkwellFontId,
+} from '../fonts/fontCatalog'
 
-export function ebookCss(theme: EbookTheme): string {
-  const fontStack = theme.fontFamily === 'serif' ? 'serif' : 'serif'
+function formatForFilename(filename: string): 'woff2' | 'truetype' {
+  return filename.endsWith('.woff2') ? 'woff2' : 'truetype'
+}
+
+function formatForUrl(url: string): 'woff2' | 'truetype' {
+  return url.endsWith('.woff2') || url.includes('.woff2?') ? 'woff2' : 'truetype'
+}
+
+function resolvedBodyFontId(theme: EbookTheme): InkwellFontId {
+  return isInkwellFontId(theme.bodyFontId) ? theme.bodyFontId : DEFAULT_BODY_FONT_ID
+}
+
+export type EbookCssContext =
+  | { kind: 'preview' }
+  | { kind: 'epub'; embedFont: boolean; bundledFontHref?: string }
+
+export function ebookCss(theme: EbookTheme, ctx: EbookCssContext = { kind: 'preview' }): string {
+  const id = resolvedBodyFontId(theme)
+  const entry = FONT_CATALOG[id]
+
+  let faceBlock = ''
+  let fontStack: string
+
+  if (ctx.kind === 'preview') {
+    const fmt = formatForUrl(entry.ebookFontUrl)
+    faceBlock = `@font-face{font-family:${JSON.stringify(entry.cssFamily)};src:url(${JSON.stringify(entry.ebookFontUrl)}) format('${fmt}');font-weight:400;font-style:normal;font-display:swap;}`
+    fontStack = `${JSON.stringify(entry.cssFamily)}, ${genericFontFallback(entry.stackKind)}`
+  } else if (ctx.embedFont && ctx.bundledFontHref) {
+    const fmt = formatForFilename(entry.epubFilename)
+    faceBlock = `@font-face{font-family:${JSON.stringify(entry.cssFamily)};src:url(${JSON.stringify(ctx.bundledFontHref)}) format('${fmt}');font-weight:400;font-style:normal;font-display:swap;}`
+    fontStack = `${JSON.stringify(entry.cssFamily)}, ${genericFontFallback(entry.stackKind)}`
+  } else {
+    fontStack = genericFontFallback(entry.stackKind)
+  }
+
   const base = Math.max(12, Math.min(28, theme.baseFontSizePx))
   const lh = Math.max(1.1, Math.min(2.4, theme.lineHeight))
   const maxWidthPx = Math.max(280, Math.min(900, theme.maxWidthPx))
@@ -9,8 +49,8 @@ export function ebookCss(theme: EbookTheme): string {
   const indentEm = Math.max(0, Math.min(6, theme.firstLineIndentEm))
   const align = theme.textAlign === 'justify' ? 'justify' : 'left'
 
-  // Keep CSS intentionally conservative (EPUB readers vary a lot).
   return `
+${faceBlock}
 .inkwell-ebook-preview {
   -webkit-text-size-adjust: 100%;
   margin: 0;
@@ -97,4 +137,3 @@ export function ebookCss(theme: EbookTheme): string {
     .trim()
     .replace(/\n{3,}/g, '\n\n')
 }
-
