@@ -29,6 +29,11 @@ type Props = {
   themeCommitPending?: boolean
   collapsed: boolean
   onSetCollapsed: (collapsed: boolean) => void
+  /**
+   * Outer column width shared with the chapters rail so left/right stay matched and the center
+   * does not shift when only one side collapses. When omitted, width follows collapsed state only.
+   */
+  sideColumnClassName?: string
 }
 
 export function FormatThemeSidebar({
@@ -41,7 +46,11 @@ export function FormatThemeSidebar({
   themeCommitPending = false,
   collapsed,
   onSetCollapsed,
+  sideColumnClassName,
 }: Props) {
+  const outerCol =
+    sideColumnClassName ??
+    (collapsed ? FORMAT_WORKSPACE_SIDE_RAIL_WIDTH_CLASS : FORMAT_WORKSPACE_SIDE_PANEL_WIDTH_CLASS)
   const lastForScope =
     formatScope === 'print' ? theme.lastPrintInteriorPresetId : theme.lastEbookInteriorPresetId
   const presetSelectValue =
@@ -50,19 +59,23 @@ export function FormatThemeSidebar({
   if (collapsed) {
     return (
       <aside
-        className={`flex flex-col items-center gap-2 border-l border-dust bg-white/70 py-3 dark:border-border-dark dark:bg-panel-dark/70 sm:py-4 ${FORMAT_WORKSPACE_SIDE_RAIL_WIDTH_CLASS}`}
+        className={`flex shrink-0 flex-col items-start gap-2 border-l border-dust bg-white/70 py-3 dark:border-border-dark dark:bg-panel-dark/70 sm:py-4 ${outerCol} transition-[width] duration-300 ease-out`}
       >
-        <button
-          type="button"
-          onClick={() => onSetCollapsed(false)}
-          className="flex h-9 w-9 items-center justify-center rounded-2xl text-ink transition-colors hover:bg-dust/40 dark:text-ink-dark dark:hover:bg-border-dark/50"
-          aria-label="Expand theme panel"
-          title="Show theme"
+        <div
+          className={`flex min-h-0 flex-1 flex-col items-center gap-2 ${FORMAT_WORKSPACE_SIDE_RAIL_WIDTH_CLASS}`}
         >
-          <ChevronLeft className="h-4 w-4" strokeWidth={2.25} />
-        </button>
-        <div className="flex flex-1 flex-col items-center pt-1" aria-hidden>
-          <Palette className="h-4 w-4 text-walnut/70 dark:text-accent-warm/80" strokeWidth={2} />
+          <button
+            type="button"
+            onClick={() => onSetCollapsed(false)}
+            className="flex h-9 w-9 items-center justify-center rounded-2xl text-ink transition-colors hover:bg-dust/40 dark:text-ink-dark dark:hover:bg-border-dark/50"
+            aria-label="Expand theme panel"
+            title="Show theme"
+          >
+            <ChevronLeft className="h-4 w-4" strokeWidth={2.25} />
+          </button>
+          <div className="flex flex-1 flex-col items-center pt-1" aria-hidden>
+            <Palette className="h-4 w-4 text-walnut/70 dark:text-accent-warm/80" strokeWidth={2} />
+          </div>
         </div>
       </aside>
     )
@@ -70,7 +83,7 @@ export function FormatThemeSidebar({
 
   return (
     <aside
-      className={`flex shrink-0 flex-col border-l border-dust bg-white/70 transition-[width] duration-300 ease-out dark:border-border-dark dark:bg-panel-dark/70 ${FORMAT_WORKSPACE_SIDE_PANEL_WIDTH_CLASS}`}
+      className={`flex shrink-0 flex-col border-l border-dust bg-white/70 transition-[width] duration-300 ease-out dark:border-border-dark dark:bg-panel-dark/70 ${outerCol}`}
     >
       <div className="flex items-center gap-1.5 border-b border-dust px-3 py-3 dark:border-border-dark sm:gap-2 sm:px-5 sm:py-5">
         <div className="flex min-w-0 flex-1 items-center gap-2">

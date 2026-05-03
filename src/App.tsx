@@ -399,6 +399,12 @@ export default function App() {
 
   const isFormatWorkspace = route === 'format_print' || route === 'format_ebook'
 
+  /** Chapters column width; format workspace keeps chapters always visible (full panel). Theme sidebar collapse uses symmetric inner rails via FormatThemeSidebar. */
+  const chaptersAsideWidthClass = useMemo(() => {
+    if (isFormatWorkspace) return FORMAT_WORKSPACE_SIDE_PANEL_WIDTH_CLASS
+    return chaptersAsideCollapsed ? FORMAT_WORKSPACE_SIDE_RAIL_WIDTH_CLASS : FORMAT_WORKSPACE_SIDE_PANEL_WIDTH_CLASS
+  }, [isFormatWorkspace, chaptersAsideCollapsed])
+
   useLayoutEffect(() => {
     document.documentElement.classList.toggle('dark', darkMode)
   }, [darkMode])
@@ -2656,7 +2662,11 @@ export default function App() {
         <>
           <header className="sticky top-0 z-50 border-b border-dust bg-white/90 backdrop-blur-md dark:border-border-dark dark:bg-panel-dark/90">
             <div className="relative flex w-full items-stretch">
-              <div className="flex shrink-0 items-center bg-white/70 py-2 pl-3 sm:py-3 sm:pl-5 dark:bg-panel-dark/70">
+              <div
+                className={`flex shrink-0 items-center bg-white/70 py-2 pl-3 sm:py-3 sm:pl-5 dark:bg-panel-dark/70 ${
+                  !isNote && isFormatWorkspace ? chaptersAsideWidthClass : ''
+                }`}
+              >
                 <a
                   href={buildInkwellUrlForProject(project.id)}
                   onClick={(e) => {
@@ -2722,9 +2732,7 @@ export default function App() {
 
               {!isNote && isFormatWorkspace ? (
                 <div
-                  className={`shrink-0 border-l border-dust bg-white/70 transition-[width] duration-300 ease-out dark:border-border-dark dark:bg-panel-dark/70 ${
-                    formatThemeAsideCollapsed ? FORMAT_WORKSPACE_SIDE_RAIL_WIDTH_CLASS : FORMAT_WORKSPACE_SIDE_PANEL_WIDTH_CLASS
-                  }`}
+                  className={`shrink-0 border-l border-dust bg-white/70 transition-[width] duration-300 ease-out dark:border-border-dark dark:bg-panel-dark/70 ${chaptersAsideWidthClass}`}
                   aria-hidden
                 />
               ) : null}
@@ -2794,77 +2802,84 @@ export default function App() {
 
           <div className="flex min-h-0 w-full flex-1">
             {!isNote && route !== 'write' ?
-              chaptersAsideCollapsed ?
-                <aside
-                  className={`flex flex-col items-center gap-2 border-r border-dust bg-white/70 py-3 dark:border-border-dark dark:bg-panel-dark/70 sm:py-4 ${FORMAT_WORKSPACE_SIDE_RAIL_WIDTH_CLASS}`}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setChaptersAsideCollapsedPersisted(false)}
-                    className="flex h-9 w-9 items-center justify-center rounded-2xl text-ink transition-colors hover:bg-dust/40 dark:text-ink-dark dark:hover:bg-border-dark/50"
-                    aria-label="Expand chapters list"
-                    title="Show chapters"
-                  >
-                    <ChevronRight className="h-4 w-4" strokeWidth={2.25} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={createManuscript}
-                    className="flex h-9 w-9 items-center justify-center rounded-2xl bg-ink text-parchment transition-transform hover:scale-105 dark:bg-cream dark:text-ink"
-                    aria-label="New chapter"
-                    title="New chapter"
-                  >
-                    <Plus className="h-4 w-4" strokeWidth={2.5} />
-                  </button>
-                </aside>
-              : <aside
-                  className={`flex shrink-0 flex-col border-r border-dust bg-white/70 dark:border-border-dark dark:bg-panel-dark/70 ${FORMAT_WORKSPACE_SIDE_PANEL_WIDTH_CLASS}`}
-                >
-                  <div className="flex items-center gap-1.5 border-b border-dust px-3 py-3 dark:border-border-dark sm:gap-2 sm:px-5 sm:py-5">
-                    <div className="flex min-w-0 flex-1 items-center gap-2">
-                      <h2 className="min-w-0 truncate text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
-                        Chapters
-                      </h2>
+              <aside
+                className={`flex shrink-0 flex-col border-r border-dust bg-white/70 transition-[width] duration-300 ease-out dark:border-border-dark dark:bg-panel-dark/70 ${chaptersAsideWidthClass}`}
+              >
+                {chaptersAsideCollapsed && !isFormatWorkspace ?
+                  <div className="flex min-h-0 flex-1 flex-col items-end py-3 sm:py-4">
+                    <div
+                      className={`flex flex-col items-center gap-2 ${FORMAT_WORKSPACE_SIDE_RAIL_WIDTH_CLASS}`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setChaptersAsideCollapsedPersisted(false)}
+                        className="flex h-9 w-9 items-center justify-center rounded-2xl text-ink transition-colors hover:bg-dust/40 dark:text-ink-dark dark:hover:bg-border-dark/50"
+                        aria-label="Expand chapters list"
+                        title="Show chapters"
+                      >
+                        <ChevronRight className="h-4 w-4" strokeWidth={2.25} />
+                      </button>
                       <button
                         type="button"
                         onClick={createManuscript}
-                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl bg-ink text-parchment transition-transform hover:scale-105 dark:bg-cream dark:text-ink"
+                        className="flex h-9 w-9 items-center justify-center rounded-2xl bg-ink text-parchment transition-transform hover:scale-105 dark:bg-cream dark:text-ink"
                         aria-label="New chapter"
                         title="New chapter"
                       >
                         <Plus className="h-4 w-4" strokeWidth={2.5} />
                       </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setChaptersAsideCollapsedPersisted(true)}
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl text-ink transition-colors hover:bg-dust/40 dark:text-ink-dark dark:hover:bg-border-dark/50"
-                      aria-label="Collapse chapters list"
-                      title="Collapse chapters"
-                    >
-                      <ChevronLeft className="h-4 w-4" strokeWidth={2.25} />
-                    </button>
                   </div>
-                  <div className="min-h-0 flex-1 space-y-1 overflow-auto px-3 py-4 sm:px-5 sm:py-5">
-                    {chapters.map((ms, i) => (
-                      <ManuscriptRow
-                        key={ms.id}
-                        manuscript={ms}
-                        active={ms.id === currentId}
-                        onSelectChapter={selectChapter}
-                        onDeleteChapter={deleteChapter}
-                        onDropReorder={onReorder}
-                        wordCount={countWordsInDoc(ms.content)}
-                        onSplitChapter={splitChapterAtCursor}
-                        onMergeWithNext={mergeChapterWithNext}
-                        canMergeWithNext={i < chapters.length - 1}
-                      />
-                    ))}
-                  </div>
-                  <p className="mt-auto border-t border-dust px-3 py-3 text-[11px] leading-snug text-ink/55 dark:border-border-dark dark:text-ink-dark/55 sm:px-5">
-                    Drag a section by its book icon. Split uses the cursor position in the open section.
-                  </p>
-                </aside>
+                : <>
+                    <div className="flex items-center gap-1.5 border-b border-dust px-3 py-3 dark:border-border-dark sm:gap-2 sm:px-5 sm:py-5">
+                      <div className="flex min-w-0 flex-1 items-center gap-2">
+                        <h2 className="min-w-0 truncate text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
+                          Chapters
+                        </h2>
+                        <button
+                          type="button"
+                          onClick={createManuscript}
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl bg-ink text-parchment transition-transform hover:scale-105 dark:bg-cream dark:text-ink"
+                          aria-label="New chapter"
+                          title="New chapter"
+                        >
+                          <Plus className="h-4 w-4" strokeWidth={2.5} />
+                        </button>
+                      </div>
+                      {!isFormatWorkspace ? (
+                        <button
+                          type="button"
+                          onClick={() => setChaptersAsideCollapsedPersisted(true)}
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl text-ink transition-colors hover:bg-dust/40 dark:text-ink-dark dark:hover:bg-border-dark/50"
+                          aria-label="Collapse chapters list"
+                          title="Collapse chapters"
+                        >
+                          <ChevronLeft className="h-4 w-4" strokeWidth={2.25} />
+                        </button>
+                      ) : null}
+                    </div>
+                    <div className="min-h-0 flex-1 space-y-1 overflow-auto px-3 py-4 sm:px-5 sm:py-5">
+                      {chapters.map((ms, i) => (
+                        <ManuscriptRow
+                          key={ms.id}
+                          manuscript={ms}
+                          active={ms.id === currentId}
+                          onSelectChapter={selectChapter}
+                          onDeleteChapter={deleteChapter}
+                          onDropReorder={onReorder}
+                          wordCount={countWordsInDoc(ms.content)}
+                          onSplitChapter={splitChapterAtCursor}
+                          onMergeWithNext={mergeChapterWithNext}
+                          canMergeWithNext={i < chapters.length - 1}
+                        />
+                      ))}
+                    </div>
+                    <p className="mt-auto border-t border-dust px-3 py-3 text-[11px] leading-snug text-ink/55 dark:border-border-dark dark:text-ink-dark/55 sm:px-5">
+                      Drag a section by its book icon. Split uses the cursor position in the open section.
+                    </p>
+                  </>
+                }
+              </aside>
             : null}
 
             <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-parchment/40 dark:bg-panel-dark/40">
@@ -3000,6 +3015,7 @@ export default function App() {
                 onCommitTheme={commitActiveFormatTheme}
                 collapsed={formatThemeAsideCollapsed}
                 onSetCollapsed={setFormatThemeAsideCollapsedPersisted}
+                sideColumnClassName={chaptersAsideWidthClass}
               />
             ) : null}
           </div>
