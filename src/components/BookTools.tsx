@@ -1,5 +1,5 @@
 import { ExternalLink, X } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, type TransitionEvent } from 'react'
 import type {
   BookAssembly,
   BookMeta,
@@ -8,7 +8,9 @@ import type {
   SeriesBibleEntry,
   WritingGoals,
 } from '../types'
+import { fileToBookCoverDataUrl } from '../lib/bookCoverImage'
 import { buildInkwellUrlForProject, type ProjectHistoryEntry } from '../lib/manuscripts'
+import { readInkwellPanelMotionDurationMs } from '../lib/panelMotionMs'
 import { CollapsibleSection } from './book-tools/CollapsibleSection'
 import { HistoryPanel } from './book-tools/HistoryPanel'
 import { ProgressBar } from './book-tools/ProgressBar'
@@ -24,7 +26,7 @@ export type NotesProjectMasterRow = {
   missing: boolean
 }
 
-export type WorkspaceRoute = 'write' | 'format_print' | 'format_ebook' | 'publish'
+export type WorkspaceRoute = 'write' | 'format_print' | 'format_ebook' | 'publish' | 'note_export'
 
 type Props = {
   open: boolean
@@ -104,6 +106,24 @@ export function BookTools({
   const [phase, setPhase] = useState<'entering' | 'open' | 'closing'>(() =>
     open ? 'entering' : 'closing',
   )
+  const [drawerPanelMotionLive, setDrawerPanelMotionLive] = useState(false)
+  const coverInputRef = useRef<HTMLInputElement | null>(null)
+  const [coverBusy, setCoverBusy] = useState(false)
+  const [coverErr, setCoverErr] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (phase === 'entering' || phase === 'closing') {
+      setDrawerPanelMotionLive(true)
+    }
+  }, [phase])
+
+  useEffect(() => {
+    if (!drawerPanelMotionLive) return
+    const ms = readInkwellPanelMotionDurationMs()
+    const id = window.setTimeout(() => setDrawerPanelMotionLive(false), ms + 150)
+    return () => window.clearTimeout(id)
+  }, [drawerPanelMotionLive])
+
   useEffect(() => {
     if (open) {
       queueMicrotask(() => {
@@ -123,7 +143,7 @@ export function BookTools({
 
     if (!present) return
     queueMicrotask(() => setPhase('closing'))
-    const t = window.setTimeout(() => setPresent(false), 520)
+    const t = window.setTimeout(() => setPresent(false), readInkwellPanelMotionDurationMs())
     return () => window.clearTimeout(t)
   }, [open, present])
 
@@ -139,8 +159,12 @@ export function BookTools({
   if (!present) return null
 
   const visible = phase === 'open'
+  const onDrawerPanelTransitionEnd = (e: TransitionEvent<HTMLElement>) => {
+    if (e.target !== e.currentTarget || e.propertyName !== 'transform') return
+    setDrawerPanelMotionLive(false)
+  }
   const modeBtn = (active: boolean) =>
-    `rounded-2xl px-3 py-2 text-xs font-semibold transition-colors sm:text-sm ${
+    `rounded-2xl px-3 py-2 text-xs font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-walnut/35 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment/70 dark:focus-visible:ring-cream/45 dark:focus-visible:ring-offset-panel-dark sm:text-sm ${
       active
         ? 'bg-ink text-parchment dark:bg-cream dark:text-ink'
         : 'text-ink/70 hover:bg-dust/30 dark:text-ink-dark/70 dark:hover:bg-border-dark/50'
@@ -151,7 +175,7 @@ export function BookTools({
       <button
         type="button"
         aria-label="Close book tools"
-        className="inkwell-drawer-backdrop fixed inset-0 z-[100] bg-ink/20 backdrop-blur-[2px] dark:bg-black/40"
+        className="inkwell-drawer-backdrop fixed inset-0 z-[100] bg-ink/20 backdrop-blur-[1px] dark:bg-black/40"
         style={{ opacity: visible ? 1 : 0, pointerEvents: visible ? 'auto' : 'none' }}
         onClick={onClose}
       />
@@ -159,19 +183,15 @@ export function BookTools({
         role="dialog"
         aria-modal="true"
         aria-labelledby="book-tools-title"
-        className="inkwell-drawer-panel fixed right-0 top-0 z-[101] flex h-full w-full max-w-md flex-col border-l border-dust bg-white shadow-2xl dark:border-border-dark dark:bg-panel-dark"
+        className={`inkwell-drawer-panel fixed right-0 top-0 z-[101] flex h-full w-full max-w-md flex-col border-l border-dust bg-white shadow-2xl dark:border-border-dark dark:bg-panel-dark${drawerPanelMotionLive ? ' inkwell-panel-motion--live' : ''}`}
         style={{ transform: visible ? 'translateX(0)' : 'translateX(110%)' }}
+        onTransitionEnd={onDrawerPanelTransitionEnd}
       >
         <div className="flex items-center justify-between border-b border-dust px-6 py-4 dark:border-border-dark">
           <h2 id="book-tools-title" className="font-serif text-xl font-semibold text-ink dark:text-ink-dark">
             {isNote ? 'Note tools' : 'Book tools'}
           </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-10 w-10 items-center justify-center rounded-2xl text-ink hover:bg-dust/40 dark:text-ink-dark dark:hover:bg-border-dark/50"
-            aria-label="Close"
-          >
+          <button type="button" onClick={onClose} className="inkwell-btn-icon" aria-label="Close">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -210,7 +230,32 @@ export function BookTools({
                 </div>
               </div>
             </CollapsibleSection>
-          ) : null}
+          ) : (
+            <CollapsibleSection
+              title="Workspace"
+              description="Write or open the export hub for the web and backups."
+              defaultOpen
+            >
+              <div className="space-y-2 rounded-xl bg-parchment/60 p-2 dark:bg-panel-dark/50">
+                <div className="flex flex-wrap gap-1">
+                  <button
+                    type="button"
+                    className={modeBtn(workspaceRoute === 'write')}
+                    onClick={() => onSetWorkspaceRoute('write')}
+                  >
+                    Write
+                  </button>
+                  <button
+                    type="button"
+                    className={modeBtn(workspaceRoute === 'note_export')}
+                    onClick={() => onSetWorkspaceRoute('note_export')}
+                  >
+                    Export
+                  </button>
+                </div>
+              </div>
+            </CollapsibleSection>
+          )}
 
           {isNote || workspaceRoute !== 'publish' ?
             onNewNoteForBook != null || linkedNotesForBook.length > 0 || notesProjectMaster != null ?
@@ -225,7 +270,7 @@ export function BookTools({
                   onClick={() => {
                     onNewNoteForBook()
                   }}
-                  className="w-full rounded-2xl border border-dust bg-white/70 px-4 py-3 text-sm font-semibold text-ink transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
+                  className="inkwell-hub-secondary w-full"
                 >
                   {isNote ? 'New note in this project' : 'New note for this book'}
                 </button>
@@ -371,6 +416,79 @@ export function BookTools({
               defaultOpen={workspaceRoute === 'publish'}
             >
             <div className="space-y-3">
+              <div className="rounded-2xl border border-dust/80 bg-parchment/40 p-4 dark:border-border-dark dark:bg-panel-dark/40">
+                <div className="flex items-start justify-between gap-3">
+                  <span className="text-xs font-medium text-ink/70 dark:text-ink-dark/70">Book cover</span>
+                  {book.coverImageDataUrl ? (
+                    <button
+                      type="button"
+                      className="shrink-0 text-xs font-semibold text-ink/55 underline decoration-dotted underline-offset-2 hover:text-ink dark:text-ink-dark/55 dark:hover:text-ink-dark"
+                      onClick={() => {
+                        setCoverErr(null)
+                        onBookChange({ coverImageDataUrl: undefined })
+                      }}
+                    >
+                      Remove
+                    </button>
+                  ) : null}
+                </div>
+                <div className="mt-3 flex items-start gap-4">
+                  <div
+                    className={`flex h-[4.5rem] w-[3.15rem] shrink-0 overflow-hidden rounded-xl border border-dust/70 dark:border-border-dark ${
+                      book.coverImageDataUrl ? '' : 'items-center justify-center bg-dust/35 dark:bg-border-dark/40'
+                    }`}
+                  >
+                    {book.coverImageDataUrl ? (
+                      <img
+                        src={book.coverImageDataUrl}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <span className="px-1 text-center text-[10px] leading-tight text-ink/45 dark:text-ink-dark/45">
+                        None
+                      </span>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <input
+                      ref={coverInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0] ?? null
+                        e.currentTarget.value = ''
+                        if (!file) return
+                        setCoverErr(null)
+                        setCoverBusy(true)
+                        try {
+                          const url = await fileToBookCoverDataUrl(file)
+                          onBookChange({ coverImageDataUrl: url })
+                        } catch (err) {
+                          setCoverErr(err instanceof Error ? err.message : 'Could not read that image')
+                        } finally {
+                          setCoverBusy(false)
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      disabled={coverBusy}
+                      onClick={() => coverInputRef.current?.click()}
+                      className="rounded-2xl border border-dust bg-white px-3 py-2 text-xs font-semibold text-ink shadow-sm transition-colors hover:bg-dust/20 disabled:opacity-60 dark:border-border-dark dark:bg-panel-dark dark:text-ink-dark dark:hover:bg-border-dark/40"
+                    >
+                      {coverBusy ? 'Processing…' : book.coverImageDataUrl ? 'Replace image…' : 'Upload image…'}
+                    </button>
+                    <p className="text-[11px] leading-snug text-ink/50 dark:text-ink-dark/50">
+                      Shown on the bookshelf. Stored only on this device.
+                    </p>
+                    {coverErr ? (
+                      <p className="text-[11px] text-red-600 dark:text-red-400">{coverErr}</p>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
               <label className="block space-y-1">
                 <span className="text-xs font-medium text-ink/70 dark:text-ink-dark/70">Title</span>
                 <input
@@ -658,18 +776,10 @@ export function BookTools({
               defaultOpen
             >
               <div className="space-y-3 rounded-xl bg-parchment/60 p-4 dark:bg-panel-dark/50">
-                <button
-                  type="button"
-                  onClick={onExportPdfKdp}
-                  className="w-full rounded-2xl border border-dust bg-white/70 px-4 py-3 text-sm font-semibold text-ink transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
-                >
+                <button type="button" onClick={onExportPdfKdp} className="inkwell-hub-row-btn">
                   Export PDF (KDP)
                 </button>
-                <button
-                  type="button"
-                  onClick={onExportEpub}
-                  className="w-full rounded-2xl border border-dust bg-white/70 px-4 py-3 text-sm font-semibold text-ink transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
-                >
+                <button type="button" onClick={onExportEpub} className="inkwell-hub-row-btn">
                   Export EPUB
                 </button>
                 <label className="block">
@@ -684,34 +794,20 @@ export function BookTools({
                       onImportDocx(f)
                     }}
                   />
-                  <span className="block w-full cursor-pointer rounded-2xl border border-dashed border-dust bg-white/40 px-4 py-3 text-center text-sm font-semibold text-ink/80 transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/40 dark:text-ink-dark/80 dark:hover:bg-panel-dark/70">
-                    Import DOCX…
-                  </span>
+                  <span className="inkwell-hub-dropzone bg-white/40 dark:bg-panel-dark/40">Import DOCX…</span>
                 </label>
                 {onExportTxt ? (
-                  <button
-                    type="button"
-                    onClick={onExportTxt}
-                    className="w-full rounded-2xl border border-dust bg-white/70 px-4 py-3 text-sm font-semibold text-ink transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
-                  >
+                  <button type="button" onClick={onExportTxt} className="inkwell-hub-row-btn">
                     Export plain text (.txt)
                   </button>
                 ) : null}
                 {onExportProjectArchive ? (
-                  <button
-                    type="button"
-                    onClick={onExportProjectArchive}
-                    className="w-full rounded-2xl border border-dust bg-white/70 px-4 py-3 text-sm font-semibold text-ink transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
-                  >
+                  <button type="button" onClick={onExportProjectArchive} className="inkwell-hub-row-btn">
                     Export book backup (.inkwell.zip)
                   </button>
                 ) : null}
                 {onExportLibraryArchive ? (
-                  <button
-                    type="button"
-                    onClick={onExportLibraryArchive}
-                    className="w-full rounded-2xl border border-dust bg-white/70 px-4 py-3 text-sm font-semibold text-ink transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
-                  >
+                  <button type="button" onClick={onExportLibraryArchive} className="inkwell-hub-row-btn">
                     Export full library (.zip)
                   </button>
                 ) : null}
@@ -728,9 +824,7 @@ export function BookTools({
                         onImportProjectArchive(f)
                       }}
                     />
-                    <span className="block w-full cursor-pointer rounded-2xl border border-dashed border-dust bg-white/40 px-4 py-3 text-center text-sm font-semibold text-ink/80 transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/40 dark:text-ink-dark/80 dark:hover:bg-panel-dark/70">
-                      Import backup (.zip)
-                    </span>
+                    <span className="inkwell-hub-dropzone bg-white/40 dark:bg-panel-dark/40">Import backup (.zip)</span>
                   </label>
                 ) : null}
                 <div className="text-xs text-ink/60 dark:text-ink-dark/60">

@@ -6,15 +6,12 @@ import {
   type ThemePresetId,
   type ThemePresetScope,
 } from '../lib/themePresets'
+import {
+  FORMAT_WORKSPACE_SIDE_PANEL_WIDTH_CLASS,
+  FORMAT_WORKSPACE_SIDE_RAIL_WIDTH_CLASS,
+} from '../lib/formatWorkspaceLayout'
 import { EbookThemeForm } from './book-tools/EbookThemeForm'
 import { PrintThemeForm } from './book-tools/PrintThemeForm'
-
-/** Shared by Theme + Chapters panels so the format workspace stays column-symmetrical. */
-export const FORMAT_WORKSPACE_SIDE_PANEL_WIDTH_CLASS =
-  'w-[min(18.72rem,calc(100vw-4.5rem))] sm:w-[20.16rem] lg:w-[23.04rem] xl:w-[24.48rem]'
-
-/** Collapsed Chapters / Theme rails — keep in sync with aside markup. */
-export const FORMAT_WORKSPACE_SIDE_RAIL_WIDTH_CLASS = 'w-11 shrink-0 sm:w-12'
 
 type Props = {
   theme: Theme
@@ -67,7 +64,7 @@ export function FormatThemeSidebar({
           <button
             type="button"
             onClick={() => onSetCollapsed(false)}
-            className="flex h-9 w-9 items-center justify-center rounded-2xl text-ink transition-colors hover:bg-dust/40 dark:text-ink-dark dark:hover:bg-border-dark/50"
+            className="inkwell-btn-icon-sm"
             aria-label="Expand theme panel"
             title="Show theme"
           >
@@ -95,7 +92,7 @@ export function FormatThemeSidebar({
         <button
           type="button"
           onClick={() => onSetCollapsed(true)}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl text-ink transition-colors hover:bg-dust/40 dark:text-ink-dark dark:hover:bg-border-dark/50"
+          className="inkwell-btn-icon-xs"
           aria-label="Collapse theme panel"
           title="Hide theme"
         >
@@ -143,7 +140,7 @@ export function FormatThemeSidebar({
               type="button"
               disabled={!themeCommitDirty || themeCommitPending}
               onClick={() => onCommitTheme()}
-              className="w-full rounded-2xl bg-ink px-4 py-2.5 text-sm font-semibold text-parchment shadow-sm transition-opacity enabled:hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-cream dark:text-ink"
+              className="w-full rounded-2xl bg-ink px-4 py-2.5 text-sm font-semibold text-parchment shadow-sm outline-none transition-opacity enabled:hover:opacity-95 focus-visible:ring-2 focus-visible:ring-walnut/45 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment/80 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-cream dark:text-ink dark:focus-visible:ring-cream/55 dark:focus-visible:ring-offset-panel-dark"
             >
               {themeCommitPending ? 'Applying…' : 'Apply theme to book'}
             </button>

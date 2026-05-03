@@ -195,6 +195,8 @@ function normalizeKind(raw: unknown): ProjectKind {
 export function normalizeProjectMeta(m: Partial<ProjectMeta> & Pick<ProjectMeta, 'id'>): ProjectMeta {
   const createdAt = typeof m.createdAt === 'number' ? m.createdAt : typeof m.updatedAt === 'number' ? m.updatedAt : 0
   const updatedAt = typeof m.updatedAt === 'number' ? m.updatedAt : createdAt
+  const cover =
+    typeof m.coverImageDataUrl === 'string' && m.coverImageDataUrl.length > 0 ? m.coverImageDataUrl : undefined
   return {
     id: m.id,
     title: typeof m.title === 'string' ? m.title : '',
@@ -202,6 +204,7 @@ export function normalizeProjectMeta(m: Partial<ProjectMeta> & Pick<ProjectMeta,
     updatedAt,
     kind: normalizeKind(m.kind),
     linkedBookId: m.linkedBookId ?? null,
+    ...(cover ? { coverImageDataUrl: cover } : {}),
   }
 }
 
@@ -1005,15 +1008,23 @@ export function saveProject(project: InkwellProject): InkwellProject {
     normalized.kind === 'note'
       ? deriveNoteMetaTitle(normalized)
       : normalized.book.title.trim() || normalized.chapters[0]?.title || 'Untitled book'
+  const shelfCoverUrl =
+    normalized.kind === 'book' &&
+    typeof normalized.book.coverImageDataUrl === 'string' &&
+    normalized.book.coverImageDataUrl.length > 0
+      ? normalized.book.coverImageDataUrl
+      : undefined
   const existingRaw = idx.projects.find((p) => p.id === normalized.id) ?? null
   const existing = existingRaw ? normalizeProjectMeta(existingRaw) : null
   const nextMeta: ProjectMeta = existing
     ? {
-        ...existing,
+        id: existing.id,
         title: metaTitle,
+        createdAt: existing.createdAt,
         updatedAt: now,
         kind: normalized.kind,
         linkedBookId: normalized.kind === 'note' ? normalized.linkedBookId ?? null : null,
+        ...(shelfCoverUrl ? { coverImageDataUrl: shelfCoverUrl } : {}),
       }
     : {
         id: normalized.id,
@@ -1022,6 +1033,7 @@ export function saveProject(project: InkwellProject): InkwellProject {
         updatedAt: now,
         kind: normalized.kind,
         linkedBookId: normalized.kind === 'note' ? normalized.linkedBookId ?? null : null,
+        ...(shelfCoverUrl ? { coverImageDataUrl: shelfCoverUrl } : {}),
       }
   saveIndex({
     version: 1,

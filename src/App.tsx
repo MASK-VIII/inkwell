@@ -3,6 +3,8 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  CircleHelp,
+  Download,
   Folders,
   LayoutTemplate,
   Library,
@@ -15,6 +17,8 @@ import {
   Trash2,
 } from 'lucide-react'
 import {
+  lazy,
+  Suspense,
   useCallback,
   useDeferredValue,
   useEffect,
@@ -23,22 +27,33 @@ import {
   useRef,
   useState,
   type ReactNode,
+  type TransitionEvent,
 } from 'react'
 import { BookTools } from './components/BookTools'
-import { PublishHub } from './components/PublishHub'
 import { FindReplaceModal } from './components/FindReplaceModal'
+import { GettingStartedTour } from './components/GettingStartedTour'
+import { SignInScreen } from './components/SignInScreen'
 import { ShelfLinkedNotesList } from './components/ShelfLinkedNotesList'
 import { StickyNotePopout } from './components/book-tools/StickyNotePopout'
-import { EbookReview } from './components/EbookReview'
 import { ManuscriptEditor } from './components/ManuscriptEditor'
 import { ManuscriptRow } from './components/ManuscriptRow'
 import { FormatPreviewModeBar } from './components/FormatPreviewModeBar'
+import { devMarkChaptersToggleEnd, devMarkChaptersToggleStart } from './lib/dev/chaptersOverlayPerf'
 import {
-  FormatThemeSidebar,
   FORMAT_WORKSPACE_SIDE_PANEL_WIDTH_CLASS,
   FORMAT_WORKSPACE_SIDE_RAIL_WIDTH_CLASS,
-} from './components/FormatThemeSidebar'
-import { PrintReview } from './components/PrintReview'
+} from './lib/formatWorkspaceLayout'
+import { readInkwellPanelMotionDurationMs } from './lib/panelMotionMs'
+import {
+  devClearForceSignInFlag,
+  devIsForceSignInActive,
+  markSignInComplete,
+  markSignedOut,
+  markTutorialSeen,
+  readBootstrap,
+  shouldShowSignIn,
+  shouldShowTutorial,
+} from './lib/bootstrapState'
 import { attachInkwellDragGhost } from './lib/dragGhost'
 import { NOTE_DRAG_MIME, NOTE_DRAG_TEXT_PREFIX, readShelfDragNoteId } from './lib/shelfDrag'
 import {
@@ -82,6 +97,8 @@ import {
   wouldCreateNoteAttachmentCycle,
 } from './lib/manuscripts'
 import { buildPlaintextExport } from './lib/export/plaintext'
+import { tiptapDocToMarkdown } from './lib/export/tiptapToMarkdown'
+import { buildWebHtmlDocument } from './lib/export/webHtml'
 import { buildKdpPdf } from './lib/export/pdfKdp'
 import { buildEpub, epubFilename } from './lib/export/epub'
 import { importDocxToChapters } from './lib/import/docx'
@@ -103,6 +120,29 @@ import type {
 import type { MentionItem } from './lib/tiptap/mentionUi'
 import type { Editor, JSONContent } from '@tiptap/core'
 
+const PrintReview = lazy(() => import('./components/PrintReview').then((m) => ({ default: m.PrintReview })))
+const EbookReview = lazy(() => import('./components/EbookReview').then((m) => ({ default: m.EbookReview })))
+const PublishHub = lazy(() => import('./components/PublishHub').then((m) => ({ default: m.PublishHub })))
+const NoteExportHub = lazy(() => import('./components/NoteExportHub').then((m) => ({ default: m.NoteExportHub })))
+const FormatThemeSidebar = lazy(() =>
+  import('./components/FormatThemeSidebar').then((m) => ({ default: m.FormatThemeSidebar })),
+)
+
+function RouteWorkspaceFallback() {
+  return (
+    <div
+      className="flex min-h-[12rem] flex-1 flex-col items-center justify-center gap-3 bg-parchment/30 px-6 py-12 text-center dark:bg-panel-dark/30"
+      role="status"
+      aria-live="polite"
+    >
+      <div className="h-1 w-24 rounded-full bg-dust/70 dark:bg-border-dark/90" />
+      <p className="text-xs font-medium uppercase tracking-widest text-walnut/75 dark:text-accent-warm/75">
+        Loading workspace
+      </p>
+    </div>
+  )
+}
+
 const THEME_KEY = 'inkwell-theme'
 const CHAPTERS_ASIDE_COLLAPSED_KEY = 'inkwell-chapters-aside-collapsed'
 const FORMAT_THEME_ASIDE_COLLAPSED_KEY = 'inkwell-format-theme-aside-collapsed'
@@ -111,7 +151,14 @@ const PERSIST_IDLE_MS = 450
 
 type DeletedSnapshot = Manuscript & { originalIndex: number }
 
-type Route = 'bookshelf' | 'write' | 'format_print' | 'format_ebook' | 'publish'
+type Route =
+  | 'signin'
+  | 'bookshelf'
+  | 'write'
+  | 'format_print'
+  | 'format_ebook'
+  | 'publish'
+  | 'note_export'
 
 type EbookFormatSlice = {
   ebook: EbookTheme
@@ -148,16 +195,27 @@ function readInitialDarkMode(): boolean {
 
 function readRouteFromHash(): Route {
   const hash = (typeof window === 'undefined' ? '' : window.location.hash).replace(/^#/, '')
+  if (hash === 'signin' || hash === 'welcome') return 'signin'
   if (hash === 'bookshelf') return 'bookshelf'
   if (hash === 'format/print' || hash === 'review/print') return 'format_print'
   if (hash === 'format/ebook' || hash === 'review/ebook') return 'format_ebook'
   if (hash === 'publish') return 'publish'
+  if (hash === 'export') return 'note_export'
   if (hash === 'write' || hash === '') return 'write'
   return 'write'
 }
 
+function normalizeRouteForProject(route: Route, proj: InkwellProject): Route {
+  const note = proj.kind === 'note'
+  if (note && route === 'publish') return 'note_export'
+  if (!note && route === 'note_export') return 'write'
+  return route
+}
+
 function routeToHash(route: Route): string {
   switch (route) {
+    case 'signin':
+      return '#signin'
     case 'bookshelf':
       return '#bookshelf'
     case 'format_print':
@@ -166,10 +224,35 @@ function routeToHash(route: Route): string {
       return '#format/ebook'
     case 'publish':
       return '#publish'
+    case 'note_export':
+      return '#export'
     case 'write':
     default:
       return '#write'
   }
+}
+
+function readInitialAppRoute(): Route {
+  if (typeof window === 'undefined') return 'write'
+  if (readOpenProjectIdFromLocation()) return readRouteFromHash()
+  if (devIsForceSignInActive()) {
+    if (window.location.hash !== '#signin') {
+      window.history.replaceState(null, '', '#signin')
+    }
+    return 'signin'
+  }
+  const boot = readBootstrap()
+  if (shouldShowSignIn(boot)) {
+    if (window.location.hash !== '#signin') {
+      window.history.replaceState(null, '', '#signin')
+    }
+    return 'signin'
+  }
+  if (window.location.hash === '#welcome' || window.location.hash === '#signin') {
+    window.history.replaceState(null, '', routeToHash('bookshelf'))
+    return 'bookshelf'
+  }
+  return readRouteFromHash()
 }
 
 function slugDownload(name: string) {
@@ -216,7 +299,7 @@ function readInitialEditorSession(): {
 }
 
 export default function App() {
-  const [route, setRouteState] = useState<Route>(() => readRouteFromHash())
+  const [route, setRouteState] = useState<Route>(() => readInitialAppRoute())
   const [boot] = useState(readInitialEditorSession)
   const [project, setProject] = useState<InkwellProject>(() => boot.project)
   const [currentId, setCurrentId] = useState<number | null>(() => boot.currentId)
@@ -230,6 +313,7 @@ export default function App() {
       return false
     }
   })
+  const [chaptersPanelMotionLive, setChaptersPanelMotionLive] = useState(false)
   const [formatThemeAsideCollapsed, setFormatThemeAsideCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false
     try {
@@ -242,7 +326,8 @@ export default function App() {
   const [printFormatSlice, setPrintFormatSlice] = useState<PrintFormatSlice | null>(null)
   const ebookFormatSliceRef = useRef<EbookFormatSlice | null>(null)
   const printFormatSliceRef = useRef<PrintFormatSlice | null>(null)
-  const routeRef = useRef<Route>(readRouteFromHash())
+  const routeRef = useRef<Route>(readInitialAppRoute())
+  const [gettingStartedTourOpen, setGettingStartedTourOpen] = useState(false)
   const prevRouteForSliceInitRef = useRef<Route | null>(null)
   const [findReplaceOpen, setFindReplaceOpen] = useState(false)
   const [stickyNotePopoutId, setStickyNotePopoutId] = useState<string | null>(null)
@@ -253,6 +338,8 @@ export default function App() {
   const newProjectMenuRef = useRef<HTMLDivElement | null>(null)
   const docxShelfInputRef = useRef<HTMLInputElement | null>(null)
   const [newProjectMenuOpen, setNewProjectMenuOpen] = useState(false)
+  const shelfAccountMenuRef = useRef<HTMLDivElement | null>(null)
+  const [shelfAccountMenuOpen, setShelfAccountMenuOpen] = useState(false)
   const [stickNoteId, setStickNoteId] = useState<string | null>(null)
   const [stickSelectParentId, setStickSelectParentId] = useState<string>('')
   const [openNoteMenuId, setOpenNoteMenuId] = useState<string | null>(null)
@@ -457,6 +544,18 @@ export default function App() {
   )
 
   useLayoutEffect(() => {
+    const normalized = normalizeRouteForProject(route, project)
+    if (normalized === route) return
+    if (!tryDiscardFormatDraftsIfNeeded(route, normalized)) {
+      if (typeof window !== 'undefined' && window.location.hash !== routeToHash(route)) {
+        window.history.replaceState(null, '', routeToHash(route))
+      }
+      return
+    }
+    navigateRoute(normalized)
+  }, [project.kind, project.id, route, tryDiscardFormatDraftsIfNeeded, navigateRoute])
+
+  useLayoutEffect(() => {
     routeRef.current = route
   }, [route])
 
@@ -487,6 +586,8 @@ export default function App() {
   }, [route])
 
   const setChaptersAsideCollapsedPersisted = useCallback((collapsed: boolean) => {
+    devMarkChaptersToggleStart(!collapsed)
+    setChaptersPanelMotionLive(true)
     setChaptersAsideCollapsed(collapsed)
     try {
       localStorage.setItem(CHAPTERS_ASIDE_COLLAPSED_KEY, collapsed ? '1' : '0')
@@ -494,6 +595,19 @@ export default function App() {
       /* ignore */
     }
   }, [])
+
+  const onChaptersPanelTransitionEnd = useCallback((e: TransitionEvent<HTMLElement>) => {
+    if (e.target !== e.currentTarget || e.propertyName !== 'transform') return
+    devMarkChaptersToggleEnd(!chaptersAsideCollapsed)
+    setChaptersPanelMotionLive(false)
+  }, [chaptersAsideCollapsed])
+
+  useEffect(() => {
+    if (!chaptersPanelMotionLive) return
+    const ms = readInkwellPanelMotionDurationMs()
+    const id = window.setTimeout(() => setChaptersPanelMotionLive(false), ms + 150)
+    return () => window.clearTimeout(id)
+  }, [chaptersPanelMotionLive])
 
   const setFormatThemeAsideCollapsedPersisted = useCallback((collapsed: boolean) => {
     setFormatThemeAsideCollapsed(collapsed)
@@ -504,9 +618,28 @@ export default function App() {
     }
   }, [])
 
+  const closeGettingStartedTour = useCallback(() => {
+    markTutorialSeen()
+    setGettingStartedTourOpen(false)
+  }, [])
+
+  useEffect(() => {
+    if (route !== 'bookshelf') return
+    if (!shouldShowTutorial(readBootstrap())) return
+    setGettingStartedTourOpen(true)
+  }, [route])
+
   useEffect(() => {
     const onHash = () => {
-      const next = readRouteFromHash()
+      let raw = readRouteFromHash()
+      if (raw === 'signin' && readBootstrap().welcomeDone && !devIsForceSignInActive()) {
+        raw = 'bookshelf'
+        window.history.replaceState(null, '', routeToHash('bookshelf'))
+      }
+      const next = normalizeRouteForProject(raw, projectRef.current)
+      if (next !== raw && typeof window !== 'undefined') {
+        window.history.replaceState(null, '', routeToHash(next))
+      }
       const from = routeRef.current
       if (next === from) return
       if (!tryDiscardFormatDraftsIfNeeded(from, next)) {
@@ -537,6 +670,23 @@ export default function App() {
       window.removeEventListener('keydown', onKey)
     }
   }, [newProjectMenuOpen])
+
+  useEffect(() => {
+    if (!shelfAccountMenuOpen) return
+    const onDocMouseDown = (e: MouseEvent) => {
+      const el = shelfAccountMenuRef.current
+      if (el && !el.contains(e.target as Node)) setShelfAccountMenuOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShelfAccountMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onDocMouseDown)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDocMouseDown)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [shelfAccountMenuOpen])
 
   useEffect(() => {
     if (route !== 'bookshelf') {
@@ -585,6 +735,15 @@ export default function App() {
     },
     [syncPersistedState],
   )
+
+  const onBookshelfSignOut = useCallback(() => {
+    syncPersistedState()
+    devClearForceSignInFlag()
+    markSignedOut()
+    setGettingStartedTourOpen(false)
+    setShelfAccountMenuOpen(false)
+    navigateRoute('signin')
+  }, [syncPersistedState, navigateRoute])
 
   const scheduleIdlePersist = useCallback(() => {
     if (persistIdleTimerRef.current != null) {
@@ -1108,6 +1267,69 @@ export default function App() {
     },
     [showToast, syncPersistedState],
   )
+
+  const noteWebDoc = useMemo(() => chapters[0]?.content ?? null, [chapters])
+
+  const copyFormattedHtmlForWeb = useCallback(async () => {
+    const doc = noteWebDoc
+    if (!doc || doc.type !== 'doc') {
+      showToast('Nothing to copy')
+      return
+    }
+    try {
+      const html = buildWebHtmlDocument(doc)
+      const plain = buildPlaintextExport(project).trim()
+      if (navigator.clipboard?.write && typeof ClipboardItem !== 'undefined') {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            'text/html': new Blob([html], { type: 'text/html' }),
+            'text/plain': new Blob([plain], { type: 'text/plain' }),
+          }),
+        ])
+      } else {
+        await navigator.clipboard.writeText(plain)
+      }
+      showToast('Copied formatted HTML')
+    } catch {
+      showToast('Copy failed')
+    }
+  }, [noteWebDoc, project, showToast])
+
+  const copyMarkdownForWeb = useCallback(async () => {
+    const doc = noteWebDoc
+    if (!doc || doc.type !== 'doc') {
+      showToast('Nothing to copy')
+      return
+    }
+    try {
+      const md = tiptapDocToMarkdown(doc)
+      await navigator.clipboard.writeText(md)
+      showToast('Copied Markdown')
+    } catch {
+      showToast('Copy failed')
+    }
+  }, [noteWebDoc, showToast])
+
+  const downloadNoteWebHtml = useCallback(() => {
+    const doc = noteWebDoc
+    if (!doc || doc.type !== 'doc') {
+      showToast('Nothing to export')
+      return
+    }
+    try {
+      const html = buildWebHtmlDocument(doc)
+      const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${slugDownload(project.book.title.trim() || chapters[0]?.title || 'note')}.html`
+      a.click()
+      URL.revokeObjectURL(url)
+      showToast('Downloaded HTML')
+    } catch {
+      showToast('HTML export failed')
+    }
+  }, [noteWebDoc, project.book.title, chapters, showToast])
 
   const applyGlobalReplace = useCallback(
     (next: Manuscript[]) => {
@@ -1743,26 +1965,21 @@ export default function App() {
             !wouldCreateNoteAttachmentCycle(stickNoteId, m.id),
         )
 
-  const chaptersChromeBtn =
-    'outline-none transition-colors focus-visible:ring-2 focus-visible:ring-cream focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark'
-  const chaptersPrimaryBtn =
-    `${chaptersChromeBtn} rounded-2xl bg-ink text-parchment transition-transform hover:scale-105 dark:bg-cream dark:text-ink`
-
   const writeChaptersOverlay = useMemo(() => {
     if (isNote || route !== 'write') return null
     return (
       <div
-        className={`inkwell-chapters-overlay-clip pointer-events-none absolute left-0 top-0 z-40 isolate h-full min-w-0 shrink-0 overflow-hidden ${
+        className={`inkwell-chapters-overlay-clip ${FORMAT_WORKSPACE_SIDE_PANEL_WIDTH_CLASS} pointer-events-none absolute left-0 top-0 z-40 isolate h-full min-w-0 shrink-0 overflow-hidden ${
           chaptersAsideCollapsed ? 'inkwell-chapters-overlay-clip--collapsed' : 'inkwell-chapters-overlay-clip--expanded'
         }`}
       >
           <aside
-            className={`inkwell-chapters-overlay-rail pointer-events-auto absolute left-0 top-0 z-20 flex h-full shrink-0 flex-col items-center gap-2 rounded-r-2xl border-r border-dust bg-white/90 py-3 shadow-xl backdrop-blur-md dark:border-border-dark dark:bg-panel-dark/90 sm:py-4 ${FORMAT_WORKSPACE_SIDE_RAIL_WIDTH_CLASS}`}
+            className={`inkwell-chapters-overlay-rail pointer-events-auto absolute left-0 top-0 z-20 flex h-full shrink-0 flex-col items-center gap-2 rounded-r-2xl border-r border-dust bg-white/90 py-3 shadow-xl backdrop-blur-sm dark:border-border-dark dark:bg-panel-dark/90 sm:py-4 ${FORMAT_WORKSPACE_SIDE_RAIL_WIDTH_CLASS}${chaptersPanelMotionLive ? ' inkwell-panel-motion--live' : ''}`}
           >
             <button
               type="button"
               onClick={() => setChaptersAsideCollapsedPersisted(false)}
-              className={`flex h-9 w-9 items-center justify-center rounded-2xl text-ink hover:bg-dust/40 dark:text-ink-dark dark:hover:bg-border-dark/50 ${chaptersChromeBtn}`}
+              className="inkwell-btn-icon-sm"
               aria-label="Expand chapters list"
               title="Show chapters"
             >
@@ -1771,7 +1988,7 @@ export default function App() {
             <button
               type="button"
               onClick={createManuscript}
-              className={`flex h-9 w-9 items-center justify-center ${chaptersPrimaryBtn}`}
+              className="inkwell-btn-chapter-new-sm"
               aria-label="New chapter"
               title="New chapter"
             >
@@ -1779,7 +1996,8 @@ export default function App() {
             </button>
           </aside>
           <aside
-            className={`inkwell-chapters-overlay-panel absolute left-0 top-0 z-10 flex h-full shrink-0 flex-col rounded-r-2xl border-r border-dust bg-white/90 shadow-2xl backdrop-blur-md dark:border-border-dark dark:bg-panel-dark/90 ${FORMAT_WORKSPACE_SIDE_PANEL_WIDTH_CLASS}`}
+            className={`inkwell-chapters-overlay-panel absolute left-0 top-0 z-10 flex h-full shrink-0 flex-col rounded-r-2xl border-r border-dust bg-white/90 shadow-2xl backdrop-blur-sm dark:border-border-dark dark:bg-panel-dark/90 ${FORMAT_WORKSPACE_SIDE_PANEL_WIDTH_CLASS}${chaptersPanelMotionLive ? ' inkwell-panel-motion--live' : ''}`}
+            onTransitionEnd={onChaptersPanelTransitionEnd}
           >
             <div className="flex items-center gap-1.5 border-b border-dust px-3 py-3 dark:border-border-dark sm:gap-2 sm:px-5 sm:py-5">
               <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -1789,7 +2007,7 @@ export default function App() {
                 <button
                   type="button"
                   onClick={createManuscript}
-                  className={`flex h-8 w-8 shrink-0 items-center justify-center ${chaptersPrimaryBtn}`}
+                  className="inkwell-btn-chapter-new-xs"
                   aria-label="New chapter"
                   title="New chapter"
                 >
@@ -1799,7 +2017,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setChaptersAsideCollapsedPersisted(true)}
-                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl text-ink hover:bg-dust/40 dark:text-ink-dark dark:hover:bg-border-dark/50 ${chaptersChromeBtn}`}
+                className="inkwell-btn-icon-xs"
                 aria-label="Collapse chapters list"
                 title="Collapse chapters"
               >
@@ -1832,6 +2050,8 @@ export default function App() {
     isNote,
     route,
     chaptersAsideCollapsed,
+    chaptersPanelMotionLive,
+    onChaptersPanelTransitionEnd,
     chapters,
     currentId,
     setChaptersAsideCollapsedPersisted,
@@ -1845,19 +2065,225 @@ export default function App() {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-parchment text-ink transition-colors dark:bg-panel-dark dark:text-ink-dark">
-      {route === 'bookshelf' ? (
-        <div className="inkwell-bookshelf mx-auto flex w-full max-w-screen-2xl flex-1 flex-col px-4 py-6 sm:px-8 sm:py-10">
-          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-            <div className="flex min-w-0 items-center gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-ink text-parchment dark:bg-cream dark:text-ink">
-                🪶
+      {route === 'signin' ? (
+        <SignInScreen
+          darkMode={darkMode}
+          onToggleTheme={toggleTheme}
+          onComplete={() => {
+            devClearForceSignInFlag()
+            markSignInComplete()
+            navigateRoute('bookshelf')
+          }}
+        />
+      ) : route === 'bookshelf' ? (
+        <div className="flex min-h-0 flex-1 flex-col">
+          <header className="sticky top-0 z-50 border-b border-dust bg-white/90 backdrop-blur-md dark:border-border-dark dark:bg-panel-dark/90">
+            <div className="relative flex w-full items-stretch">
+              <div className="flex shrink-0 items-center bg-white/70 py-2 pl-3 sm:py-3 sm:pl-5 dark:bg-panel-dark/70">
+                <button
+                  type="button"
+                  onClick={() => {
+                    syncPersistedState()
+                  }}
+                  className="inkwell-header-brand group inline-flex w-fit max-w-full items-center gap-2 rounded-2xl px-2 py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-walnut/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream/50 dark:focus-visible:ring-offset-panel-dark sm:gap-3"
+                  aria-label="Inkwell"
+                  title="Inkwell"
+                >
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-ink text-lg text-parchment transition-colors group-hover:bg-cream dark:bg-cream dark:text-ink dark:group-hover:bg-accent-warm sm:text-xl">
+                    🪶
+                  </div>
+                  <span className="hidden font-serif text-xl font-semibold tracking-tight sm:block sm:text-2xl">
+                    Inkwell
+                  </span>
+                </button>
               </div>
-              <div className="min-w-0">
-                <h1 className="font-serif text-2xl font-semibold tracking-tight">Bookshelf</h1>
-                <p className="text-sm text-ink/60 dark:text-ink-dark/60">Local projects on this device</p>
+
+              <div className="flex min-h-[3.25rem] min-w-0 flex-1 flex-col items-center justify-center px-3 py-2 pr-[7.5rem] sm:min-h-[3.5rem] sm:px-4 sm:py-3 sm:pr-[10rem]">
+                <div className="flex min-h-0 min-w-0 max-w-[min(44rem,100%)] flex-col items-center justify-center px-1 text-center sm:px-2">
+                  <h1 className="w-full truncate font-serif text-xl font-semibold tracking-tight text-ink dark:text-ink-dark sm:text-2xl">
+                    Bookshelf
+                  </h1>
+                  <p className="mt-0.5 max-w-[min(22rem,100%)] text-pretty text-[11px] leading-snug text-ink/60 dark:text-ink-dark/60 sm:text-sm sm:leading-normal">
+                    Local projects on this device
+                  </p>
+                </div>
+              </div>
+
+              <div className="pointer-events-none absolute inset-y-0 right-0 z-10 flex items-center px-3 py-2 sm:px-5">
+                <div className="pointer-events-auto flex flex-wrap items-center justify-end gap-1 sm:gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShelfAccountMenuOpen(false)
+                      toggleTheme()
+                    }}
+                    className="flex h-11 w-11 items-center justify-center rounded-3xl border border-dust bg-white/70 text-ink transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
+                    aria-label="Toggle theme"
+                    title="Toggle theme"
+                  >
+                    {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShelfAccountMenuOpen(false)
+                      setGettingStartedTourOpen(true)
+                    }}
+                    className="flex h-11 w-11 items-center justify-center rounded-3xl border border-dust bg-white/70 text-ink transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
+                    aria-label="Getting started"
+                    title="Show getting started tips"
+                  >
+                    <CircleHelp className="h-5 w-5" strokeWidth={2.25} />
+                  </button>
+                  <input
+                    ref={docxShelfInputRef}
+                    type="file"
+                    accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0] ?? null
+                      e.currentTarget.value = ''
+                      if (!file) return
+                      syncPersistedState()
+                      const p = createBookProject()
+                      setProject(p)
+                      setCurrentId(p.chapters[0]?.id ?? null)
+                      setEbookEditOpen(false)
+                      navigateRoute('write')
+                      setNewProjectMenuOpen(false)
+                      await importDocxIntoProject(
+                        file,
+                        p,
+                        'Importing a DOCX will replace chapters in this new book. Continue?',
+                      )
+                    }}
+                  />
+                  <div className="relative" ref={newProjectMenuRef}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShelfAccountMenuOpen(false)
+                        setNewProjectMenuOpen((v) => !v)
+                      }}
+                      className="flex items-center gap-2 rounded-3xl bg-ink px-4 py-2.5 text-sm font-semibold text-parchment hover:bg-walnut dark:bg-cream dark:text-ink dark:hover:bg-accent-warm"
+                      aria-expanded={newProjectMenuOpen}
+                      aria-haspopup="menu"
+                    >
+                      <Plus className="h-4 w-4" strokeWidth={2.5} />
+                      New
+                      <ChevronDown className="h-4 w-4 opacity-80" strokeWidth={2.5} />
+                    </button>
+                    {newProjectMenuOpen ? (
+                      <div
+                        role="menu"
+                        className="absolute right-0 top-full z-50 mt-2 min-w-[11rem] overflow-hidden rounded-2xl border border-dust bg-white py-1 shadow-xl dark:border-border-dark dark:bg-panel-dark"
+                      >
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="block w-full px-4 py-2.5 text-left text-sm font-medium text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
+                          onClick={() => {
+                            setNewProjectMenuOpen(false)
+                            syncPersistedState()
+                            const p = createNoteProject()
+                            setProject(p)
+                            setCurrentId(p.chapters[0]?.id ?? null)
+                            setEbookEditOpen(false)
+                            navigateRoute('write')
+                          }}
+                        >
+                          Note
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="block w-full px-4 py-2.5 text-left text-sm font-medium text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
+                          onClick={() => {
+                            setNewProjectMenuOpen(false)
+                            syncPersistedState()
+                            const p = createBookProject()
+                            setProject(p)
+                            setCurrentId(p.chapters[0]?.id ?? null)
+                            setEbookEditOpen(false)
+                            navigateRoute('write')
+                          }}
+                        >
+                          Book
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="block w-full px-4 py-2.5 text-left text-sm font-medium text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
+                          onClick={() => {
+                            setNewProjectMenuOpen(false)
+                            docxShelfInputRef.current?.click()
+                          }}
+                        >
+                          Import DOCX…
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="relative" ref={shelfAccountMenuRef}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewProjectMenuOpen(false)
+                        setShelfAccountMenuOpen((v) => !v)
+                      }}
+                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-3xl bg-gradient-to-br from-ink to-walnut text-[10px] font-bold uppercase tracking-[0.14em] text-parchment shadow-md shadow-ink/20 ring-1 ring-ink/25 outline-none transition-[transform,box-shadow,filter] hover:shadow-lg hover:shadow-ink/25 hover:brightness-[1.06] active:scale-[0.97] focus-visible:ring-2 focus-visible:ring-walnut/45 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:from-ink dark:to-walnut dark:text-ink-dark dark:shadow-black/35 dark:ring-cream/40 dark:hover:brightness-110 dark:focus-visible:ring-cream/55 dark:focus-visible:ring-offset-panel-dark"
+                      aria-expanded={shelfAccountMenuOpen}
+                      aria-haspopup="menu"
+                      aria-label="Account menu"
+                      title="Account"
+                    >
+                      IW
+                    </button>
+                    {shelfAccountMenuOpen ? (
+                      <div
+                        role="menu"
+                        className="absolute right-0 top-full z-[60] mt-2 w-[min(17.5rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-zinc-200/90 bg-white py-1 text-zinc-900 shadow-lg ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:ring-white/10"
+                      >
+                        <div className="flex gap-3 px-4 pb-3 pt-3">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-ink to-walnut text-xs font-bold uppercase tracking-[0.12em] text-parchment shadow-sm ring-1 ring-ink/20 dark:text-ink-dark dark:ring-cream/40">
+                            IW
+                          </div>
+                          <div className="min-w-0 flex-1 pt-0.5">
+                            <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50">Inkwell writer</p>
+                            <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">
+                              Signed in on this device only
+                            </p>
+                          </div>
+                        </div>
+                        <div className="border-t border-zinc-100 dark:border-zinc-800" />
+                        <div className="px-1 py-1">
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="block w-full rounded-lg px-3 py-2 text-left text-sm text-zinc-900 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-800/80"
+                            onClick={() => setShelfAccountMenuOpen(false)}
+                          >
+                            My account
+                          </button>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="block w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-sky-600 hover:bg-zinc-50 dark:text-sky-400 dark:hover:bg-zinc-800/80"
+                            onClick={onBookshelfSignOut}
+                          >
+                            Sign out
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
               </div>
             </div>
-            <div className="flex shrink-0 justify-center px-2">
+          </header>
+
+          <div className="inkwell-bookshelf mx-auto flex w-full max-w-screen-2xl flex-1 flex-col px-4 pb-6 sm:px-8 sm:pb-10">
+            <div className="flex justify-center py-6 sm:py-8">
               <button
                 type="button"
                 onClick={() => {
@@ -1875,106 +2301,8 @@ export default function App() {
                 Start Writing
               </button>
             </div>
-            <div className="flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={toggleTheme}
-                className="flex h-11 w-11 items-center justify-center rounded-3xl border border-dust bg-white/70 text-ink transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
-                aria-label="Toggle theme"
-                title="Toggle theme"
-              >
-                {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-              </button>
-              <input
-                ref={docxShelfInputRef}
-                type="file"
-                accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                className="hidden"
-                onChange={async (e) => {
-                  const file = e.target.files?.[0] ?? null
-                  e.currentTarget.value = ''
-                  if (!file) return
-                  syncPersistedState()
-                  const p = createBookProject()
-                  setProject(p)
-                  setCurrentId(p.chapters[0]?.id ?? null)
-                  setEbookEditOpen(false)
-                  navigateRoute('write')
-                  setNewProjectMenuOpen(false)
-                  await importDocxIntoProject(
-                    file,
-                    p,
-                    'Importing a DOCX will replace chapters in this new book. Continue?',
-                  )
-                }}
-              />
-              <div className="relative" ref={newProjectMenuRef}>
-                <button
-                  type="button"
-                  onClick={() => setNewProjectMenuOpen((v) => !v)}
-                  className="flex items-center gap-2 rounded-3xl bg-ink px-4 py-2.5 text-sm font-semibold text-parchment hover:bg-walnut dark:bg-cream dark:text-ink dark:hover:bg-accent-warm"
-                  aria-expanded={newProjectMenuOpen}
-                  aria-haspopup="menu"
-                >
-                  <Plus className="h-4 w-4" strokeWidth={2.5} />
-                  New
-                  <ChevronDown className="h-4 w-4 opacity-80" strokeWidth={2.5} />
-                </button>
-                {newProjectMenuOpen ? (
-                  <div
-                    role="menu"
-                    className="absolute right-0 top-full z-50 mt-2 min-w-[11rem] overflow-hidden rounded-2xl border border-dust bg-white py-1 shadow-xl dark:border-border-dark dark:bg-panel-dark"
-                  >
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="block w-full px-4 py-2.5 text-left text-sm font-medium text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
-                      onClick={() => {
-                        setNewProjectMenuOpen(false)
-                        syncPersistedState()
-                        const p = createNoteProject()
-                        setProject(p)
-                        setCurrentId(p.chapters[0]?.id ?? null)
-                        setEbookEditOpen(false)
-                        navigateRoute('write')
-                      }}
-                    >
-                      Note
-                    </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="block w-full px-4 py-2.5 text-left text-sm font-medium text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
-                      onClick={() => {
-                        setNewProjectMenuOpen(false)
-                        syncPersistedState()
-                        const p = createBookProject()
-                        setProject(p)
-                        setCurrentId(p.chapters[0]?.id ?? null)
-                        setEbookEditOpen(false)
-                        navigateRoute('write')
-                      }}
-                    >
-                      Book
-                    </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="block w-full px-4 py-2.5 text-left text-sm font-medium text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
-                      onClick={() => {
-                        setNewProjectMenuOpen(false)
-                        docxShelfInputRef.current?.click()
-                      }}
-                    >
-                      Import DOCX…
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          </div>
 
-          <section className="mt-8 space-y-3">
+          <section className="mt-10 space-y-3 sm:space-y-4">
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
                 Books
@@ -2044,8 +2372,22 @@ export default function App() {
                         className="min-w-0 flex-1 cursor-pointer rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-cream focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark"
                       >
                         <div className="flex items-start gap-3">
-                          <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-dust/60 text-walnut dark:bg-border-dark/60 dark:text-accent-warm">
-                            <BookOpen className="h-5 w-5" strokeWidth={2} />
+                          <div
+                            className={`mt-0.5 flex h-10 w-10 shrink-0 overflow-hidden rounded-2xl ${
+                              p.coverImageDataUrl
+                                ? 'ring-1 ring-ink/10 dark:ring-white/15'
+                                : 'items-center justify-center bg-dust/60 text-walnut dark:bg-border-dark/60 dark:text-accent-warm'
+                            }`}
+                          >
+                            {p.coverImageDataUrl ? (
+                              <img
+                                src={p.coverImageDataUrl}
+                                alt=""
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <BookOpen className="h-5 w-5" strokeWidth={2} />
+                            )}
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="truncate font-serif text-lg font-semibold">{p.title || 'Untitled book'}</div>
@@ -2189,7 +2531,7 @@ export default function App() {
           </section>
 
           <section
-            className={`mt-10 space-y-3 rounded-3xl transition-[transform,box-shadow] duration-300 ease-out ${
+            className={`mt-10 space-y-3 sm:space-y-4 rounded-3xl transition-[transform,box-shadow] duration-300 ease-out ${
               shelfDropHoverProjectsSection
                 ? 'inkwell-shelf-drop-target scale-[1.01] shadow-lg ring-2 ring-cream ring-offset-2 ring-offset-parchment dark:ring-accent-warm dark:ring-offset-panel-dark'
                 : ''
@@ -2398,7 +2740,7 @@ export default function App() {
           </section>
 
           <section
-            className={`mt-10 space-y-3 rounded-3xl transition-[transform,box-shadow] duration-300 ease-out ${
+            className={`mt-10 space-y-3 sm:space-y-4 rounded-3xl transition-[transform,box-shadow] duration-300 ease-out ${
               shelfDropHoverNotesSection
                 ? 'inkwell-shelf-drop-target scale-[1.01] shadow-lg ring-2 ring-cream ring-offset-2 ring-offset-parchment dark:ring-accent-warm dark:ring-offset-panel-dark'
                 : ''
@@ -2408,7 +2750,7 @@ export default function App() {
             onDragLeave={shelfNotesSectionDragLeave}
             onDrop={shelfNotesSectionDrop}
           >
-            <div>
+            <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between gap-2">
                 <h2 className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
                   Notes
@@ -2424,7 +2766,7 @@ export default function App() {
                 </button>
               </div>
               {shelfLooseNotes.length > 0 ? (
-                <p className="mt-1 text-sm text-ink/55 dark:text-ink-dark/55">
+                <p className="text-sm text-ink/55 dark:text-ink-dark/55">
                   Drag a note onto a book or another note to attach it, or drop here to move a linked note back into
                   Notes.
                 </p>
@@ -2489,7 +2831,7 @@ export default function App() {
                       </a>
 
                       <div
-                        className="flex shrink-0 items-start gap-1"
+                        className="flex shrink-0 items-start gap-2"
                         onClick={(e) => e.stopPropagation()}
                         onKeyDown={(e) => e.stopPropagation()}
                       >
@@ -2657,6 +2999,7 @@ export default function App() {
               </div>
             </div>
           </div>
+          </div>
         </div>
       ) : (
         <>
@@ -2682,7 +3025,7 @@ export default function App() {
                       syncPersistedState()
                     }
                   }}
-                  className="inkwell-header-brand group inline-flex w-fit max-w-full items-center gap-2 rounded-2xl px-2 py-1.5 focus:outline-none sm:gap-3"
+                  className="inkwell-header-brand group inline-flex w-fit max-w-full items-center gap-2 rounded-2xl px-2 py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-walnut/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream/50 dark:focus-visible:ring-offset-panel-dark sm:gap-3"
                   aria-label="Back to Bookshelf"
                   title="Bookshelf"
                 >
@@ -2705,7 +3048,7 @@ export default function App() {
                     <input
                       type="text"
                       value={current?.title ?? ''}
-                      disabled={!current || route !== 'write'}
+                      disabled={!current || (route !== 'write' && route !== 'note_export')}
                       onChange={(e) => updateCurrentTitle(e.target.value)}
                       placeholder="Note title"
                       className="w-full min-w-0 rounded-2xl border border-transparent bg-transparent px-3 py-2 text-center text-base font-medium focus:border-cream focus:outline-none dark:focus:border-cream sm:px-4 sm:text-lg"
@@ -2744,7 +3087,7 @@ export default function App() {
                     onClick={() => {
                       if (route === 'format_ebook') setEbookEditOpen((v) => !v)
                     }}
-                    className={`items-center gap-2 rounded-3xl border border-dust bg-white/70 px-3 py-2 text-sm font-medium text-ink transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90 ${
+                    className={`items-center gap-2 rounded-3xl border border-dust bg-white/70 px-3 py-2 text-sm font-medium text-ink outline-none transition-colors hover:bg-white focus-visible:ring-2 focus-visible:ring-walnut/35 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90 dark:focus-visible:ring-cream/45 dark:focus-visible:ring-offset-panel-dark ${
                       route === 'format_ebook' ? 'hidden sm:flex' : 'hidden'
                     }`}
                     title="Toggle editor for ebook review"
@@ -2758,7 +3101,7 @@ export default function App() {
                       onClick={() => {
                         setBookToolsOpen(true)
                       }}
-                      className="flex h-10 w-10 items-center justify-center rounded-2xl text-ink transition-colors hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
+                      className="inkwell-btn-icon"
                       aria-label={isNote ? 'Note tools' : 'Book tools'}
                       title={isNote ? 'Note tools' : 'Book tools'}
                     >
@@ -2767,34 +3110,56 @@ export default function App() {
                     <button
                       type="button"
                       onClick={toggleTheme}
-                      className="flex h-10 w-10 items-center justify-center rounded-2xl text-ink transition-colors hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
+                      className="inkwell-btn-icon"
                       aria-label="Toggle theme"
                     >
                       {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
                     </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (isFormatWorkspace) navigateRoute('publish')
-                      else {
+                  {isNote ? (
+                    <button
+                      type="button"
+                      onClick={() => {
                         syncPersistedState()
-                        setEbookEditOpen(false)
-                        navigateRoute('format_ebook')
-                      }
-                    }}
-                    disabled={isFormatWorkspace ? false : !current || route !== 'write'}
-                    className="flex items-center gap-2 rounded-3xl bg-ink px-3 py-2 text-sm font-medium text-parchment transition-colors hover:bg-walnut disabled:opacity-40 dark:bg-cream dark:text-ink dark:hover:bg-accent-warm sm:px-5 sm:py-2.5"
-                    aria-label={isFormatWorkspace ? 'Go to Publish workspace' : 'Open Format workspace'}
-                    title={isFormatWorkspace ? 'Open Publish workspace' : 'Ebook & print previews'}
-                  >
-                    {isFormatWorkspace ? (
-                      <Rocket className="h-4 w-4 shrink-0" strokeWidth={2.25} />
-                    ) : (
-                      <LayoutTemplate className="h-4 w-4 shrink-0" strokeWidth={2.25} />
-                    )}
-                    <span className="hidden sm:inline">{isFormatWorkspace ? 'Publish!' : 'Format'}</span>
-                  </button>
+                        if (route === 'note_export') navigateRoute('write')
+                        else navigateRoute('note_export')
+                      }}
+                      disabled={!current}
+                      className="flex items-center gap-2 rounded-3xl bg-ink px-3 py-2 text-sm font-medium text-parchment outline-none transition-colors hover:bg-walnut focus-visible:ring-2 focus-visible:ring-walnut/45 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:pointer-events-none disabled:opacity-40 dark:bg-cream dark:text-ink dark:hover:bg-accent-warm dark:focus-visible:ring-cream/55 dark:focus-visible:ring-offset-panel-dark sm:px-5 sm:py-2.5"
+                      aria-label={route === 'note_export' ? 'Back to Write' : 'Open Export workspace'}
+                      title={route === 'note_export' ? 'Back to writing' : 'Export for the web and backups'}
+                    >
+                      {route === 'note_export' ? (
+                        <PenLine className="h-4 w-4 shrink-0" strokeWidth={2.25} />
+                      ) : (
+                        <Download className="h-4 w-4 shrink-0" strokeWidth={2.25} />
+                      )}
+                      <span className="hidden sm:inline">{route === 'note_export' ? 'Write' : 'Export'}</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (isFormatWorkspace) navigateRoute('publish')
+                        else {
+                          syncPersistedState()
+                          setEbookEditOpen(false)
+                          navigateRoute('format_ebook')
+                        }
+                      }}
+                      disabled={isFormatWorkspace ? false : !current || route !== 'write'}
+                      className="flex items-center gap-2 rounded-3xl bg-ink px-3 py-2 text-sm font-medium text-parchment outline-none transition-colors hover:bg-walnut focus-visible:ring-2 focus-visible:ring-walnut/45 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:pointer-events-none disabled:opacity-40 dark:bg-cream dark:text-ink dark:hover:bg-accent-warm dark:focus-visible:ring-cream/55 dark:focus-visible:ring-offset-panel-dark sm:px-5 sm:py-2.5"
+                      aria-label={isFormatWorkspace ? 'Go to Publish workspace' : 'Open Format workspace'}
+                      title={isFormatWorkspace ? 'Open Publish workspace' : 'Ebook & print previews'}
+                    >
+                      {isFormatWorkspace ? (
+                        <Rocket className="h-4 w-4 shrink-0" strokeWidth={2.25} />
+                      ) : (
+                        <LayoutTemplate className="h-4 w-4 shrink-0" strokeWidth={2.25} />
+                      )}
+                      <span className="hidden sm:inline">{isFormatWorkspace ? 'Publish!' : 'Format'}</span>
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -2813,7 +3178,7 @@ export default function App() {
                       <button
                         type="button"
                         onClick={() => setChaptersAsideCollapsedPersisted(false)}
-                        className="flex h-9 w-9 items-center justify-center rounded-2xl text-ink transition-colors hover:bg-dust/40 dark:text-ink-dark dark:hover:bg-border-dark/50"
+                        className="inkwell-btn-icon-sm"
                         aria-label="Expand chapters list"
                         title="Show chapters"
                       >
@@ -2822,7 +3187,7 @@ export default function App() {
                       <button
                         type="button"
                         onClick={createManuscript}
-                        className="flex h-9 w-9 items-center justify-center rounded-2xl bg-ink text-parchment transition-transform hover:scale-105 dark:bg-cream dark:text-ink"
+                        className="inkwell-btn-chapter-new-sm"
                         aria-label="New chapter"
                         title="New chapter"
                       >
@@ -2839,7 +3204,7 @@ export default function App() {
                         <button
                           type="button"
                           onClick={createManuscript}
-                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl bg-ink text-parchment transition-transform hover:scale-105 dark:bg-cream dark:text-ink"
+                          className="inkwell-btn-chapter-new-xs"
                           aria-label="New chapter"
                           title="New chapter"
                         >
@@ -2850,7 +3215,7 @@ export default function App() {
                         <button
                           type="button"
                           onClick={() => setChaptersAsideCollapsedPersisted(true)}
-                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl text-ink transition-colors hover:bg-dust/40 dark:text-ink-dark dark:hover:bg-border-dark/50"
+                          className="inkwell-btn-icon-xs"
                           aria-label="Collapse chapters list"
                           title="Collapse chapters"
                         >
@@ -2884,30 +3249,32 @@ export default function App() {
 
             <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-parchment/40 dark:bg-panel-dark/40">
               {route === 'format_print' ? (
-                <PrintReview
-                  chapters={chapters}
-                  theme={displayTheme}
-                  book={project.book}
-                  scrollToChapterId={currentId}
-                  onChapterSelect={setCurrentId}
-                  formatModeBar={
-                    <FormatPreviewModeBar
-                      mode="print"
-                      onSelectEbook={() => {
-                        setEbookEditOpen(false)
-                        navigateRoute('format_ebook')
-                      }}
-                      onSelectPrint={() => {
-                        setEbookEditOpen(false)
-                        navigateRoute('format_print')
-                      }}
-                    />
-                  }
-                  onJumpToChapter={(id) => {
-                    setCurrentId(id)
-                    navigateRoute('write')
-                  }}
-                />
+                <Suspense fallback={<RouteWorkspaceFallback />}>
+                  <PrintReview
+                    chapters={chapters}
+                    theme={displayTheme}
+                    book={project.book}
+                    scrollToChapterId={currentId}
+                    onChapterSelect={setCurrentId}
+                    formatModeBar={
+                      <FormatPreviewModeBar
+                        mode="print"
+                        onSelectEbook={() => {
+                          setEbookEditOpen(false)
+                          navigateRoute('format_ebook')
+                        }}
+                        onSelectPrint={() => {
+                          setEbookEditOpen(false)
+                          navigateRoute('format_print')
+                        }}
+                      />
+                    }
+                    onJumpToChapter={(id) => {
+                      setCurrentId(id)
+                      navigateRoute('write')
+                    }}
+                  />
+                </Suspense>
               ) : route === 'format_ebook' ? (
                 <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
                   {ebookEditOpen && (
@@ -2940,45 +3307,65 @@ export default function App() {
                   <div
                     className={`flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden ${ebookEditOpen ? 'border-t border-dust dark:border-border-dark lg:border-l lg:border-t-0' : ''}`}
                   >
-                    <EbookReview
-                      chapters={chapters}
-                      theme={displayTheme}
-                      activeChapterId={currentId}
-                      formatModeBar={
-                        <FormatPreviewModeBar
-                          mode="ebook"
-                          onSelectEbook={() => {
-                            setEbookEditOpen(false)
-                            navigateRoute('format_ebook')
-                          }}
-                          onSelectPrint={() => {
-                            setEbookEditOpen(false)
-                            navigateRoute('format_print')
-                          }}
-                        />
-                      }
-                      onPrevChapter={prevChapter}
-                      onNextChapter={nextChapter}
-                    />
+                    <Suspense fallback={<RouteWorkspaceFallback />}>
+                      <EbookReview
+                        chapters={chapters}
+                        theme={displayTheme}
+                        activeChapterId={currentId}
+                        formatModeBar={
+                          <FormatPreviewModeBar
+                            mode="ebook"
+                            onSelectEbook={() => {
+                              setEbookEditOpen(false)
+                              navigateRoute('format_ebook')
+                            }}
+                            onSelectPrint={() => {
+                              setEbookEditOpen(false)
+                              navigateRoute('format_print')
+                            }}
+                          />
+                        }
+                        onPrevChapter={prevChapter}
+                        onNextChapter={nextChapter}
+                      />
+                    </Suspense>
                   </div>
                 </div>
+              ) : route === 'note_export' && isNote ? (
+                <Suspense fallback={<RouteWorkspaceFallback />}>
+                  <NoteExportHub
+                    noteTitle={deriveNoteMetaTitle(project)}
+                    wordCount={liveTotalBookWords}
+                    onOpenNoteTools={() => setBookToolsOpen(true)}
+                    onBackToWrite={() => navigateRoute('write')}
+                    onExportTxt={exportTxt}
+                    onExportProjectArchive={() => void exportBookArchive()}
+                    onExportLibraryArchive={() => void exportFullLibrary()}
+                    onImportProjectArchive={(file) => void importArchiveFile(file)}
+                    onCopyFormattedHtml={() => void copyFormattedHtmlForWeb()}
+                    onCopyMarkdown={() => void copyMarkdownForWeb()}
+                    onDownloadHtml={() => downloadNoteWebHtml()}
+                  />
+                </Suspense>
               ) : route === 'publish' && !isNote ? (
-                <PublishHub
-                  book={project.book}
-                  onOpenBookTools={() => setBookToolsOpen(true)}
-                  onExportPdfKdp={() => void exportPdfKdp()}
-                  onExportEpub={() => void exportEpub()}
-                  onImportDocx={(file) => void importDocx(file)}
-                  onExportTxt={exportTxt}
-                  onExportProjectArchive={() => void exportBookArchive()}
-                  onExportLibraryArchive={() => void exportFullLibrary()}
-                  onImportProjectArchive={(file) => void importArchiveFile(file)}
-                  onOpenFormatPrint={() => navigateRoute('format_print')}
-                  onOpenFormatEbook={() => {
-                    setEbookEditOpen(false)
-                    navigateRoute('format_ebook')
-                  }}
-                />
+                <Suspense fallback={<RouteWorkspaceFallback />}>
+                  <PublishHub
+                    book={project.book}
+                    onOpenBookTools={() => setBookToolsOpen(true)}
+                    onExportPdfKdp={() => void exportPdfKdp()}
+                    onExportEpub={() => void exportEpub()}
+                    onImportDocx={(file) => void importDocx(file)}
+                    onExportTxt={exportTxt}
+                    onExportProjectArchive={() => void exportBookArchive()}
+                    onExportLibraryArchive={() => void exportFullLibrary()}
+                    onImportProjectArchive={(file) => void importArchiveFile(file)}
+                    onOpenFormatPrint={() => navigateRoute('format_print')}
+                    onOpenFormatEbook={() => {
+                      setEbookEditOpen(false)
+                      navigateRoute('format_ebook')
+                    }}
+                  />
+                </Suspense>
               ) : current ? (
                 <ManuscriptEditor
                   key={`${current.id}-${editorEpoch}`}
@@ -3006,17 +3393,19 @@ export default function App() {
               )}
             </main>
             {!isNote && (route === 'format_print' || route === 'format_ebook') ? (
-              <FormatThemeSidebar
-                theme={displayTheme}
-                formatScope={route === 'format_print' ? 'print' : 'ebook'}
-                onThemeChange={patchTheme}
-                onApplyThemePreset={applyInteriorPreset}
-                themeCommitDirty={themeCommitDirty}
-                onCommitTheme={commitActiveFormatTheme}
-                collapsed={formatThemeAsideCollapsed}
-                onSetCollapsed={setFormatThemeAsideCollapsedPersisted}
-                sideColumnClassName={chaptersAsideWidthClass}
-              />
+              <Suspense fallback={<RouteWorkspaceFallback />}>
+                <FormatThemeSidebar
+                  theme={displayTheme}
+                  formatScope={route === 'format_print' ? 'print' : 'ebook'}
+                  onThemeChange={patchTheme}
+                  onApplyThemePreset={applyInteriorPreset}
+                  themeCommitDirty={themeCommitDirty}
+                  onCommitTheme={commitActiveFormatTheme}
+                  collapsed={formatThemeAsideCollapsed}
+                  onSetCollapsed={setFormatThemeAsideCollapsedPersisted}
+                  sideColumnClassName={chaptersAsideWidthClass}
+                />
+              </Suspense>
             ) : null}
           </div>
 
@@ -3026,7 +3415,11 @@ export default function App() {
             projectId={project.id}
             variant={isNote ? 'note' : 'book'}
             workspaceRoute={
-              isNote ? 'write'
+              isNote ?
+                route === 'note_export' ? 'note_export'
+                : route === 'format_print' ? 'format_print'
+                : route === 'format_ebook' ? 'format_ebook'
+                : 'write'
               : route === 'format_print' ? 'format_print'
               : route === 'format_ebook' ? 'format_ebook'
               : route === 'publish' ? 'publish'
@@ -3135,6 +3528,7 @@ export default function App() {
           )}
         </>
       )}
+      <GettingStartedTour open={gettingStartedTourOpen} onClose={closeGettingStartedTour} />
     </div>
   )
 }

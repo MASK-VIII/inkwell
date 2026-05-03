@@ -1,5 +1,4 @@
 import type { JSONContent } from '@tiptap/core'
-import mammoth from 'mammoth'
 import { coerceDocThroughTipTap } from './coerceTipTapImport'
 
 export type ImportedChapter = {
@@ -260,7 +259,7 @@ function sanitizeImportedDoc(doc: JSONContent): JSONContent {
 }
 
 export async function importDocxToChapters(arrayBuffer: ArrayBuffer): Promise<DocxImportResult> {
-  // mammoth converts docx to HTML, preserving bold/italic reasonably well.
+  const mammoth = (await import('mammoth')).default
   const { value: html } = await mammoth.convertToHtml(
     { arrayBuffer },
     {

@@ -58,6 +58,8 @@ export type BookMeta = {
   subtitle: string
   authorName: string
   series: string
+  /** JPEG data URL; shown on bookshelf and optional future export use */
+  coverImageDataUrl?: string
   /** BCP-47 language tag for EPUB/metadata */
   language?: string
   isbn?: string
@@ -178,6 +180,8 @@ export type ProjectMeta = {
   kind: ProjectKind
   /** When kind is note: optional parent on the shelf (book or note project id) */
   linkedBookId?: string | null
+  /** Denormalized from book.coverImageDataUrl for bookshelf thumbnails */
+  coverImageDataUrl?: string
 }
 
 export type ProjectIndex = {

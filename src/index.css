@@ -52,9 +52,12 @@ button:not(:disabled):not(.cursor-grab) {
   scrollbar-color: color-mix(in srgb, var(--color-walnut) 55%, transparent)
     color-mix(in srgb, var(--color-dust) 55%, transparent);
   scrollbar-width: thin;
-  /* BookTools drawer + Write chapters overlay — keep timing aligned */
+  /* Default UI motion (honors prefers-reduced-motion below). */
   --inkwell-motion-duration: 520ms;
   --inkwell-motion-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  /* BookTools drawer + Write chapters overlay — always full slide; not tied to reduced-motion tokens. */
+  --inkwell-panel-motion-duration: 520ms;
+  --inkwell-panel-motion-ease: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .dark {
@@ -257,65 +260,76 @@ body {
     box-shadow 650ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* BookTools drawer motion */
+/* BookTools drawer motion (uses panel tokens so slide plays under prefers-reduced-motion) */
 .inkwell-drawer-backdrop {
-  transition: opacity var(--inkwell-motion-duration) var(--inkwell-motion-ease);
+  transition: opacity var(--inkwell-panel-motion-duration) var(--inkwell-panel-motion-ease);
 }
 
 .inkwell-drawer-panel {
-  transition: transform var(--inkwell-motion-duration) var(--inkwell-motion-ease);
+  transition: transform var(--inkwell-panel-motion-duration) var(--inkwell-panel-motion-ease);
+}
+
+.inkwell-panel-motion--live {
   will-change: transform;
 }
 
-/* Write workspace: chapters overlay (explicit width on clip so abspos-only children don’t collapse to 0) */
-.inkwell-chapters-overlay-clip {
-  --inkwell-chapters-rail-w: 2.75rem;
-  transition:
-    width var(--inkwell-motion-duration) var(--inkwell-motion-ease),
-    max-width var(--inkwell-motion-duration) var(--inkwell-motion-ease);
-}
-
-@media (min-width: 640px) {
-  .inkwell-chapters-overlay-clip {
-    --inkwell-chapters-rail-w: 3rem;
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --inkwell-motion-duration: 0.01ms;
+    --inkwell-motion-ease: linear;
   }
 }
 
-.inkwell-chapters-overlay-clip--collapsed {
-  width: var(--inkwell-chapters-rail-w);
-  max-width: var(--inkwell-chapters-rail-w);
-}
+@layer components {
+  /* Shared header rail, drawer close, and compact chrome */
+  .inkwell-btn-icon {
+    @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-ink transition-colors outline-none hover:bg-dust/30 focus-visible:ring-2 focus-visible:ring-walnut/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:text-ink-dark dark:hover:bg-border-dark/50 dark:focus-visible:ring-cream/50 dark:focus-visible:ring-offset-panel-dark;
+  }
 
-/* Matches FORMAT_WORKSPACE_SIDE_PANEL_WIDTH_CLASS */
-.inkwell-chapters-overlay-clip--expanded {
-  width: min(18.72rem, calc(100vw - 4.5rem));
-  max-width: min(18.72rem, calc(100vw - 4.5rem));
-}
+  .inkwell-btn-icon-sm {
+    @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl text-ink transition-colors outline-none hover:bg-dust/40 focus-visible:ring-2 focus-visible:ring-walnut/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:text-ink-dark dark:hover:bg-border-dark/50 dark:focus-visible:ring-cream/50 dark:focus-visible:ring-offset-panel-dark;
+  }
 
-@media (min-width: 640px) {
-  .inkwell-chapters-overlay-clip--expanded {
-    width: 20.16rem;
-    max-width: 20.16rem;
+  .inkwell-btn-icon-xs {
+    @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl text-ink transition-colors outline-none hover:bg-dust/40 focus-visible:ring-2 focus-visible:ring-walnut/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:text-ink-dark dark:hover:bg-border-dark/50 dark:focus-visible:ring-cream/50 dark:focus-visible:ring-offset-panel-dark;
+  }
+
+  .inkwell-btn-chapter-new-sm {
+    @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-ink text-parchment outline-none transition-transform hover:scale-105 hover:bg-walnut focus-visible:ring-2 focus-visible:ring-walnut/45 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:bg-cream dark:text-ink dark:hover:bg-accent-warm dark:focus-visible:ring-cream/55 dark:focus-visible:ring-offset-panel-dark;
+  }
+
+  .inkwell-btn-chapter-new-xs {
+    @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl bg-ink text-parchment outline-none transition-transform hover:scale-105 hover:bg-walnut focus-visible:ring-2 focus-visible:ring-walnut/45 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:bg-cream dark:text-ink dark:hover:bg-accent-warm dark:focus-visible:ring-cream/55 dark:focus-visible:ring-offset-panel-dark;
+  }
+
+  .inkwell-hub-primary {
+    @apply rounded-2xl bg-ink px-5 py-3 text-sm font-semibold text-parchment outline-none transition-colors hover:bg-walnut focus-visible:ring-2 focus-visible:ring-walnut/45 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment/80 dark:bg-cream dark:text-ink dark:hover:bg-accent-warm dark:focus-visible:ring-cream/55 dark:focus-visible:ring-offset-panel-dark disabled:pointer-events-none disabled:opacity-40;
+  }
+
+  .inkwell-hub-secondary {
+    @apply rounded-2xl border border-dust bg-white/80 px-5 py-3 text-sm font-semibold text-ink outline-none transition-colors hover:bg-white focus-visible:ring-2 focus-visible:ring-walnut/35 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment/80 dark:border-border-dark dark:bg-panel-dark/80 dark:text-ink-dark dark:hover:bg-panel-dark dark:focus-visible:ring-cream/45 dark:focus-visible:ring-offset-panel-dark disabled:pointer-events-none disabled:opacity-40;
+  }
+
+  .inkwell-hub-tertiary {
+    @apply rounded-full border border-dust bg-white/80 px-4 py-2 text-xs font-semibold text-ink outline-none transition-colors hover:bg-white focus-visible:ring-2 focus-visible:ring-walnut/35 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment/80 dark:border-border-dark dark:bg-panel-dark/80 dark:text-ink-dark dark:hover:bg-panel-dark dark:focus-visible:ring-cream/45 dark:focus-visible:ring-offset-panel-dark disabled:pointer-events-none disabled:opacity-40;
+  }
+
+  .inkwell-hub-card {
+    @apply flex flex-col gap-2 rounded-2xl border border-dust/80 bg-parchment/50 p-4 dark:border-border-dark dark:bg-panel-dark/50;
+  }
+
+  .inkwell-hub-row-btn {
+    @apply w-full rounded-xl border border-dust bg-white/70 px-4 py-3 text-sm font-semibold text-ink outline-none transition-colors hover:bg-white focus-visible:ring-2 focus-visible:ring-walnut/35 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment/80 dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90 dark:focus-visible:ring-cream/45 dark:focus-visible:ring-offset-panel-dark disabled:pointer-events-none disabled:opacity-40;
+  }
+
+  .inkwell-hub-dropzone {
+    @apply block w-full cursor-pointer rounded-xl border border-dashed border-dust bg-white/50 px-4 py-3 text-center text-sm font-semibold text-ink/85 outline-none transition-colors hover:bg-white focus-visible:ring-2 focus-visible:ring-walnut/35 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment/80 dark:border-border-dark dark:bg-panel-dark/50 dark:text-ink-dark/85 dark:hover:bg-panel-dark/80 dark:focus-visible:ring-cream/45 dark:focus-visible:ring-offset-panel-dark;
   }
 }
 
-@media (min-width: 1024px) {
-  .inkwell-chapters-overlay-clip--expanded {
-    width: 23.04rem;
-    max-width: 23.04rem;
-  }
-}
-
-@media (min-width: 1280px) {
-  .inkwell-chapters-overlay-clip--expanded {
-    width: 24.48rem;
-    max-width: 24.48rem;
-  }
-}
-
+/* Write workspace: chapters overlay — clip width matches panel (Tailwind on element); no width animation */
 .inkwell-chapters-overlay-rail {
-  transition: transform var(--inkwell-motion-duration) var(--inkwell-motion-ease);
-  will-change: transform;
+  transition: transform var(--inkwell-panel-motion-duration) var(--inkwell-panel-motion-ease);
   backface-visibility: hidden;
 }
 
@@ -325,9 +339,8 @@ body {
 }
 
 .inkwell-chapters-overlay-panel {
-  transition: transform var(--inkwell-motion-duration) var(--inkwell-motion-ease);
+  transition: transform var(--inkwell-panel-motion-duration) var(--inkwell-panel-motion-ease);
   transform: translate3d(-100%, 0, 0);
-  will-change: transform;
   backface-visibility: hidden;
   pointer-events: none;
 }

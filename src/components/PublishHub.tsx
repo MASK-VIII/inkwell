@@ -70,11 +70,7 @@ export function PublishHub({
           <h2 id="publish-checklist-heading" className="font-serif text-lg font-semibold text-ink dark:text-ink-dark">
             Export readiness
           </h2>
-          <button
-            type="button"
-            onClick={onOpenBookTools}
-            className="rounded-full border border-dust bg-white/80 px-4 py-2 text-xs font-semibold text-ink transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/80 dark:text-ink-dark dark:hover:bg-panel-dark"
-          >
+          <button type="button" onClick={onOpenBookTools} className="inkwell-hub-tertiary">
             Edit in Book tools
           </button>
         </div>
@@ -98,18 +94,10 @@ export function PublishHub({
           Primary exports
         </h2>
         <div className="flex flex-col gap-3 sm:flex-row">
-          <button
-            type="button"
-            onClick={onExportPdfKdp}
-            className="rounded-2xl bg-ink px-5 py-3 text-sm font-semibold text-parchment transition-colors hover:bg-walnut dark:bg-cream dark:text-ink dark:hover:bg-accent-warm"
-          >
+          <button type="button" onClick={onExportPdfKdp} className="inkwell-hub-primary">
             Export PDF (KDP)
           </button>
-          <button
-            type="button"
-            onClick={onExportEpub}
-            className="rounded-2xl border border-dust bg-white/80 px-5 py-3 text-sm font-semibold text-ink transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/80 dark:text-ink-dark dark:hover:bg-panel-dark"
-          >
+          <button type="button" onClick={onExportEpub} className="inkwell-hub-secondary">
             Export EPUB
           </button>
         </div>
@@ -119,20 +107,12 @@ export function PublishHub({
         {(onOpenFormatPrint || onOpenFormatEbook) && (
           <div className="flex flex-wrap gap-2">
             {onOpenFormatPrint ? (
-              <button
-                type="button"
-                onClick={onOpenFormatPrint}
-                className="rounded-full border border-dust px-4 py-2 text-xs font-semibold text-ink/90 hover:bg-dust/20 dark:border-border-dark dark:text-ink-dark dark:hover:bg-border-dark/40"
-              >
+              <button type="button" onClick={onOpenFormatPrint} className="inkwell-hub-tertiary">
                 Open print format
               </button>
             ) : null}
             {onOpenFormatEbook ? (
-              <button
-                type="button"
-                onClick={onOpenFormatEbook}
-                className="rounded-full border border-dust px-4 py-2 text-xs font-semibold text-ink/90 hover:bg-dust/20 dark:border-border-dark dark:text-ink-dark dark:hover:bg-border-dark/40"
-              >
+              <button type="button" onClick={onOpenFormatEbook} className="inkwell-hub-tertiary">
                 Open ebook format
               </button>
             ) : null}
@@ -144,7 +124,7 @@ export function PublishHub({
         <h2 id="publish-secondary-heading" className="font-serif text-lg font-semibold text-ink dark:text-ink-dark">
           Import and backups
         </h2>
-        <div className="flex flex-col gap-2 rounded-2xl border border-dust/80 bg-parchment/50 p-4 dark:border-border-dark dark:bg-panel-dark/50">
+        <div className="inkwell-hub-card">
           <label className="block">
             <input
               type="file"
@@ -157,34 +137,20 @@ export function PublishHub({
                 onImportDocx(f)
               }}
             />
-            <span className="block w-full cursor-pointer rounded-xl border border-dashed border-dust bg-white/50 px-4 py-3 text-center text-sm font-semibold text-ink/85 transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/50 dark:text-ink-dark/85 dark:hover:bg-panel-dark/80">
-              Import DOCX…
-            </span>
+            <span className="inkwell-hub-dropzone">Import DOCX…</span>
           </label>
           {onExportTxt ? (
-            <button
-              type="button"
-              onClick={onExportTxt}
-              className="w-full rounded-xl border border-dust bg-white/70 px-4 py-3 text-sm font-semibold text-ink transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
-            >
+            <button type="button" onClick={onExportTxt} className="inkwell-hub-row-btn">
               Export plain text (.txt)
             </button>
           ) : null}
           {onExportProjectArchive ? (
-            <button
-              type="button"
-              onClick={onExportProjectArchive}
-              className="w-full rounded-xl border border-dust bg-white/70 px-4 py-3 text-sm font-semibold text-ink transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
-            >
+            <button type="button" onClick={onExportProjectArchive} className="inkwell-hub-row-btn">
               Export book backup (.inkwell.zip)
             </button>
           ) : null}
           {onExportLibraryArchive ? (
-            <button
-              type="button"
-              onClick={onExportLibraryArchive}
-              className="w-full rounded-xl border border-dust bg-white/70 px-4 py-3 text-sm font-semibold text-ink transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
-            >
+            <button type="button" onClick={onExportLibraryArchive} className="inkwell-hub-row-btn">
               Export full library (.zip)
             </button>
           ) : null}
@@ -201,9 +167,7 @@ export function PublishHub({
                   onImportProjectArchive(f)
                 }}
               />
-              <span className="block w-full cursor-pointer rounded-xl border border-dashed border-dust bg-white/40 px-4 py-3 text-center text-sm font-semibold text-ink/80 transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/40 dark:text-ink-dark/80 dark:hover:bg-panel-dark/70">
-                Import backup (.zip)
-              </span>
+              <span className="inkwell-hub-dropzone bg-white/40 dark:bg-panel-dark/40">Import backup (.zip)</span>
             </label>
           ) : null}
         </div>
