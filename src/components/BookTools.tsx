@@ -65,6 +65,9 @@ type Props = {
   onExportLibraryArchive?: () => void
   onImportProjectArchive?: (file: File) => void
   onExportTxt?: () => void
+  /** When set (build-time URL configured), shows upload full library to cloud. */
+  onCloudBackupLibrary?: () => void
+  cloudBackupBusy?: boolean
 }
 
 export function BookTools({
@@ -99,6 +102,8 @@ export function BookTools({
   onExportLibraryArchive,
   onImportProjectArchive,
   onExportTxt,
+  onCloudBackupLibrary,
+  cloudBackupBusy = false,
 }: Props) {
   const isNote = variant === 'note'
   const isFormat = workspaceRoute === 'format_print' || workspaceRoute === 'format_ebook'
@@ -831,6 +836,28 @@ export function BookTools({
                   Print export uses trim, margins, and manual page breaks. EPUB uses ebook theme and reflow. PDF adds a
                   printable TOC when enabled in Book structure.
                 </div>
+              </div>
+            </CollapsibleSection>
+          ) : null}
+
+          {onCloudBackupLibrary ? (
+            <CollapsibleSection
+              title="Cloud backup"
+              description="Upload the same full-library archive as “Export full library.”"
+              defaultOpen={false}
+            >
+              <div className="space-y-2 rounded-xl bg-parchment/60 p-4 dark:bg-panel-dark/50">
+                <button
+                  type="button"
+                  onClick={onCloudBackupLibrary}
+                  disabled={cloudBackupBusy}
+                  className="inkwell-hub-row-btn disabled:opacity-50"
+                >
+                  {cloudBackupBusy ? 'Uploading…' : 'Upload full library to cloud'}
+                </button>
+                <p className="text-xs text-ink/60 dark:text-ink-dark/60">
+                  Read-only backup to your HTTPS endpoint. See docs/CLOUD_SYNC.md for env variables and payload shape.
+                </p>
               </div>
             </CollapsibleSection>
           ) : null}

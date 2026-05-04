@@ -1,0 +1,360 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPersistentTwoWaySyncQueue, type SyncFlushContext } from '../cloudSync/syncQueue'
+import { getSessionSnapshot, signOutInkwellCloud, subscribeAuthSession } from './authSession'
+import { readCachedLibraryHead } from './libraryHeadCache'
+import { exportLibraryZip } from '../projectArchive'
+import { clearCachedLibraryHead, fetchRemoteLibraryHead, forcePushLibraryZip, pullLibraryIfNewer, pushLibraryZip } from './syncEngine'
+import { getInkwellSupabaseClient } from './supabaseClient'
+import type { InkwellSupabasePublicConfig } from './syncEnv'
+
+export type LibrarySyncStatus = 'idle' | 'syncing' | 'error' | 'offline' | 'conflict'
+
+export type LibrarySyncConflict = {
+  serverRev: string
+}
+
+type SyncOptions = {
+  supabaseConfig: InkwellSupabasePublicConfig | null
+  showToast: (message: string) => void
+  reloadApp: () => void
+}
+
+export function useInkwellLibrarySync(options: SyncOptions) {
+  const optsRef = useRef(options)
+
+  useEffect(() => {
+    optsRef.current = options
+  }, [options])
+
+  const [userEmail, setUserEmail] = useState<string | null>(null)
+  const [status, setStatus] = useState<LibrarySyncStatus>('idle')
+  const [statusDetail, setStatusDetail] = useState('')
+  const [conflict, setConflict] = useState<LibrarySyncConflict | null>(null)
+  /** True until user resolves a push conflict (keep local / use cloud). */
+  const unresolvedConflictRef = useRef(false)
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const initialPullKeyRef = useRef<string | null>(null)
+
+  const syncQueue = useMemo(
+    () =>
+      createPersistentTwoWaySyncQueue(
+        async (op) => {
+          const { supabaseConfig: cfg, showToast, reloadApp } = optsRef.current
+          if (!cfg) return { ok: false, error: 'Sync not configured' }
+          if (op.kind === 'push_project') return { ok: true }
+
+          const firstTry = op.attempts === 0
+
+          try {
+            if (op.kind === 'pull_library') {
+              const cached = await readCachedLibraryHead()
+              const bound = cached?.remoteRev ?? null
+              const r = await pullLibraryIfNewer(cfg, { ifNewerThanRev: bound })
+              if (!r.ok) {
+                if (firstTry) showToast(`Cloud pull failed: ${r.error}`)
+                return { ok: false, error: r.error }
+              }
+              if (r.noop) return { ok: true }
+              showToast(`Cloud library downloaded (${r.imported} projects)`)
+              reloadApp()
+              return { ok: true }
+            }
+
+            if (op.kind === 'push_library') {
+              const r = await pushLibraryZip(cfg)
+              if (r.ok) return { ok: true }
+              if ('conflict' in r && r.conflict) return { ok: 'conflict', serverRev: r.serverRev }
+              const err = 'error' in r ? r.error : 'Push failed'
+              if (firstTry) showToast(`Cloud push failed: ${err}`)
+              return { ok: false, error: err }
+            }
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : 'Sync failed'
+            if (firstTry) showToast(`Cloud sync failed: ${msg}`)
+            return { ok: false, error: msg }
+          }
+
+          return { ok: true }
+        },
+        {
+          onPushConflict: (serverRev) => {
+            unresolvedConflictRef.current = true
+            setConflict({ serverRev })
+            setStatus('conflict')
+            setStatusDetail('Library changed elsewhere since your last sync')
+          },
+        },
+      ),
+    [],
+  )
+
+  /** Chromium/Electron often report `navigator.onLine === false` while HTTPS to Supabase still works. */
+  const shouldAttemptNetworkSync = useCallback(() => {
+    if (typeof navigator === 'undefined') return true
+    if (navigator.onLine) return true
+    if (typeof window !== 'undefined' && window.inkwellDesktop) return true
+    return false
+  }, [])
+
+  const flushQueue = useCallback(async () => {
+    const ctx: SyncFlushContext = { now: Date.now(), online: shouldAttemptNetworkSync() }
+    if (!ctx.online) {
+      setStatus('offline')
+      setStatusDetail('Offline — sync when you reconnect')
+      return
+    }
+    if (!optsRef.current.supabaseConfig) return
+    if (!unresolvedConflictRef.current) {
+      setStatus('syncing')
+      setStatusDetail('Syncing…')
+    }
+    try {
+      await syncQueue.flush(ctx)
+      if (unresolvedConflictRef.current) {
+        setStatus('conflict')
+        setStatusDetail('Library changed elsewhere since your last sync')
+      } else {
+        setStatus('idle')
+        setStatusDetail('')
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Sync error'
+      if (!unresolvedConflictRef.current) {
+        setStatus('error')
+        setStatusDetail(msg)
+      }
+      optsRef.current.showToast(msg)
+    }
+  }, [shouldAttemptNetworkSync, syncQueue])
+
+  const scheduleIdleFlush = useCallback(() => {
+    if (!optsRef.current.supabaseConfig || !userEmail || unresolvedConflictRef.current) return
+    if (idleTimerRef.current != null) clearTimeout(idleTimerRef.current)
+    idleTimerRef.current = setTimeout(() => {
+      idleTimerRef.current = null
+      void (async () => {
+        await syncQueue.enqueue('push_library')
+        await flushQueue()
+      })()
+    }, 3500)
+  }, [flushQueue, userEmail, syncQueue])
+
+  useEffect(() => {
+    const cfg = options.supabaseConfig
+    if (!cfg) {
+      queueMicrotask(() => setUserEmail(null))
+      return
+    }
+    let cancelled = false
+    void getSessionSnapshot(cfg).then((s) => {
+      if (cancelled) return
+      queueMicrotask(() => {
+        if (!cancelled) setUserEmail(s.user?.email ?? null)
+      })
+    })
+    const unsub = subscribeAuthSession(cfg, (snap) => {
+      queueMicrotask(() => {
+        setUserEmail(snap.user?.email ?? null)
+        if (!snap.user) {
+          void clearCachedLibraryHead()
+          initialPullKeyRef.current = null
+          unresolvedConflictRef.current = false
+          setConflict(null)
+        }
+      })
+    })
+    return () => {
+      cancelled = true
+      unsub()
+    }
+  }, [options.supabaseConfig])
+
+  useEffect(() => {
+    if (!options.supabaseConfig || !userEmail) return
+    const onOnline = () => void flushQueue()
+    const onVis = () => {
+      if (document.visibilityState === 'visible') void flushQueue()
+    }
+    window.addEventListener('online', onOnline)
+    document.addEventListener('visibilitychange', onVis)
+    const t = window.setInterval(() => void flushQueue(), 90_000)
+    return () => {
+      window.removeEventListener('online', onOnline)
+      document.removeEventListener('visibilitychange', onVis)
+      window.clearInterval(t)
+    }
+  }, [options.supabaseConfig, userEmail, flushQueue])
+
+  useEffect(() => {
+    const cfg = options.supabaseConfig
+    if (!cfg || !userEmail) return
+    const key = userEmail
+    if (initialPullKeyRef.current === key) return
+    initialPullKeyRef.current = key
+    void (async () => {
+      await syncQueue.enqueue('pull_library')
+      await flushQueue()
+    })()
+  }, [options.supabaseConfig, userEmail, flushQueue, syncQueue])
+
+  const syncNow = useCallback(() => {
+    const { supabaseConfig, showToast } = optsRef.current
+    if (!supabaseConfig) {
+      showToast('Cloud sync is not enabled in this build (missing Vite env).')
+      return
+    }
+    if (!userEmail) {
+      showToast('Sign in to the cloud first (open sign-in from the bookshelf banner or Account).')
+      return
+    }
+    if (!shouldAttemptNetworkSync()) {
+      showToast('You appear offline — reconnect, then try Sync again.')
+      setStatus('offline')
+      setStatusDetail('Offline — sync when you reconnect')
+      return
+    }
+    void (async () => {
+      try {
+        await syncQueue.enqueue('pull_library')
+        await syncQueue.enqueue('push_library')
+        await flushQueue()
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Sync error'
+        showToast(msg)
+      }
+    })()
+  }, [flushQueue, syncQueue, userEmail, shouldAttemptNetworkSync])
+
+  const notifyLocalSaved = useCallback(() => {
+    if (!optsRef.current.supabaseConfig || !userEmail || unresolvedConflictRef.current) return
+    syncQueue.enqueue('push_library')
+    scheduleIdleFlush()
+  }, [userEmail, scheduleIdleFlush, syncQueue])
+
+  const resolveKeepLocal = useCallback(async () => {
+    const cfg = optsRef.current.supabaseConfig
+    if (!cfg || !conflict) return
+    setStatus('syncing')
+    setStatusDetail('Uploading…')
+    try {
+      const r = await forcePushLibraryZip(cfg)
+      if (!r.ok) {
+        optsRef.current.showToast('error' in r ? r.error : 'Could not update cloud')
+        setStatus('error')
+        return
+      }
+      unresolvedConflictRef.current = false
+      setConflict(null)
+      setStatus('idle')
+      setStatusDetail('')
+      optsRef.current.showToast('Cloud updated with this device’s library')
+    } catch (e) {
+      optsRef.current.showToast(e instanceof Error ? e.message : 'Force push failed')
+      setStatus('error')
+    }
+  }, [conflict])
+
+  const resolveUseCloud = useCallback(async () => {
+    const cfg = optsRef.current.supabaseConfig
+    if (!cfg || !conflict) return
+    setStatus('syncing')
+    setStatusDetail('Downloading…')
+    try {
+      const r = await pullLibraryIfNewer(cfg, { ifNewerThanRev: null })
+      if (!r.ok) {
+        optsRef.current.showToast(r.error)
+        setStatus('error')
+        return
+      }
+      if (r.noop) {
+        optsRef.current.showToast('Already up to date with cloud')
+      } else {
+        optsRef.current.showToast(`Replaced local library (${r.imported} projects)`)
+      }
+      unresolvedConflictRef.current = false
+      setConflict(null)
+      setStatus('idle')
+      setStatusDetail('')
+      if (!r.noop) optsRef.current.reloadApp()
+    } catch (e) {
+      optsRef.current.showToast(e instanceof Error ? e.message : 'Download failed')
+      setStatus('error')
+    }
+  }, [conflict])
+
+  const exportBothZips = useCallback(async () => {
+    const cfg = optsRef.current.supabaseConfig
+    if (!cfg || !conflict) return
+    try {
+      const localBlob = await exportLibraryZip()
+      const supabase = getInkwellSupabaseClient(cfg)
+      const head = await fetchRemoteLibraryHead(cfg)
+      if (!head.ok || !head.head?.storage_object_path) {
+        optsRef.current.showToast('Could not read cloud path')
+        return
+      }
+      const { data: fileData, error } = await supabase.storage.from('libraries').download(head.head.storage_object_path)
+      if (error || !fileData) {
+        optsRef.current.showToast(error?.message ?? 'Cloud download failed')
+        return
+      }
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(localBlob)
+      a.download = 'inkwell-local-conflict.zip'
+      a.click()
+      URL.revokeObjectURL(a.href)
+      const b = document.createElement('a')
+      b.href = URL.createObjectURL(fileData)
+      b.download = 'inkwell-cloud-conflict.zip'
+      b.click()
+      URL.revokeObjectURL(b.href)
+      optsRef.current.showToast('Saved both zip files')
+    } catch (e) {
+      optsRef.current.showToast(e instanceof Error ? e.message : 'Export failed')
+    }
+  }, [conflict])
+
+  const signOutCloudOnly = useCallback(async () => {
+    const cfg = optsRef.current.supabaseConfig
+    if (!cfg) return
+    await signOutInkwellCloud(cfg)
+    unresolvedConflictRef.current = false
+    setConflict(null)
+    setUserEmail(null)
+    setStatus('idle')
+    setStatusDetail('')
+  }, [])
+
+  const snapshot = useCallback(() => syncQueue.snapshot(), [syncQueue])
+
+  return useMemo(
+    () => ({
+      userEmail,
+      status,
+      statusDetail,
+      conflict,
+      syncNow,
+      notifyLocalSaved,
+      resolveKeepLocal,
+      resolveUseCloud,
+      exportBothZips,
+      signOutCloudOnly,
+      flushQueue,
+      snapshot,
+    }),
+    [
+      userEmail,
+      status,
+      statusDetail,
+      conflict,
+      syncNow,
+      notifyLocalSaved,
+      resolveKeepLocal,
+      resolveUseCloud,
+      exportBothZips,
+      signOutCloudOnly,
+      flushQueue,
+      snapshot,
+    ],
+  )
+}

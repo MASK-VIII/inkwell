@@ -4,6 +4,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleHelp,
+  Cloud,
   Download,
   Folders,
   LayoutTemplate,
@@ -33,6 +34,8 @@ import { BookTools } from './components/BookTools'
 import { FindReplaceModal } from './components/FindReplaceModal'
 import { GettingStartedTour } from './components/GettingStartedTour'
 import { SignInScreen } from './components/SignInScreen'
+import { SyncConflictModal } from './components/SyncConflictModal'
+import { SyncStatusStrip } from './components/SyncStatusStrip'
 import { ShelfLinkedNotesList } from './components/ShelfLinkedNotesList'
 import { StickyNotePopout } from './components/book-tools/StickyNotePopout'
 import { ManuscriptEditor } from './components/ManuscriptEditor'
@@ -59,6 +62,7 @@ import { NOTE_DRAG_MIME, NOTE_DRAG_TEXT_PREFIX, readShelfDragNoteId } from './li
 import {
   createBookProject,
   createNoteProject,
+  createShelfProjectWithMasterNote,
   defaultDoc,
   deleteProject,
   deriveNoteMetaTitle,
@@ -102,7 +106,16 @@ import { buildWebHtmlDocument } from './lib/export/webHtml'
 import { buildKdpPdf } from './lib/export/pdfKdp'
 import { buildEpub, epubFilename } from './lib/export/epub'
 import { importDocxToChapters } from './lib/import/docx'
-import { exportLibraryZip, exportProjectZip, importInkwellArchive } from './lib/projectArchive'
+import { isCloudBackupConfigured, uploadFullLibraryCloudBackup } from './lib/cloudBackup'
+import { signInWithEmailPassword } from './lib/sync/authSession'
+import { getInkwellSupabasePublicConfig, isInkwellCloudSyncConfigured } from './lib/sync/syncEnv'
+import { useInkwellLibrarySync } from './lib/sync/useInkwellLibrarySync'
+import {
+  exportLibraryZip,
+  exportProjectZip,
+  importInkwellArchive,
+  type ImportArchiveResult,
+} from './lib/projectArchive'
 import { mergeDocContents, splitDocAtTopLevelIndex } from './lib/chapterSplit'
 import { applyThemePreset, type ThemePresetId } from './lib/themePresets'
 import { countWordsInDoc } from './lib/wordCount'
@@ -195,13 +208,21 @@ function readInitialDarkMode(): boolean {
 
 function readRouteFromHash(): Route {
   const hash = (typeof window === 'undefined' ? '' : window.location.hash).replace(/^#/, '')
-  if (hash === 'signin' || hash === 'welcome') return 'signin'
+  if (hash === 'signin' || hash === 'welcome' || hash === 'cloud-signin') return 'signin'
   if (hash === 'bookshelf') return 'bookshelf'
   if (hash === 'format/print' || hash === 'review/print') return 'format_print'
   if (hash === 'format/ebook' || hash === 'review/ebook') return 'format_ebook'
   if (hash === 'publish') return 'publish'
   if (hash === 'export') return 'note_export'
-  if (hash === 'write' || hash === '') return 'write'
+  if (hash === '') {
+    // Avoid booting into a random open project when the URL has no hash (common for `npm run dev`).
+    if (typeof window !== 'undefined' && readBootstrap().welcomeDone && !readOpenProjectIdFromLocation()) {
+      if (window.location.hash !== '#bookshelf') window.history.replaceState(null, '', '#bookshelf')
+      return 'bookshelf'
+    }
+    return 'write'
+  }
+  if (hash === 'write') return 'write'
   return 'write'
 }
 
@@ -248,9 +269,18 @@ function readInitialAppRoute(): Route {
     }
     return 'signin'
   }
-  if (window.location.hash === '#welcome' || window.location.hash === '#signin') {
-    window.history.replaceState(null, '', routeToHash('bookshelf'))
-    return 'bookshelf'
+  if (
+    window.location.hash === '#welcome' ||
+    window.location.hash === '#signin' ||
+    window.location.hash === '#cloud-signin'
+  ) {
+    const allowCloudSignInWhileWelcomeDone =
+      (window.location.hash === '#signin' || window.location.hash === '#cloud-signin') &&
+      isInkwellCloudSyncConfigured()
+    if (!allowCloudSignInWhileWelcomeDone) {
+      window.history.replaceState(null, '', routeToHash('bookshelf'))
+      return 'bookshelf'
+    }
   }
   return readRouteFromHash()
 }
@@ -305,6 +335,7 @@ export default function App() {
   const [currentId, setCurrentId] = useState<number | null>(() => boot.currentId)
   const [ebookEditOpen, setEbookEditOpen] = useState(false)
   const [bookToolsOpen, setBookToolsOpen] = useState(false)
+  const [cloudBackupBusy, setCloudBackupBusy] = useState(false)
   const [chaptersAsideCollapsed, setChaptersAsideCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false
     try {
@@ -337,7 +368,9 @@ export default function App() {
   const lastDeletedProjectRef = useRef<{ blob: InkwellProject } | null>(null)
   const newProjectMenuRef = useRef<HTMLDivElement | null>(null)
   const docxShelfInputRef = useRef<HTMLInputElement | null>(null)
+  const libraryShelfInputRef = useRef<HTMLInputElement | null>(null)
   const [newProjectMenuOpen, setNewProjectMenuOpen] = useState(false)
+  const [shelfNewImportSubmenuOpen, setShelfNewImportSubmenuOpen] = useState(false)
   const shelfAccountMenuRef = useRef<HTMLDivElement | null>(null)
   const [shelfAccountMenuOpen, setShelfAccountMenuOpen] = useState(false)
   const [stickNoteId, setStickNoteId] = useState<string | null>(null)
@@ -366,6 +399,9 @@ export default function App() {
   const historyTimerRef = useRef<number | null>(null)
   const historyLastRecordAtRef = useRef<number>(0)
   const persistIdleTimerRef = useRef<number | null>(null)
+  const cloudSyncNotifyRef = useRef<() => void>(() => {})
+  const cloudSignOutRef = useRef<(() => Promise<void>) | null>(null)
+  const librarySyncMenuRef = useRef<{ syncNow: () => void }>({ syncNow() {} })
   const toastTimeoutRef = useRef<number | null>(null)
   const [historyRev, setHistoryRev] = useState(0)
   /** Bumps when in-place manuscript tree changes but `currentId` can stay the same (DOCX import, history restore). Forces TipTap to remount — otherwise useEditor([manuscriptId]) keeps stale ProseMirror doc and can white-screen. */
@@ -543,6 +579,14 @@ export default function App() {
     [tryDiscardFormatDraftsIfNeeded],
   )
 
+  const navigateToCloudSignIn = useCallback(() => {
+    const from = routeRef.current
+    if (!tryDiscardFormatDraftsIfNeeded(from, 'signin')) return
+    routeRef.current = 'signin'
+    setRouteState('signin')
+    if (typeof window !== 'undefined') window.location.hash = '#cloud-signin'
+  }, [tryDiscardFormatDraftsIfNeeded])
+
   useLayoutEffect(() => {
     const normalized = normalizeRouteForProject(route, project)
     if (normalized === route) return
@@ -632,7 +676,12 @@ export default function App() {
   useEffect(() => {
     const onHash = () => {
       let raw = readRouteFromHash()
-      if (raw === 'signin' && readBootstrap().welcomeDone && !devIsForceSignInActive()) {
+      if (
+        raw === 'signin' &&
+        readBootstrap().welcomeDone &&
+        !devIsForceSignInActive() &&
+        !isInkwellCloudSyncConfigured()
+      ) {
         raw = 'bookshelf'
         window.history.replaceState(null, '', routeToHash('bookshelf'))
       }
@@ -658,10 +707,16 @@ export default function App() {
     if (!newProjectMenuOpen) return
     const onDocMouseDown = (e: MouseEvent) => {
       const el = newProjectMenuRef.current
-      if (el && !el.contains(e.target as Node)) setNewProjectMenuOpen(false)
+      if (el && !el.contains(e.target as Node)) {
+        setNewProjectMenuOpen(false)
+        setShelfNewImportSubmenuOpen(false)
+      }
     }
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setNewProjectMenuOpen(false)
+      if (e.key === 'Escape') {
+        setNewProjectMenuOpen(false)
+        setShelfNewImportSubmenuOpen(false)
+      }
     }
     document.addEventListener('mousedown', onDocMouseDown)
     window.addEventListener('keydown', onKey)
@@ -739,6 +794,7 @@ export default function App() {
   const onBookshelfSignOut = useCallback(() => {
     syncPersistedState()
     devClearForceSignInFlag()
+    void cloudSignOutRef.current?.()
     markSignedOut()
     setGettingStartedTourOpen(false)
     setShelfAccountMenuOpen(false)
@@ -752,6 +808,7 @@ export default function App() {
     persistIdleTimerRef.current = window.setTimeout(() => {
       persistIdleTimerRef.current = null
       setProject((prev) => saveProject(prev))
+      cloudSyncNotifyRef.current()
     }, PERSIST_IDLE_MS)
   }, [])
 
@@ -1155,13 +1212,13 @@ export default function App() {
     showToast('New chapter created')
   }
 
-  const toggleTheme = () => {
+  const toggleTheme = useCallback(() => {
     setDarkMode((prev) => {
       const next = !prev
       localStorage.setItem(THEME_KEY, next ? 'dark' : 'light')
       return next
     })
-  }
+  }, [])
 
   const exportPdfKdp = async () => {
     try {
@@ -1244,13 +1301,24 @@ export default function App() {
     }
   }, [showToast])
 
+  const uploadLibraryCloudBackup = useCallback(async () => {
+    if (!isCloudBackupConfigured()) return
+    setCloudBackupBusy(true)
+    try {
+      const r = await uploadFullLibraryCloudBackup()
+      showToast(r.ok ? 'Library backup uploaded' : r.error)
+    } finally {
+      setCloudBackupBusy(false)
+    }
+  }, [showToast])
+
   const importArchiveFile = useCallback(
-    async (file: File) => {
+    async (file: File): Promise<ImportArchiveResult | null> => {
       try {
         const res = await importInkwellArchive(file)
         if (!res.ok) {
           showToast(res.error)
-          return
+          return res
         }
         if (res.mode === 'single') {
           syncPersistedState()
@@ -1259,14 +1327,148 @@ export default function App() {
           setEditorEpoch((e) => e + 1)
           showToast('Imported book')
         } else {
+          syncPersistedState()
           showToast(`Imported ${res.imported} projects`)
         }
+        return res
       } catch {
         showToast('Import failed')
+        return null
       }
     },
     [showToast, syncPersistedState],
   )
+
+  const importFromNativeDialog = useCallback(async () => {
+    const bridge = typeof window !== 'undefined' ? window.inkwellDesktop : undefined
+    const picked = await bridge?.importArchiveDialog?.()
+    if (!picked?.buffer) return
+    const file = new File([picked.buffer], picked.name || 'backup.inkwell', { type: 'application/zip' })
+    const res = await importArchiveFile(file)
+    if (res?.ok && res.mode === 'library') window.location.reload()
+  }, [importArchiveFile])
+
+  const runShelfFullLibraryImport = useCallback(async () => {
+    setShelfNewImportSubmenuOpen(false)
+    setNewProjectMenuOpen(false)
+    const bridge = typeof window !== 'undefined' ? window.inkwellDesktop : undefined
+    if (bridge?.importArchiveDialog) {
+      try {
+        const picked = await bridge.importArchiveDialog()
+        if (!picked?.buffer) return
+        const file = new File([picked.buffer], picked.name || 'inkwell-library-backup.zip', {
+          type: 'application/zip',
+        })
+        const res = await importArchiveFile(file)
+        if (res?.ok && res.mode === 'library') window.location.reload()
+      } catch {
+        showToast('Import failed')
+      }
+      return
+    }
+    libraryShelfInputRef.current?.click()
+  }, [importArchiveFile, showToast])
+
+  const exportBookArchiveDesktop = useCallback(async () => {
+    const bridge = typeof window !== 'undefined' ? window.inkwellDesktop : undefined
+    if (!bridge?.saveBookBackup) {
+      await exportBookArchive()
+      return
+    }
+    try {
+      const blob = await exportProjectZip(project)
+      const buf = await blob.arrayBuffer()
+      const r = await bridge.saveBookBackup(slugDownload(project.book.title.trim() || 'book'), buf)
+      if (r?.ok) showToast('Book backup saved')
+      else showToast('Export canceled')
+    } catch {
+      showToast('Backup export failed')
+    }
+  }, [project, showToast, exportBookArchive])
+
+  const exportFullLibraryDesktop = useCallback(async () => {
+    const bridge = typeof window !== 'undefined' ? window.inkwellDesktop : undefined
+    if (!bridge?.saveLibraryBackup) {
+      await exportFullLibrary()
+      return
+    }
+    try {
+      const blob = await exportLibraryZip()
+      const buf = await blob.arrayBuffer()
+      const r = await bridge.saveLibraryBackup(buf)
+      if (r?.ok) showToast('Library backup saved')
+      else showToast('Export canceled')
+    } catch {
+      showToast('Library export failed')
+    }
+  }, [showToast, exportFullLibrary])
+
+  const runShelfFullLibraryExport = useCallback(async () => {
+    setShelfNewImportSubmenuOpen(false)
+    setNewProjectMenuOpen(false)
+    await exportFullLibraryDesktop()
+  }, [exportFullLibraryDesktop])
+
+  const consumeDesktopPendingImport = useCallback(async () => {
+    const bridge = typeof window !== 'undefined' ? window.inkwellDesktop : undefined
+    const picked = await bridge?.takePendingImport?.()
+    if (!picked?.buffer) return
+    const file = new File([picked.buffer], picked.name || 'backup.inkwell', { type: 'application/zip' })
+    const res = await importArchiveFile(file)
+    if (res?.ok && res.mode === 'library') window.location.reload()
+  }, [importArchiveFile])
+
+  useEffect(() => {
+    const bridge = typeof window !== 'undefined' ? window.inkwellDesktop : undefined
+    if (!bridge?.onMenuAction) return
+    const off = bridge.onMenuAction((action) => {
+      switch (action) {
+        case 'import-backup':
+          void importFromNativeDialog()
+          break
+        case 'export-book-backup':
+          void exportBookArchiveDesktop()
+          break
+        case 'export-library-backup':
+          void exportFullLibraryDesktop()
+          break
+        case 'toggle-theme':
+          toggleTheme()
+          break
+        case 'sync-library-now':
+          librarySyncMenuRef.current.syncNow()
+          break
+        default:
+          break
+      }
+    })
+    return off
+  }, [
+    importFromNativeDialog,
+    exportBookArchiveDesktop,
+    exportFullLibraryDesktop,
+    toggleTheme,
+  ])
+
+  useEffect(() => {
+    const bridge = typeof window !== 'undefined' ? window.inkwellDesktop : undefined
+    if (!bridge?.takePendingImport) return
+    const boot = window.setTimeout(() => {
+      void consumeDesktopPendingImport()
+    }, 0)
+    if (!bridge.onPendingImport) {
+      return () => window.clearTimeout(boot)
+    }
+    const off = bridge.onPendingImport(() => {
+      window.setTimeout(() => {
+        void consumeDesktopPendingImport()
+      }, 0)
+    })
+    return () => {
+      window.clearTimeout(boot)
+      off()
+    }
+  }, [consumeDesktopPendingImport])
 
   const noteWebDoc = useMemo(() => chapters[0]?.content ?? null, [chapters])
 
@@ -1608,11 +1810,10 @@ export default function App() {
 
   const spawnProjectOnShelf = useCallback(() => {
     syncPersistedState()
-    const p = createNoteProject({ activate: false })
-    pinProjectNote(p.id)
+    const p = createShelfProjectWithMasterNote()
+    openProject(p.id)
     setShelfUiTick((n) => n + 1)
-    showToast('Project added to shelf')
-  }, [syncPersistedState, showToast])
+  }, [syncPersistedState, openProject])
 
   const spawnNoteOnShelf = useCallback(() => {
     syncPersistedState()
@@ -2063,6 +2264,52 @@ export default function App() {
     mergeChapterWithNext,
   ])
 
+  const supabasePublicConfig = useMemo(() => getInkwellSupabasePublicConfig(), [])
+  const librarySyncOptions = useMemo(
+    () => ({
+      supabaseConfig: supabasePublicConfig,
+      showToast: (m: string) => showToast(m),
+      reloadApp: () => window.location.reload(),
+    }),
+    [supabasePublicConfig, showToast],
+  )
+  const inkwellLibrarySync = useInkwellLibrarySync(librarySyncOptions)
+  const [cloudSignInBusy, setCloudSignInBusy] = useState(false)
+  const [syncConflictBusy, setSyncConflictBusy] = useState(false)
+
+  useEffect(() => {
+    cloudSyncNotifyRef.current = () => {
+      if (supabasePublicConfig) inkwellLibrarySync.notifyLocalSaved()
+    }
+  }, [supabasePublicConfig, inkwellLibrarySync.notifyLocalSaved])
+
+  useEffect(() => {
+    librarySyncMenuRef.current = { syncNow: inkwellLibrarySync.syncNow }
+  }, [inkwellLibrarySync.syncNow])
+
+  useEffect(() => {
+    cloudSignOutRef.current = inkwellLibrarySync.signOutCloudOnly
+  }, [inkwellLibrarySync.signOutCloudOnly])
+
+  const signInWithPasswordFromSignIn = useCallback(
+    async (email: string, password: string) => {
+      if (!supabasePublicConfig) return { ok: false as const, error: 'Cloud sync is not configured' }
+      setCloudSignInBusy(true)
+      try {
+        const r = await signInWithEmailPassword(supabasePublicConfig, email, password)
+        if (r.ok) {
+          devClearForceSignInFlag()
+          markSignInComplete()
+          navigateRoute('bookshelf')
+        }
+        return r
+      } finally {
+        setCloudSignInBusy(false)
+      }
+    },
+    [supabasePublicConfig, navigateRoute],
+  )
+
   return (
     <div className="flex h-full min-h-0 flex-col bg-parchment text-ink transition-colors dark:bg-panel-dark dark:text-ink-dark">
       {route === 'signin' ? (
@@ -2074,6 +2321,16 @@ export default function App() {
             markSignInComplete()
             navigateRoute('bookshelf')
           }}
+          cloudSync={
+            isInkwellCloudSyncConfigured() && supabasePublicConfig ?
+              {
+                sessionEmail: inkwellLibrarySync.userEmail,
+                cloudSignInBusy,
+                onSignInWithEmailPassword: signInWithPasswordFromSignIn,
+                onSignOutCloud: () => void inkwellLibrarySync.signOutCloudOnly(),
+              }
+            : undefined
+          }
         />
       ) : route === 'bookshelf' ? (
         <div className="flex min-h-0 flex-1 flex-col">
@@ -2115,6 +2372,8 @@ export default function App() {
                     type="button"
                     onClick={() => {
                       setShelfAccountMenuOpen(false)
+                      setNewProjectMenuOpen(false)
+                      setShelfNewImportSubmenuOpen(false)
                       toggleTheme()
                     }}
                     className="flex h-11 w-11 items-center justify-center rounded-3xl border border-dust bg-white/70 text-ink transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
@@ -2127,6 +2386,8 @@ export default function App() {
                     type="button"
                     onClick={() => {
                       setShelfAccountMenuOpen(false)
+                      setNewProjectMenuOpen(false)
+                      setShelfNewImportSubmenuOpen(false)
                       setGettingStartedTourOpen(true)
                     }}
                     className="flex h-11 w-11 items-center justify-center rounded-3xl border border-dust bg-white/70 text-ink transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
@@ -2151,6 +2412,7 @@ export default function App() {
                       setEbookEditOpen(false)
                       navigateRoute('write')
                       setNewProjectMenuOpen(false)
+                      setShelfNewImportSubmenuOpen(false)
                       await importDocxIntoProject(
                         file,
                         p,
@@ -2158,12 +2420,29 @@ export default function App() {
                       )
                     }}
                   />
+                  <input
+                    ref={libraryShelfInputRef}
+                    type="file"
+                    accept=".zip,application/zip"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0] ?? null
+                      e.currentTarget.value = ''
+                      if (!file) return
+                      const res = await importArchiveFile(file)
+                      if (res?.ok && res.mode === 'library') window.location.reload()
+                    }}
+                  />
                   <div className="relative" ref={newProjectMenuRef}>
                     <button
                       type="button"
                       onClick={() => {
                         setShelfAccountMenuOpen(false)
-                        setNewProjectMenuOpen((v) => !v)
+                        setNewProjectMenuOpen((v) => {
+                          const next = !v
+                          if (!next) setShelfNewImportSubmenuOpen(false)
+                          return next
+                        })
                       }}
                       className="flex items-center gap-2 rounded-3xl bg-ink px-4 py-2.5 text-sm font-semibold text-parchment hover:bg-walnut dark:bg-cream dark:text-ink dark:hover:bg-accent-warm"
                       aria-expanded={newProjectMenuOpen}
@@ -2176,7 +2455,7 @@ export default function App() {
                     {newProjectMenuOpen ? (
                       <div
                         role="menu"
-                        className="absolute right-0 top-full z-50 mt-2 min-w-[11rem] overflow-hidden rounded-2xl border border-dust bg-white py-1 shadow-xl dark:border-border-dark dark:bg-panel-dark"
+                        className="absolute right-0 top-full z-50 mt-2 min-w-[13.5rem] overflow-visible rounded-2xl border border-dust bg-white py-1 shadow-xl dark:border-border-dark dark:bg-panel-dark"
                       >
                         <button
                           type="button"
@@ -2184,22 +2463,7 @@ export default function App() {
                           className="block w-full px-4 py-2.5 text-left text-sm font-medium text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
                           onClick={() => {
                             setNewProjectMenuOpen(false)
-                            syncPersistedState()
-                            const p = createNoteProject()
-                            setProject(p)
-                            setCurrentId(p.chapters[0]?.id ?? null)
-                            setEbookEditOpen(false)
-                            navigateRoute('write')
-                          }}
-                        >
-                          Note
-                        </button>
-                        <button
-                          type="button"
-                          role="menuitem"
-                          className="block w-full px-4 py-2.5 text-left text-sm font-medium text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
-                          onClick={() => {
-                            setNewProjectMenuOpen(false)
+                            setShelfNewImportSubmenuOpen(false)
                             syncPersistedState()
                             const p = createBookProject()
                             setProject(p)
@@ -2216,11 +2480,80 @@ export default function App() {
                           className="block w-full px-4 py-2.5 text-left text-sm font-medium text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
                           onClick={() => {
                             setNewProjectMenuOpen(false)
-                            docxShelfInputRef.current?.click()
+                            setShelfNewImportSubmenuOpen(false)
+                            syncPersistedState()
+                            const p = createShelfProjectWithMasterNote()
+                            openProject(p.id)
+                            setShelfUiTick((n) => n + 1)
                           }}
                         >
-                          Import DOCX…
+                          Project
                         </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="block w-full px-4 py-2.5 text-left text-sm font-medium text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
+                          onClick={() => {
+                            setNewProjectMenuOpen(false)
+                            setShelfNewImportSubmenuOpen(false)
+                            syncPersistedState()
+                            const p = createNoteProject()
+                            setProject(p)
+                            setCurrentId(p.chapters[0]?.id ?? null)
+                            setEbookEditOpen(false)
+                            navigateRoute('write')
+                          }}
+                        >
+                          Note
+                        </button>
+                        <div className="relative">
+                          <button
+                            type="button"
+                            role="menuitem"
+                            aria-expanded={shelfNewImportSubmenuOpen}
+                            aria-haspopup="menu"
+                            className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left text-sm font-medium text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
+                            onClick={() => setShelfNewImportSubmenuOpen((v) => !v)}
+                          >
+                            Import / export
+                            <ChevronRight className="h-4 w-4 shrink-0 opacity-70" strokeWidth={2.25} aria-hidden />
+                          </button>
+                          {shelfNewImportSubmenuOpen ? (
+                            <div
+                              role="menu"
+                              className="absolute right-full top-0 z-[60] mr-1 min-w-[13.5rem] overflow-hidden rounded-2xl border border-dust bg-white py-1 shadow-xl dark:border-border-dark dark:bg-panel-dark"
+                            >
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className="block w-full px-4 py-2.5 text-left text-sm font-medium text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
+                                onClick={() => {
+                                  setShelfNewImportSubmenuOpen(false)
+                                  setNewProjectMenuOpen(false)
+                                  docxShelfInputRef.current?.click()
+                                }}
+                              >
+                                Import docx...
+                              </button>
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className="block w-full px-4 py-2.5 text-left text-sm font-medium text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
+                                onClick={() => void runShelfFullLibraryImport()}
+                              >
+                                Import full library...
+                              </button>
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className="block w-full px-4 py-2.5 text-left text-sm font-medium text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
+                                onClick={() => void runShelfFullLibraryExport()}
+                              >
+                                Export full library...
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
                       </div>
                     ) : null}
                   </div>
@@ -2229,6 +2562,7 @@ export default function App() {
                       type="button"
                       onClick={() => {
                         setNewProjectMenuOpen(false)
+                        setShelfNewImportSubmenuOpen(false)
                         setShelfAccountMenuOpen((v) => !v)
                       }}
                       className="flex h-11 w-11 shrink-0 items-center justify-center rounded-3xl bg-gradient-to-br from-ink to-walnut text-[10px] font-bold uppercase tracking-[0.14em] text-parchment shadow-md shadow-ink/20 ring-1 ring-ink/25 outline-none transition-[transform,box-shadow,filter] hover:shadow-lg hover:shadow-ink/25 hover:brightness-[1.06] active:scale-[0.97] focus-visible:ring-2 focus-visible:ring-walnut/45 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:from-ink dark:to-walnut dark:text-ink-dark dark:shadow-black/35 dark:ring-cream/40 dark:hover:brightness-110 dark:focus-visible:ring-cream/55 dark:focus-visible:ring-offset-panel-dark"
@@ -2246,12 +2580,16 @@ export default function App() {
                       >
                         <div className="flex gap-3 px-4 pb-3 pt-3">
                           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-ink to-walnut text-xs font-bold uppercase tracking-[0.12em] text-parchment shadow-sm ring-1 ring-ink/20 dark:text-ink-dark dark:ring-cream/40">
-                            IW
+                            {inkwellLibrarySync.userEmail ?
+                              inkwellLibrarySync.userEmail.slice(0, 1).toUpperCase()
+                            : 'IW'}
                           </div>
                           <div className="min-w-0 flex-1 pt-0.5">
                             <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50">Inkwell writer</p>
                             <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">
-                              Signed in on this device only
+                              {inkwellLibrarySync.userEmail ?
+                                inkwellLibrarySync.userEmail
+                              : 'Signed in on this device only'}
                             </p>
                           </div>
                         </div>
@@ -2265,6 +2603,32 @@ export default function App() {
                           >
                             My account
                           </button>
+                          {isInkwellCloudSyncConfigured() && inkwellLibrarySync.userEmail ? (
+                            <button
+                              type="button"
+                              role="menuitem"
+                              className="block w-full rounded-lg px-3 py-2 text-left text-sm text-zinc-900 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-800/80"
+                              onClick={() => {
+                                setShelfAccountMenuOpen(false)
+                                inkwellLibrarySync.syncNow()
+                              }}
+                            >
+                              Sync library now
+                            </button>
+                          ) : null}
+                          {isInkwellCloudSyncConfigured() && inkwellLibrarySync.userEmail ? (
+                            <button
+                              type="button"
+                              role="menuitem"
+                              className="block w-full rounded-lg px-3 py-2 text-left text-sm text-zinc-900 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-800/80"
+                              onClick={() => {
+                                setShelfAccountMenuOpen(false)
+                                void inkwellLibrarySync.signOutCloudOnly()
+                              }}
+                            >
+                              Sign out of cloud only
+                            </button>
+                          ) : null}
                           <button
                             type="button"
                             role="menuitem"
@@ -2282,12 +2646,57 @@ export default function App() {
             </div>
           </header>
 
+          {isInkwellCloudSyncConfigured() ? (
+            <SyncStatusStrip
+              status={inkwellLibrarySync.status}
+              detail={inkwellLibrarySync.statusDetail}
+              signedIn={Boolean(inkwellLibrarySync.userEmail)}
+              onSyncNow={inkwellLibrarySync.userEmail ? inkwellLibrarySync.syncNow : undefined}
+            />
+          ) : null}
+
+          {isInkwellCloudSyncConfigured() && !inkwellLibrarySync.userEmail ? (
+            <div
+              role="region"
+              aria-label="Cloud library sync"
+              className="border-b border-sky-200/90 bg-sky-50/95 px-4 py-3 dark:border-sky-900/50 dark:bg-sky-950/45 sm:px-8"
+            >
+              <div className="mx-auto flex max-w-screen-2xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                <div className="flex min-w-0 items-start gap-2.5 text-sm text-sky-950 dark:text-sky-100/95">
+                  <Cloud
+                    className="mt-0.5 h-5 w-5 shrink-0 text-sky-600 dark:text-sky-400"
+                    strokeWidth={2}
+                    aria-hidden
+                  />
+                  <p className="min-w-0 leading-snug">
+                    <span className="font-semibold">Sign in to sync</span>
+                    <span className="text-sky-900/85 dark:text-sky-200/85">
+                      {' '}
+                      Open the cloud sign-in screen to use the same library as the web app.
+                    </span>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShelfAccountMenuOpen(false)
+                    navigateToCloudSignIn()
+                  }}
+                  className="shrink-0 self-start rounded-full bg-sky-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-sky-800 sm:self-auto dark:bg-sky-500 dark:text-sky-950 dark:hover:bg-sky-400"
+                >
+                  Open sign-in
+                </button>
+              </div>
+            </div>
+          ) : null}
+
           <div className="inkwell-bookshelf mx-auto flex w-full max-w-screen-2xl flex-1 flex-col px-4 pb-6 sm:px-8 sm:pb-10">
             <div className="flex justify-center py-6 sm:py-8">
               <button
                 type="button"
                 onClick={() => {
                   setNewProjectMenuOpen(false)
+                  setShelfNewImportSubmenuOpen(false)
                   syncPersistedState()
                   const p = createNoteProject()
                   setProject(p)
@@ -2327,8 +2736,9 @@ export default function App() {
               {shelfBooks.length === 0 ? (
                 <div className="col-span-full flex min-h-[11rem] flex-col items-center justify-center gap-3 px-4 text-center sm:min-h-[12rem]">
                   <p className="max-w-lg text-sm leading-relaxed text-ink/65 dark:text-ink-dark/60">
-                    No books yet. Click <strong>New → Book</strong> to start your first one, or{' '}
-                    <strong>Import DOCX…</strong> to bring in a draft.
+                    No books yet. Click <strong>New → Book</strong> to start your first one, use{' '}
+                    <strong>New → Project</strong> for a project hub, or{' '}
+                    <strong>New → Import / export → Import docx…</strong> to bring in a draft.
                   </p>
                 </div>
               ) : null}
@@ -2564,8 +2974,9 @@ export default function App() {
               {shelfProjectNotes.length === 0 ? (
                 <div className="col-span-full flex min-h-[11rem] flex-col items-center justify-center gap-3 px-4 text-center sm:min-h-[12rem]">
                   <p className="max-w-lg text-sm leading-relaxed text-ink/65 dark:text-ink-dark/60">
-                    Projects appear automatically when a note has other notes attached under it. Drag a note onto
-                    another note to create one.
+                    Use <strong>New → Project</strong> or the <strong>+</strong> button for a new project hub. Projects
+                    also appear when a note has other notes attached under it — drag a note onto another note to
+                    create one.
                   </p>
                 </div>
               ) : null}
@@ -3345,6 +3756,10 @@ export default function App() {
                     onCopyFormattedHtml={() => void copyFormattedHtmlForWeb()}
                     onCopyMarkdown={() => void copyMarkdownForWeb()}
                     onDownloadHtml={() => downloadNoteWebHtml()}
+                    onCloudBackupLibrary={
+                      isCloudBackupConfigured() ? () => void uploadLibraryCloudBackup() : undefined
+                    }
+                    cloudBackupBusy={cloudBackupBusy}
                   />
                 </Suspense>
               ) : route === 'publish' && !isNote ? (
@@ -3364,6 +3779,10 @@ export default function App() {
                       setEbookEditOpen(false)
                       navigateRoute('format_ebook')
                     }}
+                    onCloudBackupLibrary={
+                      isCloudBackupConfigured() ? () => void uploadLibraryCloudBackup() : undefined
+                    }
+                    cloudBackupBusy={cloudBackupBusy}
                   />
                 </Suspense>
               ) : current ? (
@@ -3491,6 +3910,10 @@ export default function App() {
               exportTxt()
               setBookToolsOpen(false)
             }}
+            onCloudBackupLibrary={
+              isCloudBackupConfigured() ? () => void uploadLibraryCloudBackup() : undefined
+            }
+            cloudBackupBusy={cloudBackupBusy}
           />
 
           <FindReplaceModal
@@ -3528,6 +3951,25 @@ export default function App() {
           )}
         </>
       )}
+      {isInkwellCloudSyncConfigured() && inkwellLibrarySync.conflict ? (
+        <SyncConflictModal
+          open
+          serverRev={inkwellLibrarySync.conflict.serverRev}
+          busy={syncConflictBusy}
+          onKeepLocal={() => {
+            setSyncConflictBusy(true)
+            void inkwellLibrarySync.resolveKeepLocal().finally(() => setSyncConflictBusy(false))
+          }}
+          onUseCloud={() => {
+            setSyncConflictBusy(true)
+            void inkwellLibrarySync.resolveUseCloud().finally(() => setSyncConflictBusy(false))
+          }}
+          onExportBoth={() => {
+            setSyncConflictBusy(true)
+            void inkwellLibrarySync.exportBothZips().finally(() => setSyncConflictBusy(false))
+          }}
+        />
+      ) : null}
       <GettingStartedTour open={gettingStartedTourOpen} onClose={closeGettingStartedTour} />
     </div>
   )

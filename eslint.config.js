@@ -19,4 +19,11 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  {
+    files: ['src/lib/sync/useInkwellLibrarySync.ts'],
+    rules: {
+      // Queue processor closes over optsRef; refs are only read when dequeue runs (async), not for render.
+      'react-hooks/refs': 'off',
+    },
+  },
 ])

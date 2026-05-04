@@ -12,6 +12,8 @@ export type PublishHubProps = {
   onImportProjectArchive?: (file: File) => void
   onOpenFormatPrint?: () => void
   onOpenFormatEbook?: () => void
+  onCloudBackupLibrary?: () => void
+  cloudBackupBusy?: boolean
 }
 
 function checklistRow(label: string, ok: boolean, value: string) {
@@ -47,6 +49,8 @@ export function PublishHub({
   onImportProjectArchive,
   onOpenFormatPrint,
   onOpenFormatEbook,
+  onCloudBackupLibrary,
+  cloudBackupBusy = false,
 }: PublishHubProps) {
   const titleOk = Boolean(book.title?.trim())
   const authorOk = Boolean(book.authorName?.trim())
@@ -152,6 +156,16 @@ export function PublishHub({
           {onExportLibraryArchive ? (
             <button type="button" onClick={onExportLibraryArchive} className="inkwell-hub-row-btn">
               Export full library (.zip)
+            </button>
+          ) : null}
+          {onCloudBackupLibrary ? (
+            <button
+              type="button"
+              onClick={onCloudBackupLibrary}
+              disabled={cloudBackupBusy}
+              className="inkwell-hub-row-btn disabled:opacity-50"
+            >
+              {cloudBackupBusy ? 'Uploading…' : 'Upload full library to cloud'}
             </button>
           ) : null}
           {onImportProjectArchive ? (

@@ -1,0 +1,39 @@
+# Unsigned desktop installers for smoke testing (Windows + macOS).
+# For release signing, see docs/DESKTOP.md and wire repository secrets + CSC env vars.
+name: Desktop build
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build desktop bundle
+        run: npm run build:desktop
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: inkwell-desktop-${{ matrix.os }}
+          path: release/*

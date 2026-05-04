@@ -10,6 +10,8 @@ export type NoteExportHubProps = {
   onCopyFormattedHtml: () => void
   onCopyMarkdown: () => void
   onDownloadHtml: () => void
+  onCloudBackupLibrary?: () => void
+  cloudBackupBusy?: boolean
 }
 
 function readinessRow(label: string, ok: boolean, value: string) {
@@ -45,6 +47,8 @@ export function NoteExportHub({
   onCopyFormattedHtml,
   onCopyMarkdown,
   onDownloadHtml,
+  onCloudBackupLibrary,
+  cloudBackupBusy = false,
 }: NoteExportHubProps) {
   const titleOk = Boolean(noteTitle?.trim()) && noteTitle.trim() !== 'Untitled note'
   const wordsLabel = wordCount === 1 ? '1 word' : `${wordCount.toLocaleString()} words`
@@ -123,6 +127,16 @@ export function NoteExportHub({
           <button type="button" onClick={onExportLibraryArchive} className="inkwell-hub-row-btn">
             Export full library (.zip)
           </button>
+          {onCloudBackupLibrary ? (
+            <button
+              type="button"
+              onClick={onCloudBackupLibrary}
+              disabled={cloudBackupBusy}
+              className="inkwell-hub-row-btn disabled:opacity-50"
+            >
+              {cloudBackupBusy ? 'Uploading…' : 'Upload full library to cloud'}
+            </button>
+          ) : null}
           <label className="block">
             <input
               type="file"

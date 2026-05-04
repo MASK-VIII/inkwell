@@ -13,20 +13,14 @@
         frame-ancestors 'none';
         form-action 'self';
         script-src 'self';
-        style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
-        font-src 'self' data: https://fonts.gstatic.com;
+        style-src 'self' 'unsafe-inline';
+        font-src 'self' data:;
         img-src 'self' data: blob:;
-        connect-src 'self' http: https: ws: wss:;
+        connect-src 'self' http://127.0.0.1:5173 ws://127.0.0.1:5173 http://localhost:5173 ws://localhost:5173 http: https: ws: wss: inkwell:;
         worker-src 'self' blob:;
       "
     />
     <title>Inkwell</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&display=swap"
-      rel="stylesheet"
-    />
   </head>
   <body>
     <div id="root"></div>

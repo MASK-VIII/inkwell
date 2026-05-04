@@ -1228,6 +1228,24 @@ export function createNoteProject(options?: {
   return project
 }
 
+/**
+ * New shelf “project”: standalone note pinned under Projects, first manuscript titled Master.
+ * Does not change the active tab session until the caller opens the project in the editor.
+ */
+export function createShelfProjectWithMasterNote(): InkwellProject {
+  const base = createNoteProject({ activate: false })
+  const ch0 = base.chapters[0]
+  const updated =
+    ch0 ?
+      saveProject({
+        ...base,
+        chapters: [{ ...ch0, title: 'Master' }, ...base.chapters.slice(1)],
+      })
+    : base
+  pinProjectNote(updated.id)
+  return updated
+}
+
 /** Creates a new note linked under `parentId` without changing the active project. */
 export function createChildNoteProject(parentId: string): InkwellProject | null {
   const parent = loadProject(parentId)
