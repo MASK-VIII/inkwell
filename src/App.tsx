@@ -30,12 +30,16 @@ import {
   type ReactNode,
   type TransitionEvent,
 } from 'react'
+import { flushSync } from 'react-dom'
 import { BookTools } from './components/BookTools'
 import { FindReplaceModal } from './components/FindReplaceModal'
 import { InkwellEmblem } from './components/InkwellEmblem'
+import { InkwellWordmark } from './components/InkwellWordmark'
 import { GettingStartedTour, type TourRouteBucket } from './components/GettingStartedTour'
 import { NotesTour } from './components/NotesTour'
+import { InkwellProfileMenu } from './components/InkwellProfileMenu'
 import { SignInScreen } from './components/SignInScreen'
+import { useThemeShine } from './components/useThemeShine'
 import { SyncConflictModal } from './components/SyncConflictModal'
 import { SyncStatusStrip } from './components/SyncStatusStrip'
 import { ShelfLinkedNotesList } from './components/ShelfLinkedNotesList'
@@ -383,6 +387,12 @@ export default function App() {
   const [stickyNotePopoutId, setStickyNotePopoutId] = useState<string | null>(null)
   const [toast, setToast] = useState<{ node: ReactNode; ms: number } | null>(null)
   const [darkMode, setDarkMode] = useState(readInitialDarkMode)
+  /** Set in `toggleTheme`, cleared when `inkwell:theme-change` fires after `html.dark` sync (see layout effect). */
+  const pendingInkwellThemeShineRef = useRef(false)
+  const bookshelfBrandRef = useRef<HTMLButtonElement | null>(null)
+  const writeHeaderBrandRef = useRef<HTMLAnchorElement | null>(null)
+  useThemeShine(bookshelfBrandRef)
+  useThemeShine(writeHeaderBrandRef)
   const lastDeletedRef = useRef<DeletedSnapshot | null>(null)
   const lastDeletedProjectRef = useRef<{ blob: InkwellProject } | null>(null)
   const newProjectMenuRef = useRef<HTMLDivElement | null>(null)
@@ -390,7 +400,6 @@ export default function App() {
   const libraryShelfInputRef = useRef<HTMLInputElement | null>(null)
   const [newProjectMenuOpen, setNewProjectMenuOpen] = useState(false)
   const [shelfNewImportSubmenuOpen, setShelfNewImportSubmenuOpen] = useState(false)
-  const shelfAccountMenuRef = useRef<HTMLDivElement | null>(null)
   const [shelfAccountMenuOpen, setShelfAccountMenuOpen] = useState(false)
   const [stickNoteId, setStickNoteId] = useState<string | null>(null)
   const [stickSelectParentId, setStickSelectParentId] = useState<string>('')
@@ -579,6 +588,10 @@ export default function App() {
 
   useLayoutEffect(() => {
     document.documentElement.classList.toggle('dark', darkMode)
+    if (pendingInkwellThemeShineRef.current) {
+      pendingInkwellThemeShineRef.current = false
+      window.dispatchEvent(new CustomEvent('inkwell:theme-change', { detail: { dark: darkMode } }))
+    }
   }, [darkMode])
 
   useLayoutEffect(() => {
@@ -832,23 +845,6 @@ export default function App() {
       window.removeEventListener('keydown', onKey)
     }
   }, [shelfHelpMenuOpen])
-
-  useEffect(() => {
-    if (!shelfAccountMenuOpen) return
-    const onDocMouseDown = (e: MouseEvent) => {
-      const el = shelfAccountMenuRef.current
-      if (el && !el.contains(e.target as Node)) setShelfAccountMenuOpen(false)
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setShelfAccountMenuOpen(false)
-    }
-    document.addEventListener('mousedown', onDocMouseDown)
-    window.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onDocMouseDown)
-      window.removeEventListener('keydown', onKey)
-    }
-  }, [shelfAccountMenuOpen])
 
   useEffect(() => {
     if (route !== 'bookshelf') {
@@ -1338,11 +1334,28 @@ export default function App() {
   }
 
   const toggleTheme = useCallback(() => {
-    setDarkMode((prev) => {
-      const next = !prev
-      localStorage.setItem(THEME_KEY, next ? 'dark' : 'light')
-      return next
-    })
+    const apply = () => {
+      pendingInkwellThemeShineRef.current = true
+      setDarkMode((prev) => {
+        const next = !prev
+        localStorage.setItem(THEME_KEY, next ? 'dark' : 'light')
+        return next
+      })
+    }
+    if (typeof document === 'undefined') {
+      apply()
+      return
+    }
+    const doc = document as Document & {
+      startViewTransition?: (callback: () => void) => { finished: Promise<void> }
+    }
+    if (typeof doc.startViewTransition === 'function') {
+      doc.startViewTransition(() => {
+        flushSync(apply)
+      })
+    } else {
+      apply()
+    }
   }, [])
 
   const exportPdfKdp = async () => {
@@ -2437,7 +2450,7 @@ export default function App() {
   )
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-parchment text-ink transition-colors dark:bg-panel-dark dark:text-ink-dark">
+    <div className="inkwell-theme-bridge flex h-full min-h-0 flex-col bg-parchment text-ink dark:bg-panel-dark dark:text-ink-dark">
       {route === 'signin' ? (
         <SignInScreen
           darkMode={darkMode}
@@ -2457,13 +2470,26 @@ export default function App() {
               }
             : undefined
           }
+          profileMenu={{
+            userEmail: inkwellLibrarySync.userEmail,
+            cloudSyncConfigured: isInkwellCloudSyncConfigured(),
+            onSyncNow: () => inkwellLibrarySync.syncNow(),
+            onSignOutCloud: () => void inkwellLibrarySync.signOutCloudOnly(),
+            onAppSignOut: onBookshelfSignOut,
+            showLibraryHubLink: !shouldShowSignIn(readBootstrap()),
+            onGoToLibraryHub: () => {
+              syncPersistedState()
+              navigateRoute('bookshelf')
+            },
+          }}
         />
       ) : route === 'bookshelf' ? (
         <div className="flex min-h-0 flex-1 flex-col">
-          <header className="sticky top-0 z-50 border-b border-dust bg-white/90 backdrop-blur-md dark:border-border-dark dark:bg-panel-dark/90">
-            <div className="relative flex w-full items-stretch">
-              <div className="flex shrink-0 items-center bg-white/70 py-2 pl-3 sm:py-3 sm:pl-5 dark:bg-panel-dark/70">
+          <header className="inkwell-chrome-header sticky top-0 z-50 border-b border-dust bg-white/90 backdrop-blur-md dark:border-border-dark dark:bg-panel-dark/90">
+            <div className="flex w-full min-h-[3.25rem] items-stretch sm:min-h-[3.5rem]">
+              <div className="inkwell-theme-bridge flex min-w-0 flex-1 items-center justify-start bg-white/70 py-2 pl-3 sm:py-3 sm:pl-5 dark:bg-panel-dark/70">
                 <button
+                  ref={bookshelfBrandRef}
                   type="button"
                   onClick={() => {
                     syncPersistedState()
@@ -2472,14 +2498,12 @@ export default function App() {
                   aria-label="Inkwell"
                   title="Inkwell"
                 >
-                  <InkwellEmblem />
-                  <span className="hidden font-serif text-xl font-semibold tracking-tight sm:block sm:text-2xl">
-                    Inkwell
-                  </span>
+                  <InkwellEmblem darkMode={darkMode} />
+                  <InkwellWordmark className="hidden sm:block" />
                 </button>
               </div>
 
-              <div className="flex min-h-[3.25rem] min-w-0 flex-1 flex-col items-center justify-center px-3 py-2 pr-[7.5rem] sm:min-h-[3.5rem] sm:px-4 sm:py-3 sm:pr-[10rem]">
+              <div className="flex shrink-0 flex-col items-center justify-center px-3 py-2 sm:px-4 sm:py-3">
                 <div className="flex min-h-0 min-w-0 max-w-[min(44rem,100%)] flex-col items-center justify-center px-1 text-center sm:px-2">
                   <h1 className="w-full truncate font-serif text-xl font-semibold tracking-tight text-ink dark:text-ink-dark sm:text-2xl">
                     Bookshelf
@@ -2490,22 +2514,8 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="pointer-events-none absolute inset-y-0 right-0 z-10 flex items-center px-3 py-2 sm:px-5">
-                <div className="pointer-events-auto flex flex-wrap items-center justify-end gap-1 sm:gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShelfAccountMenuOpen(false)
-                      setNewProjectMenuOpen(false)
-                      setShelfNewImportSubmenuOpen(false)
-                      toggleTheme()
-                    }}
-                    className="flex h-11 w-11 items-center justify-center rounded-3xl border border-dust bg-white/70 text-ink transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
-                    aria-label="Toggle theme"
-                    title="Toggle theme"
-                  >
-                    {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-                  </button>
+              <div className="relative z-10 flex min-w-0 flex-1 items-center justify-end py-2 pl-2 pr-3 sm:py-3 sm:pl-3 sm:pr-5">
+                <div className="flex flex-wrap items-center justify-end gap-1 sm:gap-2">
                   <div className="relative" ref={shelfHelpMenuRef}>
                     <button
                       type="button"
@@ -2560,6 +2570,20 @@ export default function App() {
                       </div>
                     ) : null}
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShelfAccountMenuOpen(false)
+                      setNewProjectMenuOpen(false)
+                      setShelfNewImportSubmenuOpen(false)
+                      toggleTheme()
+                    }}
+                    className="flex h-11 w-11 items-center justify-center rounded-3xl border border-dust bg-white/70 text-ink transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
+                    aria-label="Toggle theme"
+                    title="Toggle theme"
+                  >
+                    {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+                  </button>
                   <input
                     ref={docxShelfInputRef}
                     type="file"
@@ -2730,90 +2754,25 @@ export default function App() {
                       </div>
                     ) : null}
                   </div>
-                  <div className="relative" ref={shelfAccountMenuRef}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setNewProjectMenuOpen(false)
-                        setShelfNewImportSubmenuOpen(false)
-                        setShelfAccountMenuOpen((v) => !v)
-                      }}
-                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-3xl bg-gradient-to-br from-ink to-walnut text-[10px] font-bold uppercase tracking-[0.14em] text-parchment shadow-md shadow-ink/20 ring-1 ring-ink/25 outline-none transition-[transform,box-shadow,filter] hover:shadow-lg hover:shadow-ink/25 hover:brightness-[1.06] active:scale-[0.97] focus-visible:ring-2 focus-visible:ring-walnut/45 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:from-ink dark:to-walnut dark:text-ink-dark dark:shadow-black/35 dark:ring-cream/40 dark:hover:brightness-110 dark:focus-visible:ring-cream/55 dark:focus-visible:ring-offset-panel-dark"
-                      aria-expanded={shelfAccountMenuOpen}
-                      aria-haspopup="menu"
-                      aria-label="Account menu"
-                      title="Account"
-                    >
-                      IW
-                    </button>
-                    {shelfAccountMenuOpen ? (
-                      <div
-                        role="menu"
-                        className="absolute right-0 top-full z-[60] mt-2 w-[min(17.5rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-zinc-200/90 bg-white py-1 text-zinc-900 shadow-lg ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:ring-white/10"
-                      >
-                        <div className="flex gap-3 px-4 pb-3 pt-3">
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-ink to-walnut text-xs font-bold uppercase tracking-[0.12em] text-parchment shadow-sm ring-1 ring-ink/20 dark:text-ink-dark dark:ring-cream/40">
-                            {inkwellLibrarySync.userEmail ?
-                              inkwellLibrarySync.userEmail.slice(0, 1).toUpperCase()
-                            : 'IW'}
-                          </div>
-                          <div className="min-w-0 flex-1 pt-0.5">
-                            <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50">Inkwell writer</p>
-                            <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">
-                              {inkwellLibrarySync.userEmail ?
-                                inkwellLibrarySync.userEmail
-                              : 'Signed in on this device only'}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="border-t border-zinc-100 dark:border-zinc-800" />
-                        <div className="px-1 py-1">
-                          <button
-                            type="button"
-                            role="menuitem"
-                            className="block w-full rounded-lg px-3 py-2 text-left text-sm text-zinc-900 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-800/80"
-                            onClick={() => setShelfAccountMenuOpen(false)}
-                          >
-                            My account
-                          </button>
-                          {isInkwellCloudSyncConfigured() && inkwellLibrarySync.userEmail ? (
-                            <button
-                              type="button"
-                              role="menuitem"
-                              className="block w-full rounded-lg px-3 py-2 text-left text-sm text-zinc-900 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-800/80"
-                              onClick={() => {
-                                setShelfAccountMenuOpen(false)
-                                inkwellLibrarySync.syncNow()
-                              }}
-                            >
-                              Sync library now
-                            </button>
-                          ) : null}
-                          {isInkwellCloudSyncConfigured() && inkwellLibrarySync.userEmail ? (
-                            <button
-                              type="button"
-                              role="menuitem"
-                              className="block w-full rounded-lg px-3 py-2 text-left text-sm text-zinc-900 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-800/80"
-                              onClick={() => {
-                                setShelfAccountMenuOpen(false)
-                                void inkwellLibrarySync.signOutCloudOnly()
-                              }}
-                            >
-                              Sign out of cloud only
-                            </button>
-                          ) : null}
-                          <button
-                            type="button"
-                            role="menuitem"
-                            className="block w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-sky-600 hover:bg-zinc-50 dark:text-sky-400 dark:hover:bg-zinc-800/80"
-                            onClick={onBookshelfSignOut}
-                          >
-                            Sign out
-                          </button>
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
+                  <InkwellProfileMenu
+                    userEmail={inkwellLibrarySync.userEmail}
+                    cloudSyncConfigured={isInkwellCloudSyncConfigured()}
+                    onSyncNow={() => inkwellLibrarySync.syncNow()}
+                    onSignOutCloud={() => void inkwellLibrarySync.signOutCloudOnly()}
+                    onAppSignOut={onBookshelfSignOut}
+                    showLibraryHubLink
+                    onGoToLibraryHub={() => {
+                      syncPersistedState()
+                      navigateRoute('bookshelf')
+                    }}
+                    menuOpen={shelfAccountMenuOpen}
+                    onMenuOpenChange={setShelfAccountMenuOpen}
+                    onRequestExclusiveOpen={() => {
+                      setNewProjectMenuOpen(false)
+                      setShelfNewImportSubmenuOpen(false)
+                      setShelfHelpMenuOpen(false)
+                    }}
+                  />
                 </div>
               </div>
             </div>
@@ -3591,44 +3550,37 @@ export default function App() {
         </div>
       ) : (
         <>
-          <header className="sticky top-0 z-50 border-b border-dust bg-white/90 backdrop-blur-md dark:border-border-dark dark:bg-panel-dark/90">
-            <div className="relative flex w-full items-stretch">
-              <div
-                className={`flex shrink-0 items-center bg-white/70 py-2 pl-3 sm:py-3 sm:pl-5 dark:bg-panel-dark/70 ${
-                  !isNote && isFormatWorkspace ? chaptersAsideWidthClass : ''
-                }`}
-              >
-                <a
-                  href={buildInkwellUrlForProject(project.id)}
-                  onClick={(e) => {
-                    e.preventDefault()
-                    syncPersistedState()
-                    navigateRoute('bookshelf')
-                  }}
-                  onContextMenu={() => {
-                    syncPersistedState()
-                  }}
-                  onMouseDown={(e) => {
-                    if (e.button === 1 || (e.button === 0 && (e.ctrlKey || e.metaKey))) {
+          <header className="inkwell-chrome-header sticky top-0 z-50 border-b border-dust bg-white/90 backdrop-blur-md dark:border-border-dark dark:bg-panel-dark/90">
+            <div className="flex w-full min-h-[3.25rem] items-stretch sm:min-h-[3.5rem]">
+              <div className="inkwell-theme-bridge flex min-w-0 flex-1 items-center justify-start bg-white/70 py-2 pl-3 sm:py-3 sm:pl-5 dark:bg-panel-dark/70">
+                <div className={!isNote && isFormatWorkspace ? chaptersAsideWidthClass : 'min-w-0'}>
+                  <a
+                    ref={writeHeaderBrandRef}
+                    href={buildInkwellUrlForProject(project.id)}
+                    onClick={(e) => {
+                      e.preventDefault()
                       syncPersistedState()
-                    }
-                  }}
-                  className="inkwell-header-brand group inline-flex w-fit max-w-full items-center gap-2 rounded-2xl px-2 py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-walnut/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream/50 dark:focus-visible:ring-offset-panel-dark sm:gap-3"
-                  aria-label="Back to Bookshelf"
-                  title="Bookshelf"
-                >
-                  <InkwellEmblem />
-                  <span className="hidden font-serif text-xl font-semibold tracking-tight sm:block sm:text-2xl">
-                    Inkwell
-                  </span>
-                </a>
+                      navigateRoute('bookshelf')
+                    }}
+                    onContextMenu={() => {
+                      syncPersistedState()
+                    }}
+                    onMouseDown={(e) => {
+                      if (e.button === 1 || (e.button === 0 && (e.ctrlKey || e.metaKey))) {
+                        syncPersistedState()
+                      }
+                    }}
+                    className="inkwell-header-brand group inline-flex w-fit max-w-full items-center gap-2 rounded-2xl px-2 py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-walnut/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream/50 dark:focus-visible:ring-offset-panel-dark sm:gap-3"
+                    aria-label="Back to Bookshelf"
+                    title="Bookshelf"
+                  >
+                    <InkwellEmblem darkMode={darkMode} />
+                    <InkwellWordmark className="hidden sm:block" />
+                  </a>
+                </div>
               </div>
 
-              <div
-                className={`flex min-h-[3.25rem] min-w-0 flex-1 items-center justify-center py-2 sm:min-h-[3.5rem] sm:py-3 ${
-                  !isNote && isFormatWorkspace ? 'px-3 sm:px-4' : 'px-3 pr-[7.5rem] sm:px-4 sm:pr-[10rem]'
-                }`}
-              >
+              <div className="flex min-h-[3.25rem] shrink-0 flex-col items-center justify-center px-3 py-2 sm:min-h-[3.5rem] sm:px-4 sm:py-3">
                 <div className="min-w-0 w-full max-w-[min(44rem,100%)]">
                   {isNote ? (
                     <input
@@ -3639,9 +3591,16 @@ export default function App() {
                       placeholder="Note title"
                       className="w-full min-w-0 rounded-2xl border border-transparent bg-transparent px-3 py-2 text-center text-base font-medium focus:border-cream focus:outline-none dark:focus:border-cream sm:px-4 sm:text-lg"
                     />
-                  ) : route === 'write' || route === 'publish' ? (
+                  ) : route === 'write' ? (
                     <div
-                      className="truncate text-center font-serif text-sm font-semibold text-ink/80 dark:text-ink-dark/80 sm:text-base"
+                      className="truncate px-3 py-2 text-center text-base font-semibold text-ink dark:text-ink-dark sm:px-4 sm:text-lg"
+                      title={project.book.title.trim() || 'Untitled book'}
+                    >
+                      {project.book.title.trim() || 'Untitled book'}
+                    </div>
+                  ) : route === 'publish' ? (
+                    <div
+                      className="truncate px-3 py-2 text-center text-base font-semibold text-ink dark:text-ink-dark sm:px-4 sm:text-lg"
                       title={project.book.title.trim() || 'Untitled book'}
                     >
                       {project.book.title.trim() || 'Untitled book'}
@@ -3653,35 +3612,34 @@ export default function App() {
                       disabled={!current}
                       onChange={(e) => updateCurrentTitle(e.target.value)}
                       placeholder="Chapter title"
-                      className="w-full min-w-0 rounded-2xl border border-transparent bg-transparent px-3 py-2 text-center text-base font-medium focus:border-cream focus:outline-none dark:focus:border-cream sm:px-4 sm:text-lg disabled:opacity-80"
+                      className="w-full min-w-0 rounded-2xl border border-transparent bg-transparent px-3 py-2 text-center text-base font-semibold text-ink focus:border-cream focus:outline-none dark:text-ink-dark dark:focus:border-cream sm:px-4 sm:text-lg disabled:opacity-80"
                     />
                   )}
                 </div>
               </div>
 
-              {!isNote && isFormatWorkspace ? (
+              <div className="relative z-10 flex min-w-0 flex-1 items-center justify-end gap-2 py-2 pl-2 pr-3 sm:py-3 sm:pr-5">
                 <div
-                  className={`shrink-0 border-l border-dust bg-white/70 transition-[width] duration-300 ease-out dark:border-border-dark dark:bg-panel-dark/70 ${chaptersAsideWidthClass}`}
-                  aria-hidden
-                />
-              ) : null}
-
-              <div className="pointer-events-none absolute inset-y-0 right-0 z-10 flex items-center px-3 py-2 sm:px-5">
-                <div className="pointer-events-auto flex flex-wrap items-center justify-end gap-1 sm:gap-2">
+                  className={`flex min-w-0 max-w-full items-center justify-end gap-1 sm:gap-2 ${
+                    !isNote && isFormatWorkspace
+                      ? 'flex-nowrap overflow-x-auto overscroll-x-contain px-0.5 sm:px-1'
+                      : 'flex-wrap'
+                  }`}
+                >
                   <button
                     type="button"
                     onClick={() => {
                       if (route === 'format_ebook') setEbookEditOpen((v) => !v)
                     }}
-                    className={`items-center gap-2 rounded-3xl border border-dust bg-white/70 px-3 py-2 text-sm font-medium text-ink outline-none transition-colors hover:bg-white focus-visible:ring-2 focus-visible:ring-walnut/35 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90 dark:focus-visible:ring-cream/45 dark:focus-visible:ring-offset-panel-dark ${
-                      route === 'format_ebook' ? 'hidden sm:flex' : 'hidden'
+                    className={`shrink-0 items-center gap-2 rounded-3xl border border-dust bg-white/70 px-2.5 py-2 text-sm font-medium text-ink outline-none transition-colors hover:bg-white focus-visible:ring-2 focus-visible:ring-walnut/35 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90 dark:focus-visible:ring-cream/45 dark:focus-visible:ring-offset-panel-dark sm:px-3 ${
+                      route === 'format_ebook' ? 'flex' : 'hidden'
                     }`}
                     title="Toggle editor for ebook review"
                   >
                     <BookOpen className="h-4 w-4 shrink-0" />
                     <span>{ebookEditOpen ? 'Hide editor' : 'Edit'}</span>
                   </button>
-                  <div className="flex items-center gap-0 sm:gap-0.5">
+                  <div className="flex shrink-0 items-center gap-0 sm:gap-0.5">
                     <button
                       type="button"
                       data-inkwell-tour="header-book-tools"
@@ -3736,7 +3694,7 @@ export default function App() {
                         }
                       }}
                       disabled={isFormatWorkspace ? false : !current || route !== 'write'}
-                      className="flex items-center gap-2 rounded-3xl bg-ink px-3 py-2 text-sm font-medium text-parchment outline-none transition-colors hover:bg-walnut focus-visible:ring-2 focus-visible:ring-walnut/45 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:pointer-events-none disabled:opacity-40 dark:bg-cream dark:text-ink dark:hover:bg-accent-warm dark:focus-visible:ring-cream/55 dark:focus-visible:ring-offset-panel-dark sm:px-5 sm:py-2.5"
+                      className="flex shrink-0 items-center gap-2 rounded-3xl bg-ink px-3 py-2 text-sm font-medium text-parchment outline-none transition-colors hover:bg-walnut focus-visible:ring-2 focus-visible:ring-walnut/45 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:pointer-events-none disabled:opacity-40 dark:bg-cream dark:text-ink dark:hover:bg-accent-warm dark:focus-visible:ring-cream/55 dark:focus-visible:ring-offset-panel-dark sm:px-5 sm:py-2.5"
                       aria-label={isFormatWorkspace ? 'Go to Publish workspace' : 'Open Format workspace'}
                       title={isFormatWorkspace ? 'Open Publish workspace' : 'Ebook & print previews'}
                     >
@@ -3748,6 +3706,19 @@ export default function App() {
                       <span className="hidden sm:inline">{isFormatWorkspace ? 'Publish!' : 'Format'}</span>
                     </button>
                   )}
+                  <InkwellProfileMenu
+                    userEmail={inkwellLibrarySync.userEmail}
+                    cloudSyncConfigured={isInkwellCloudSyncConfigured()}
+                    onSyncNow={() => inkwellLibrarySync.syncNow()}
+                    onSignOutCloud={() => void inkwellLibrarySync.signOutCloudOnly()}
+                    onAppSignOut={onBookshelfSignOut}
+                    showLibraryHubLink
+                    onGoToLibraryHub={() => {
+                      syncPersistedState()
+                      navigateRoute('bookshelf')
+                    }}
+                    onRequestExclusiveOpen={() => setBookToolsOpen(false)}
+                  />
                 </div>
               </div>
             </div>

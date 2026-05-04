@@ -18,7 +18,7 @@ export type PublishHubProps = {
 
 function checklistRow(label: string, ok: boolean, value: string) {
   return (
-    <div className="flex gap-3 rounded-xl border border-dust/80 bg-white/60 px-4 py-3 dark:border-border-dark dark:bg-panel-dark/60">
+    <div className="inkwell-theme-bridge flex gap-3 rounded-xl border border-dust/80 bg-white/60 px-4 py-3 dark:border-border-dark dark:bg-panel-dark/60">
       <span
         className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
           ok ? 'bg-emerald-600/15 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400' : 'bg-amber-500/15 text-amber-800 dark:bg-amber-400/20 dark:text-amber-200'

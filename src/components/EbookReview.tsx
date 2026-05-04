@@ -120,7 +120,7 @@ export function EbookReview({
 
   return (
     <div className="inkwell-ebook-review-scroll flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overscroll-y-contain">
-      <div className="sticky top-0 z-10 grid shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 border-b border-dust bg-white/90 px-4 py-3 backdrop-blur-sm dark:border-border-dark dark:bg-panel-dark/90 sm:px-5">
+      <div className="inkwell-theme-bridge sticky top-0 z-10 grid shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 border-b border-dust bg-white/90 px-4 py-3 backdrop-blur-sm dark:border-border-dark dark:bg-panel-dark/90 sm:px-5">
         <div className="min-w-0" aria-hidden />
         <div className="flex justify-center">{formatModeBar}</div>
         <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">

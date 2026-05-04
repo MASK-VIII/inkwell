@@ -5,6 +5,8 @@
 @theme {
   --font-sans: 'Inter', system-ui, sans-serif;
   --font-serif: 'Playfair Display', Georgia, serif;
+  /* Wordmark only; do not use for body copy. Playfair omitted so a failed DM load reads as Georgia, not “no change”. */
+  --font-brand: 'DM Serif Display', Georgia, 'Times New Roman', serif;
   --color-ink: #2c241f;
   --color-parchment: #f8f1e3;
   /* Dark-mode “gold” accent (used by buttons/focus/selection) */
@@ -22,12 +24,54 @@ html,
 body,
 #root {
   height: 100%;
+  transition:
+    background-color var(--inkwell-theme-bridge-duration) var(--inkwell-theme-bridge-ease),
+    color var(--inkwell-theme-bridge-duration) var(--inkwell-theme-bridge-ease);
+}
+
+/* Base canvas so theme toggles always interpolate a visible wash (not “instant” behind opaque UI). */
+html {
+  background-color: var(--color-parchment);
 }
 
 body {
   margin: 0;
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+}
+
+/* Brand wordmark: literal stack so Tailwind @theme vars cannot leave font-family invalid (inherit → Inter). */
+.inkwell-wordmark {
+  font-family: 'DM Serif Display', Georgia, 'Times New Roman', serif;
+  font-weight: 400;
+  font-synthesis-weight: none;
+  font-synthesis-style: none;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  font-feature-settings: 'kern' 1, 'liga' 1;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  color: var(--color-ink);
+  text-shadow:
+    0 1px 0 color-mix(in srgb, var(--color-parchment) 55%, transparent),
+    0 0.06em 0.12em color-mix(in srgb, var(--color-walnut) 18%, transparent);
+  transition:
+    color var(--inkwell-theme-bridge-duration) var(--inkwell-theme-bridge-ease),
+    text-shadow var(--inkwell-theme-bridge-duration) var(--inkwell-theme-bridge-ease);
+}
+
+.dark .inkwell-wordmark {
+  color: color-mix(in srgb, var(--color-ink-dark) 86%, var(--color-cream));
+  text-shadow:
+    0 0 1.25rem color-mix(in srgb, var(--color-cream) 30%, transparent),
+    0 0.08em 0.2em color-mix(in srgb, #000 55%, transparent);
+}
+
+.dark .inkwell-header-brand:hover .inkwell-wordmark {
+  color: color-mix(in srgb, var(--color-ink-dark) 80%, var(--color-cream));
+  text-shadow:
+    0 0 1.45rem color-mix(in srgb, var(--color-cream) 40%, transparent),
+    0 0.08em 0.22em color-mix(in srgb, #000 58%, transparent);
 }
 
 /* Manuscript toolbar customize: clearer drag session (dnd-kit) */
@@ -58,10 +102,23 @@ button:not(:disabled):not(.cursor-grab) {
   /* BookTools drawer + Write chapters overlay — always full slide; not tied to reduced-motion tokens. */
   --inkwell-panel-motion-duration: 520ms;
   --inkwell-panel-motion-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  /* Brand + shine: lock step with `html`/`body` theme fades (see rules below).
+     Ease is a soft long deceleration — reads calm on large color fields without feeling sluggish. */
+  --inkwell-theme-bridge-duration: 600ms;
+  --inkwell-theme-bridge-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  /* Mirrors @theme --font-brand; available here for any non-Tailwind CSS. */
+  --font-brand: 'DM Serif Display', Georgia, 'Times New Roman', serif;
+}
+
+/* Shorter ramp than full motion, but still a real crossfade (not a hard cut). */
+html[data-inkwell-play-animations='false'] {
+  --inkwell-theme-bridge-duration: 320ms;
+  --inkwell-theme-bridge-ease: cubic-bezier(0.33, 1, 0.68, 1);
 }
 
 .dark {
   color-scheme: dark;
+  background-color: var(--color-panel-dark);
   scrollbar-color: color-mix(in srgb, var(--color-accent-warm) 55%, transparent)
     color-mix(in srgb, var(--color-border-dark) 80%, transparent);
 }
@@ -243,21 +300,61 @@ select {
     linear-gradient(to right, transparent, transparent);
 }
 
-/* Premium but calm theme transitions */
-html,
-body {
+/* Themed UI surfaces: avoid `div` here — ProseMirror is thousands of nested divs and animating them
+   all at once tanks frame time on theme flip. Editor + shelf cards + semantic chrome are covered. */
+:where(
+    header,
+    aside,
+    main,
+    section,
+    footer,
+    nav,
+    article,
+    form,
+    fieldset,
+    button,
+    input,
+    select,
+    textarea,
+    summary,
+    dialog
+  ),
+  .inkwell-editor-shell,
+  .inkwell-hub-card,
+  .inkwell-shelf-card,
+  .inkwell-signin-form-card,
+  .inkwell-theme-bridge,
+  .tiptap.ProseMirror,
+  .tiptap.ProseMirror :where(
+    a,
+    .inkwell-mention,
+    .inkwell-wikilink,
+    .inkwell-writer-comment,
+    .inkwell-fn-ref,
+    .inkwell-proofreader-issue
+  ) {
   transition:
-    background-color 650ms cubic-bezier(0.16, 1, 0.3, 1),
-    color 650ms cubic-bezier(0.16, 1, 0.3, 1);
+    background-color var(--inkwell-theme-bridge-duration) var(--inkwell-theme-bridge-ease),
+    color var(--inkwell-theme-bridge-duration) var(--inkwell-theme-bridge-ease),
+    border-color var(--inkwell-theme-bridge-duration) var(--inkwell-theme-bridge-ease),
+    box-shadow var(--inkwell-theme-bridge-duration) var(--inkwell-theme-bridge-ease),
+    text-decoration-color var(--inkwell-theme-bridge-duration) var(--inkwell-theme-bridge-ease);
 }
 
-/* Fade common surfaces that switch via dark: classes */
-:where(header, aside, main, section, footer, button, input, select, textarea, div) {
-  transition:
-    background-color 650ms cubic-bezier(0.16, 1, 0.3, 1),
-    color 650ms cubic-bezier(0.16, 1, 0.3, 1),
-    border-color 650ms cubic-bezier(0.16, 1, 0.3, 1),
-    box-shadow 650ms cubic-bezier(0.16, 1, 0.3, 1);
+/* When `document.startViewTransition` runs (see App `toggleTheme`), match the root crossfade to the
+   CSS theme bridge so the compositor pass and surface ramps feel like one continuous motion. */
+@supports (view-transition-name: none) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    /* Slightly longer than surface CSS so the root crossfade lingers at the soft tail — reads as a deliberate fade. */
+    animation-duration: calc(var(--inkwell-theme-bridge-duration) + 80ms);
+    animation-timing-function: var(--inkwell-theme-bridge-ease);
+  }
+}
+
+/* Sticky app chrome: titles sit in plain divs (not `header` itself) — keep typography in sync with the wash. */
+.inkwell-chrome-header :where(h1, h2, p) {
+  transition: color var(--inkwell-theme-bridge-duration) var(--inkwell-theme-bridge-ease);
 }
 
 /* BookTools drawer motion (uses panel tokens so slide plays under prefers-reduced-motion) */
@@ -277,6 +374,9 @@ body {
   :root {
     --inkwell-motion-duration: 0.01ms;
     --inkwell-motion-ease: linear;
+    /* Theme: gentle visible fade (not a snap) while keeping drawer/panel motion minimal above. */
+    --inkwell-theme-bridge-duration: 300ms;
+    --inkwell-theme-bridge-ease: cubic-bezier(0.33, 1, 0.68, 1);
   }
 }
 
@@ -325,6 +425,109 @@ body {
   .inkwell-hub-dropzone {
     @apply block w-full cursor-pointer rounded-xl border border-dashed border-dust bg-white/50 px-4 py-3 text-center text-sm font-semibold text-ink/85 outline-none transition-colors hover:bg-white focus-visible:ring-2 focus-visible:ring-walnut/35 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment/80 dark:border-border-dark dark:bg-panel-dark/50 dark:text-ink-dark/85 dark:hover:bg-panel-dark/80 dark:focus-visible:ring-cream/45 dark:focus-visible:ring-offset-panel-dark;
   }
+}
+
+/* Sign-in: manuscript-like canvas (static; no motion on background) */
+.inkwell-signin-canvas {
+  background-color: var(--color-parchment);
+  background-image:
+    radial-gradient(
+      ellipse 120% 80% at 50% -20%,
+      color-mix(in srgb, var(--color-dust) 45%, transparent),
+      transparent 55%
+    ),
+    radial-gradient(
+      ellipse 90% 65% at 50% 100%,
+      color-mix(in srgb, var(--color-walnut) 12%, var(--color-parchment)),
+      transparent 50%
+    );
+  box-shadow: inset 0 0 80px -20px color-mix(in srgb, var(--color-walnut) 10%, transparent);
+}
+
+.dark .inkwell-signin-canvas {
+  background-color: var(--color-panel-dark);
+  background-image:
+    radial-gradient(
+      ellipse 110% 70% at 50% -25%,
+      color-mix(in srgb, var(--color-cream) 18%, transparent),
+      transparent 58%
+    ),
+    radial-gradient(
+      ellipse 100% 55% at 50% 105%,
+      color-mix(in srgb, var(--color-cream) 8%, transparent),
+      transparent 45%
+    );
+  box-shadow:
+    inset 0 0 100px -30px rgba(139, 69, 19, 0.35),
+    inset 0 0 0 1px color-mix(in srgb, var(--color-cream) 8%, transparent);
+}
+
+@keyframes inkwell-signin-hero-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.inkwell-signin-hero {
+  animation: inkwell-signin-hero-in 480ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .inkwell-signin-hero {
+    animation: none;
+  }
+}
+
+/* Sign-in: cloud sync form as a desk card (inner form supplies flex + gap) */
+.inkwell-signin-form-card {
+  width: 100%;
+  margin-bottom: 2rem;
+  padding: 1.25rem;
+  border-radius: 1rem;
+  border: 1px solid color-mix(in srgb, var(--color-dust) 80%, transparent);
+  background: linear-gradient(
+    165deg,
+    color-mix(in srgb, var(--color-parchment) 70%, white),
+    color-mix(in srgb, var(--color-parchment) 55%, var(--color-dust))
+  );
+  box-shadow:
+    0 1px 0 color-mix(in srgb, white 60%, transparent),
+    0 12px 32px -12px color-mix(in srgb, var(--color-walnut) 22%, transparent);
+}
+
+.dark .inkwell-signin-form-card {
+  border-color: color-mix(in srgb, var(--color-border-dark) 95%, transparent);
+  background: linear-gradient(
+    165deg,
+    color-mix(in srgb, var(--color-panel-dark) 92%, var(--color-border-dark)),
+    color-mix(in srgb, var(--color-panel-dark) 88%, #121418)
+  );
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-cream) 10%, transparent),
+    0 16px 40px -14px rgba(0, 0, 0, 0.55);
+}
+
+.inkwell-signin-error {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  color: color-mix(in srgb, #7f1d1d 92%, var(--color-ink));
+  border: 1px solid color-mix(in srgb, #b91c1c 42%, var(--color-walnut));
+  background: color-mix(in srgb, #fef2f2 88%, var(--color-parchment));
+}
+
+.dark .inkwell-signin-error {
+  color: #fecaca;
+  border-color: color-mix(in srgb, #f87171 48%, var(--color-accent-warm));
+  background: color-mix(in srgb, #450a0a 38%, var(--color-panel-dark));
 }
 
 /* Write workspace: chapters overlay — clip width matches panel (Tailwind on element); no width animation */
@@ -513,6 +716,59 @@ body {
 
 .dark .tiptap.ProseMirror .inkwell-wikilink {
   color: var(--color-accent-warm);
+}
+
+/* Inkwell Review (in-house proofreader) — squiggle decorations.
+   Each category has a distinct wavy underline color. The classes are added by
+   `InkwellProofreader.ts` as ProseMirror inline decorations. We intentionally only style the
+   underline itself so any existing marks (bold/italic/links) keep rendering normally. */
+.tiptap.ProseMirror .inkwell-proofreader-issue {
+  text-decoration-line: underline;
+  text-decoration-style: wavy;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+  cursor: pointer;
+  -webkit-text-decoration-style: wavy;
+}
+
+.tiptap.ProseMirror .inkwell-proofreader-spelling {
+  text-decoration-color: rgba(220, 38, 38, 0.85);
+}
+
+.tiptap.ProseMirror .inkwell-proofreader-grammar {
+  text-decoration-color: rgba(234, 88, 12, 0.85);
+}
+
+.tiptap.ProseMirror .inkwell-proofreader-punctuation {
+  text-decoration-color: rgba(124, 58, 237, 0.8);
+}
+
+.tiptap.ProseMirror .inkwell-proofreader-style {
+  text-decoration-color: rgba(217, 119, 6, 0.8);
+}
+
+.tiptap.ProseMirror .inkwell-proofreader-readability {
+  text-decoration-color: rgba(37, 99, 235, 0.7);
+}
+
+.dark .tiptap.ProseMirror .inkwell-proofreader-spelling {
+  text-decoration-color: rgba(248, 113, 113, 0.95);
+}
+
+.dark .tiptap.ProseMirror .inkwell-proofreader-grammar {
+  text-decoration-color: rgba(251, 146, 60, 0.95);
+}
+
+.dark .tiptap.ProseMirror .inkwell-proofreader-punctuation {
+  text-decoration-color: rgba(167, 139, 250, 0.95);
+}
+
+.dark .tiptap.ProseMirror .inkwell-proofreader-style {
+  text-decoration-color: rgba(251, 191, 36, 0.95);
+}
+
+.dark .tiptap.ProseMirror .inkwell-proofreader-readability {
+  text-decoration-color: rgba(96, 165, 250, 0.95);
 }
 
 .inkwell-mention-popup {
@@ -897,11 +1153,16 @@ body {
     0 0 0 4px color-mix(in srgb, var(--color-accent-warm) 28%, transparent);
 }
 
-/* Write header: Inkwell brand — same glow language as bookshelf controls */
+/* Write header: Inkwell brand — same glow language as bookshelf controls.
+   Include theme-bridge surfaces so the pill doesn’t pop while the sticky header eases (`.inkwell-header-brand`
+   overrides generic `button`/`a` transition shorthand otherwise). */
 .inkwell-header-brand {
   transition:
     box-shadow 200ms ease,
-    transform 200ms ease;
+    transform 200ms ease,
+    background-color var(--inkwell-theme-bridge-duration) var(--inkwell-theme-bridge-ease),
+    color var(--inkwell-theme-bridge-duration) var(--inkwell-theme-bridge-ease),
+    border-color var(--inkwell-theme-bridge-duration) var(--inkwell-theme-bridge-ease);
   box-shadow: 0 0 0 0 transparent;
 }
 
@@ -931,4 +1192,135 @@ body {
   box-shadow:
     0 0 0 2px var(--color-accent-warm),
     0 0 0 4px color-mix(in srgb, var(--color-accent-warm) 28%, transparent);
+}
+
+/* Light mode: Inkwell brand — clearer lift, parchment wash, and gold bloom (dark keeps rules above). */
+html:not(.dark) .inkwell-header-brand {
+  transition:
+    box-shadow 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color var(--inkwell-theme-bridge-duration) var(--inkwell-theme-bridge-ease),
+    color var(--inkwell-theme-bridge-duration) var(--inkwell-theme-bridge-ease),
+    border-color var(--inkwell-theme-bridge-duration) var(--inkwell-theme-bridge-ease);
+  background-color: transparent;
+}
+
+html:not(.dark) .inkwell-header-brand .inkwell-wordmark {
+  transition:
+    color 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    text-shadow 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+html:not(.dark) .inkwell-header-brand:hover {
+  background-color: color-mix(in srgb, var(--color-parchment) 52%, white);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-walnut) 26%, transparent),
+    inset 0 1px 0 color-mix(in srgb, white 78%, transparent),
+    0 12px 40px -10px color-mix(in srgb, var(--color-accent-warm) 44%, transparent),
+    0 6px 22px -6px color-mix(in srgb, var(--color-walnut) 18%, transparent);
+  transform: translateY(-1.5px) scale(1.006);
+}
+
+html:not(.dark) .inkwell-header-brand:hover .inkwell-wordmark {
+  color: color-mix(in srgb, var(--color-ink) 78%, var(--color-walnut));
+  text-shadow:
+    0 1px 0 color-mix(in srgb, white 52%, transparent),
+    0 0.08em 0.18em color-mix(in srgb, var(--color-walnut) 24%, transparent),
+    0 0 26px color-mix(in srgb, var(--color-accent-warm) 32%, transparent),
+    0 0 52px -10px color-mix(in srgb, var(--color-accent-warm) 16%, transparent);
+}
+
+html:not(.dark) .inkwell-header-brand .inkwell-emblem {
+  transition:
+    box-shadow 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+html:not(.dark) .inkwell-header-brand:hover .inkwell-emblem {
+  transform: scale(1.03);
+  box-shadow:
+    0 2px 12px -2px color-mix(in srgb, var(--color-walnut) 28%, transparent),
+    0 16px 38px -12px color-mix(in srgb, var(--color-accent-warm) 40%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--color-walnut) 34%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html:not(.dark) .inkwell-header-brand:hover {
+    transform: none;
+  }
+
+  html:not(.dark) .inkwell-header-brand:hover .inkwell-emblem {
+    transform: none;
+  }
+}
+
+/* Theme-change shine: soft horizontal wipe across the whole brand pill */
+.inkwell-header-brand {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.inkwell-header-brand::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  pointer-events: none;
+  z-index: 3;
+  opacity: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    var(--inkwell-shine-color, transparent) 50%,
+    transparent 70%
+  );
+  background-size: 220% 100%;
+  background-repeat: no-repeat;
+  background-position: -120% 0;
+  filter: blur(0.5px);
+  mix-blend-mode: screen;
+}
+
+.inkwell-header-brand[data-shine='light'] {
+  --inkwell-shine-color: color-mix(in srgb, white 70%, var(--color-parchment));
+}
+
+.inkwell-header-brand[data-shine='dark'] {
+  --inkwell-shine-color: color-mix(in srgb, var(--color-accent-warm) 65%, transparent);
+}
+
+.inkwell-header-brand[data-shine]::before {
+  animation: inkwell-brand-shine var(--inkwell-theme-bridge-duration) var(--inkwell-theme-bridge-ease);
+}
+
+/* Band crosses center at ~50% so the wipe lines up with the mid-point of the global theme ramp. */
+@keyframes inkwell-brand-shine {
+  0% {
+    background-position: -130% 0;
+    opacity: 0;
+  }
+
+  10% {
+    opacity: 0.55;
+  }
+
+  50% {
+    background-position: 50% 0;
+    opacity: 1;
+  }
+
+  90% {
+    opacity: 0.55;
+  }
+
+  100% {
+    background-position: 230% 0;
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .inkwell-header-brand::before {
+    display: none;
+  }
 }

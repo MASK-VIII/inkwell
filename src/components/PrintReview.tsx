@@ -607,7 +607,7 @@ export function PrintReview({
   return (
     <div className="flex min-h-0 flex-1 flex-col outline-none" tabIndex={0}>
       <style dangerouslySetInnerHTML={{ __html: printFontFaceCss }} />
-      <div className="shrink-0 border-b border-dust bg-white/90 px-4 py-3 backdrop-blur-sm dark:border-border-dark dark:bg-panel-dark/90 sm:px-5">
+      <div className="inkwell-theme-bridge shrink-0 border-b border-dust bg-white/90 px-4 py-3 backdrop-blur-sm dark:border-border-dark dark:bg-panel-dark/90 sm:px-5">
         <div className="mx-auto grid w-full max-w-[min(64rem,100%)] grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
           <div className="min-w-0" aria-hidden />
           <div className="flex justify-center">{formatModeBar}</div>
