@@ -1,15 +1,44 @@
-import { Cloud, CloudOff, Loader2, RefreshCw, AlertCircle } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Cloud, CloudOff, Loader2 } from 'lucide-react'
 import type { LibrarySyncStatus } from '../lib/sync/useInkwellLibrarySync'
 
 type Props = {
   status: LibrarySyncStatus
   detail?: string
   signedIn: boolean
-  onSyncNow?: () => void
+  queueHasWork: boolean
 }
 
-export function SyncStatusStrip({ status, detail, signedIn, onSyncNow }: Props) {
+export function SyncStatusStrip({ status, detail, signedIn, queueHasWork }: Props) {
   if (!signedIn) return null
+
+  if (status === 'idle' && !queueHasWork) {
+    return (
+      <div
+        className="flex w-full items-center justify-center gap-2 border-b border-dust/80 bg-dust/15 px-3 py-1.5 text-[11px] text-emerald-700 dark:border-border-dark/80 dark:bg-border-dark/25 dark:text-emerald-400 sm:text-xs"
+        role="status"
+        aria-live="polite"
+      >
+        <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
+        <span className="font-medium">Synced</span>
+        {detail ? <span className="truncate opacity-90">— {detail}</span> : null}
+      </div>
+    )
+  }
+
+  if (status === 'idle' && queueHasWork) {
+    const pendingDetail = detail?.trim() ? detail : 'Queued…'
+    return (
+      <div
+        className="flex w-full items-center justify-center gap-2 border-b border-dust/80 bg-dust/15 px-3 py-1.5 text-[11px] text-ink/80 dark:border-border-dark/80 dark:bg-border-dark/25 dark:text-ink-dark/80 sm:text-xs"
+        role="status"
+        aria-live="polite"
+      >
+        <Cloud className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
+        <span className="font-medium">Cloud sync</span>
+        <span className="truncate opacity-90">— {pendingDetail}</span>
+      </div>
+    )
+  }
 
   const icon =
     status === 'offline' ? <CloudOff className="h-3.5 w-3.5 shrink-0" aria-hidden />
@@ -40,16 +69,6 @@ export function SyncStatusStrip({ status, detail, signedIn, onSyncNow }: Props) 
       {icon}
       <span className="font-medium">{label}</span>
       {detail ? <span className="truncate opacity-90">— {detail}</span> : null}
-      {onSyncNow && status !== 'syncing' && status !== 'conflict' ? (
-        <button
-          type="button"
-          onClick={onSyncNow}
-          className="ml-1 inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-0.5 font-medium text-ink underline decoration-dotted underline-offset-2 hover:bg-white/60 dark:text-ink-dark dark:hover:bg-panel-dark/80"
-        >
-          <RefreshCw className="h-3 w-3" aria-hidden />
-          Sync now
-        </button>
-      ) : null}
     </div>
   )
 }

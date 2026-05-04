@@ -209,7 +209,7 @@ export function BookTools({
               defaultOpen
             >
               <div className="space-y-2 rounded-xl bg-parchment/60 p-2 dark:bg-panel-dark/50">
-                <div className="flex flex-wrap gap-1">
+                <div className="flex flex-wrap gap-1" data-inkwell-tour="workspace-modes">
                   <button
                     type="button"
                     className={modeBtn(workspaceRoute === 'write')}

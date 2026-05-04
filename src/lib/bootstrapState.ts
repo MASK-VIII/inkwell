@@ -5,7 +5,7 @@ const LEGACY_V1 = 'inkwell-manuscripts-v1'
 const LEGACY_V2 = 'inkwell-project-v2'
 
 /** Bump when tutorial steps or copy change so users see the new tour once. */
-export const CURRENT_TUTORIAL_VERSION = 1
+export const CURRENT_TUTORIAL_VERSION = 3
 
 export type WriterPresetId = 'author'
 
@@ -18,6 +18,8 @@ export type InkwellBootstrap = {
   preferSignInGate?: boolean
   /** Last tutorial content version the user completed or skipped. */
   tutorialVersion: number
+  /** When set, first-run tour resumes at this step after “Remind me later” (does not bump `tutorialVersion`). */
+  tutorialStepId?: string
 }
 
 function emptyBootstrap(): InkwellBootstrap {
@@ -54,12 +56,15 @@ function parseBootstrap(raw: string | null): InkwellBootstrap | null {
     if (o && o.version === 1 && typeof o.welcomeDone === 'boolean' && typeof o.tutorialVersion === 'number') {
       const writerPreset: WriterPresetId | undefined = o.writerPreset === 'author' ? 'author' : undefined
       const preferSignInGate = o.preferSignInGate === true
+      const tutorialStepId =
+        typeof o.tutorialStepId === 'string' && o.tutorialStepId.trim() ? o.tutorialStepId.trim() : undefined
       return {
         version: 1,
         writerPreset,
         welcomeDone: o.welcomeDone,
         preferSignInGate: preferSignInGate ? true : undefined,
         tutorialVersion: Number.isFinite(o.tutorialVersion) ? o.tutorialVersion : 0,
+        tutorialStepId,
       }
     }
   } catch {
@@ -82,8 +87,9 @@ function saveBootstrap(state: InkwellBootstrap): void {
  * `welcomeDone` is set and they never see the first-run sign-in gate.
  */
 export function readBootstrap(): InkwellBootstrap {
-  if (typeof window === 'undefined') return { ...emptyBootstrap(), welcomeDone: true, tutorialVersion: CURRENT_TUTORIAL_VERSION }
-  let raw: string | null = null
+  if (typeof window === 'undefined')
+    return { ...emptyBootstrap(), welcomeDone: true, tutorialVersion: CURRENT_TUTORIAL_VERSION, tutorialStepId: undefined }
+  let raw: string | null
   try {
     raw = localStorage.getItem(STORAGE_BOOTSTRAP)
   } catch {
@@ -145,7 +151,24 @@ export function markTutorialSeen(version: number = CURRENT_TUTORIAL_VERSION): vo
     ...prev,
     version: 1,
     tutorialVersion: Math.max(prev.tutorialVersion, version),
+    tutorialStepId: undefined,
   })
+}
+
+/** Persist mid-tour step for resume; does not mark the tutorial version complete. */
+export function saveTutorialResumeStep(stepId: string): void {
+  const prev = readBootstrap()
+  saveBootstrap({
+    ...prev,
+    version: 1,
+    tutorialStepId: stepId,
+  })
+}
+
+export function clearTutorialResumeStep(): void {
+  const prev = readBootstrap()
+  if (!prev.tutorialStepId) return
+  saveBootstrap({ ...prev, version: 1, tutorialStepId: undefined })
 }
 
 /** Hook for future shelf defaults per writer type; Author uses current bookshelf as-is. */
@@ -203,6 +226,7 @@ export function devResetTutorialForReplay(): void {
         ...b,
         version: 1,
         tutorialVersion: 0,
+        tutorialStepId: undefined,
       } satisfies InkwellBootstrap),
     )
   } catch {

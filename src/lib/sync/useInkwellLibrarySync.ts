@@ -30,6 +30,8 @@ export function useInkwellLibrarySync(options: SyncOptions) {
   const [status, setStatus] = useState<LibrarySyncStatus>('idle')
   const [statusDetail, setStatusDetail] = useState('')
   const [conflict, setConflict] = useState<LibrarySyncConflict | null>(null)
+  /** True when the durable sync queue has one or more operations (IndexedDB). */
+  const [queueHasWork, setQueueHasWork] = useState(false)
   /** True until user resolves a push conflict (keep local / use cloud). */
   const unresolvedConflictRef = useRef(false)
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -88,6 +90,11 @@ export function useInkwellLibrarySync(options: SyncOptions) {
     [],
   )
 
+  const refreshQueuePending = useCallback(async () => {
+    const ops = await syncQueue.snapshot()
+    setQueueHasWork(ops.length > 0)
+  }, [syncQueue])
+
   /** Chromium/Electron often report `navigator.onLine === false` while HTTPS to Supabase still works. */
   const shouldAttemptNetworkSync = useCallback(() => {
     if (typeof navigator === 'undefined') return true
@@ -101,9 +108,13 @@ export function useInkwellLibrarySync(options: SyncOptions) {
     if (!ctx.online) {
       setStatus('offline')
       setStatusDetail('Offline — sync when you reconnect')
+      await refreshQueuePending()
       return
     }
-    if (!optsRef.current.supabaseConfig) return
+    if (!optsRef.current.supabaseConfig) {
+      await refreshQueuePending()
+      return
+    }
     if (!unresolvedConflictRef.current) {
       setStatus('syncing')
       setStatusDetail('Syncing…')
@@ -124,8 +135,10 @@ export function useInkwellLibrarySync(options: SyncOptions) {
         setStatusDetail(msg)
       }
       optsRef.current.showToast(msg)
+    } finally {
+      await refreshQueuePending()
     }
-  }, [shouldAttemptNetworkSync, syncQueue])
+  }, [shouldAttemptNetworkSync, syncQueue, refreshQueuePending])
 
   const scheduleIdleFlush = useCallback(() => {
     if (!optsRef.current.supabaseConfig || !userEmail || unresolvedConflictRef.current) return
@@ -160,6 +173,7 @@ export function useInkwellLibrarySync(options: SyncOptions) {
           initialPullKeyRef.current = null
           unresolvedConflictRef.current = false
           setConflict(null)
+          setQueueHasWork(false)
         }
       })
     })
@@ -184,6 +198,11 @@ export function useInkwellLibrarySync(options: SyncOptions) {
       window.clearInterval(t)
     }
   }, [options.supabaseConfig, userEmail, flushQueue])
+
+  useEffect(() => {
+    if (!options.supabaseConfig || !userEmail) return
+    queueMicrotask(() => void refreshQueuePending())
+  }, [options.supabaseConfig, userEmail, refreshQueuePending])
 
   useEffect(() => {
     const cfg = options.supabaseConfig
@@ -227,9 +246,9 @@ export function useInkwellLibrarySync(options: SyncOptions) {
 
   const notifyLocalSaved = useCallback(() => {
     if (!optsRef.current.supabaseConfig || !userEmail || unresolvedConflictRef.current) return
-    syncQueue.enqueue('push_library')
+    void syncQueue.enqueue('push_library').then(() => void refreshQueuePending())
     scheduleIdleFlush()
-  }, [userEmail, scheduleIdleFlush, syncQueue])
+  }, [userEmail, scheduleIdleFlush, syncQueue, refreshQueuePending])
 
   const resolveKeepLocal = useCallback(async () => {
     const cfg = optsRef.current.supabaseConfig
@@ -333,6 +352,7 @@ export function useInkwellLibrarySync(options: SyncOptions) {
       status,
       statusDetail,
       conflict,
+      queueHasWork,
       syncNow,
       notifyLocalSaved,
       resolveKeepLocal,
@@ -347,6 +367,7 @@ export function useInkwellLibrarySync(options: SyncOptions) {
       status,
       statusDetail,
       conflict,
+      queueHasWork,
       syncNow,
       notifyLocalSaved,
       resolveKeepLocal,

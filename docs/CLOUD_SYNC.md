@@ -75,7 +75,7 @@ Never commit production secrets; inject via CI or host env for builds.
 
 | Milestone | Outcome |
 |-----------|---------|
-| **M1** | Supabase schema + Storage + email/password sign-in + manual “Sync library now” (menu / account / strip). |
+| **M1** | Supabase schema + Storage + email/password sign-in + manual “Sync library now” (bookshelf **Account** menu and Electron **Application** menu); status strip shows **Synced** when signed in, idle, and the durable queue is empty (not a second manual-sync control). |
 | **M2** | Initial pull after sign-in; debounced push after local save idle; periodic / visibility / online flush. |
 | **M3** | Conflict modal + status strip + queue persistence/backoff. |
 | **M4** | Electron `safeStorage`-backed session KV (implemented via main/preload IPC). |

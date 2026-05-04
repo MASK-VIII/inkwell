@@ -1239,9 +1239,14 @@ export function ManuscriptToolbar({
     >
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
-          {toolbarInner}
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-2" data-inkwell-tour="editor-toolbar-bar">
+            {toolbarInner}
+          </div>
 
-          <div className="flex flex-wrap items-center gap-2 border-l border-dust/80 pl-3 dark:border-border-dark/90">
+          <div
+            className="flex flex-wrap items-center gap-2 border-l border-dust/80 pl-3 dark:border-border-dark/90"
+            data-inkwell-tour="editor-toolbar-customize"
+          >
             <button
               type="button"
               className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-walnut/35 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment dark:focus-visible:ring-accent-warm/40 dark:focus-visible:ring-offset-panel-dark ${

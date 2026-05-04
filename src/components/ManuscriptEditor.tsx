@@ -106,7 +106,7 @@ function ManuscriptEditorInner({
   const floatClusterRef = useRef<HTMLDivElement | null>(null)
 
   const [floatPos, setFloatPos] = useState<{ x: number; y: number } | null>(null)
-  const [statsPinned, setStatsPinned] = useState(false)
+  const [statsPinned, setStatsPinned] = useState(true)
 
   const mentionItemsRef = useRef(mentionItems)
   mentionItemsRef.current = mentionItems
@@ -169,13 +169,13 @@ function ManuscriptEditorInner({
     queueMicrotask(() => {
       if (cancelled) return
       if (!wordStatStorageKey) {
-        setStatsPinned(false)
+        setStatsPinned(true)
         return
       }
       try {
-        setStatsPinned(localStorage.getItem(`inkwell-wordstat-pin:${wordStatStorageKey}`) === '1')
+        setStatsPinned(localStorage.getItem(`inkwell-wordstat-pin:${wordStatStorageKey}`) !== '0')
       } catch {
-        setStatsPinned(false)
+        setStatsPinned(true)
       }
     })
     return () => {
@@ -325,7 +325,7 @@ function ManuscriptEditorInner({
   const editorMinH = embedded ? 'min-h-[9rem]' : 'min-h-[50vh]'
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col" data-inkwell-tour="editor-toolbar">
       <ManuscriptToolbar
         manuscriptId={manuscriptId}
         editor={editor}

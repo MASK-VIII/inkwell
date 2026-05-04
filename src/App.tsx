@@ -32,7 +32,7 @@ import {
 } from 'react'
 import { BookTools } from './components/BookTools'
 import { FindReplaceModal } from './components/FindReplaceModal'
-import { GettingStartedTour } from './components/GettingStartedTour'
+import { GettingStartedTour, type TourRouteBucket } from './components/GettingStartedTour'
 import { SignInScreen } from './components/SignInScreen'
 import { SyncConflictModal } from './components/SyncConflictModal'
 import { SyncStatusStrip } from './components/SyncStatusStrip'
@@ -117,6 +117,7 @@ import {
   type ImportArchiveResult,
 } from './lib/projectArchive'
 import { mergeDocContents, splitDocAtTopLevelIndex } from './lib/chapterSplit'
+import type { TourStepId } from './lib/tutorialSteps'
 import { applyThemePreset, type ThemePresetId } from './lib/themePresets'
 import { countWordsInDoc } from './lib/wordCount'
 import type {
@@ -359,6 +360,10 @@ export default function App() {
   const printFormatSliceRef = useRef<PrintFormatSlice | null>(null)
   const routeRef = useRef<Route>(readInitialAppRoute())
   const [gettingStartedTourOpen, setGettingStartedTourOpen] = useState(false)
+  const [tourPersistRemindLater, setTourPersistRemindLater] = useState(true)
+  const [tourResumeStepId, setTourResumeStepId] = useState<string | null>(null)
+  const [tourBookMenuCreate, setTourBookMenuCreate] = useState(false)
+  const activeTourStepRef = useRef<TourStepId | null>(null)
   const prevRouteForSliceInitRef = useRef<Route | null>(null)
   const [findReplaceOpen, setFindReplaceOpen] = useState(false)
   const [stickyNotePopoutId, setStickyNotePopoutId] = useState<string | null>(null)
@@ -662,15 +667,32 @@ export default function App() {
     }
   }, [])
 
-  const closeGettingStartedTour = useCallback(() => {
-    markTutorialSeen()
-    setGettingStartedTourOpen(false)
+  const handleTourStepChange = useCallback((id: TourStepId | null) => {
+    activeTourStepRef.current = id
   }, [])
+
+  const handleTourClose = useCallback((reason: 'complete' | 'remind') => {
+    if (reason === 'complete') markTutorialSeen()
+    setGettingStartedTourOpen(false)
+    setTourBookMenuCreate(false)
+  }, [])
+
+  const tourRouteBucket = useMemo((): TourRouteBucket => {
+    if (route === 'bookshelf') return 'bookshelf'
+    if (route === 'write') return 'write'
+    if (route === 'format_print' || route === 'format_ebook') return 'format'
+    if (route === 'publish') return 'publish'
+    return 'other'
+  }, [route])
 
   useEffect(() => {
     if (route !== 'bookshelf') return
     if (!shouldShowTutorial(readBootstrap())) return
-    setGettingStartedTourOpen(true)
+    queueMicrotask(() => {
+      setTourPersistRemindLater(true)
+      setTourResumeStepId(readBootstrap().tutorialStepId ?? null)
+      setGettingStartedTourOpen(true)
+    })
   }, [route])
 
   useEffect(() => {
@@ -781,6 +803,24 @@ export default function App() {
     setProject(saved)
     return saved
   }, [clearPersistIdleTimer])
+
+  const tourGoBookshelf = useCallback(() => {
+    syncPersistedState()
+    navigateRoute('bookshelf')
+  }, [syncPersistedState, navigateRoute])
+
+  const tourGoWrite = useCallback(() => {
+    navigateRoute('write')
+  }, [navigateRoute])
+
+  const tourGoFormat = useCallback(() => {
+    setEbookEditOpen(false)
+    navigateRoute('format_ebook')
+  }, [navigateRoute])
+
+  const tourGoPublish = useCallback(() => {
+    navigateRoute('publish')
+  }, [navigateRoute])
 
   const openLinkedNotePopout = useCallback(
     (noteId: string) => {
@@ -2170,6 +2210,7 @@ export default function App() {
     if (isNote || route !== 'write') return null
     return (
       <div
+        data-inkwell-tour="write-chapters"
         className={`inkwell-chapters-overlay-clip ${FORMAT_WORKSPACE_SIDE_PANEL_WIDTH_CLASS} pointer-events-none absolute left-0 top-0 z-40 isolate h-full min-w-0 shrink-0 overflow-hidden ${
           chaptersAsideCollapsed ? 'inkwell-chapters-overlay-clip--collapsed' : 'inkwell-chapters-overlay-clip--expanded'
         }`}
@@ -2388,6 +2429,10 @@ export default function App() {
                       setShelfAccountMenuOpen(false)
                       setNewProjectMenuOpen(false)
                       setShelfNewImportSubmenuOpen(false)
+                      const b = readBootstrap()
+                      const persist = shouldShowTutorial(b)
+                      setTourPersistRemindLater(persist)
+                      setTourResumeStepId(persist ? (b.tutorialStepId ?? null) : null)
                       setGettingStartedTourOpen(true)
                     }}
                     className="flex h-11 w-11 items-center justify-center rounded-3xl border border-dust bg-white/70 text-ink transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
@@ -2436,6 +2481,7 @@ export default function App() {
                   <div className="relative" ref={newProjectMenuRef}>
                     <button
                       type="button"
+                      data-inkwell-tour="shelf-new"
                       onClick={() => {
                         setShelfAccountMenuOpen(false)
                         setNewProjectMenuOpen((v) => {
@@ -2460,11 +2506,15 @@ export default function App() {
                         <button
                           type="button"
                           role="menuitem"
+                          data-inkwell-tour="shelf-menu-book"
                           className="block w-full px-4 py-2.5 text-left text-sm font-medium text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
                           onClick={() => {
                             setNewProjectMenuOpen(false)
                             setShelfNewImportSubmenuOpen(false)
                             syncPersistedState()
+                            if (gettingStartedTourOpen && activeTourStepRef.current === 'shelf-pick-book') {
+                              setTourBookMenuCreate(true)
+                            }
                             const p = createBookProject()
                             setProject(p)
                             setCurrentId(p.chapters[0]?.id ?? null)
@@ -2651,7 +2701,7 @@ export default function App() {
               status={inkwellLibrarySync.status}
               detail={inkwellLibrarySync.statusDetail}
               signedIn={Boolean(inkwellLibrarySync.userEmail)}
-              onSyncNow={inkwellLibrarySync.userEmail ? inkwellLibrarySync.syncNow : undefined}
+              queueHasWork={inkwellLibrarySync.queueHasWork}
             />
           ) : null}
 
@@ -2691,7 +2741,7 @@ export default function App() {
           ) : null}
 
           <div className="inkwell-bookshelf mx-auto flex w-full max-w-screen-2xl flex-1 flex-col px-4 pb-6 sm:px-8 sm:pb-10">
-            <div className="flex justify-center py-6 sm:py-8">
+            <div className="flex justify-center pb-2 pt-4 sm:pb-3 sm:pt-5">
               <button
                 type="button"
                 onClick={() => {
@@ -2711,7 +2761,7 @@ export default function App() {
               </button>
             </div>
 
-          <section className="mt-10 space-y-3 sm:space-y-4">
+          <section className="mt-4 space-y-3 sm:mt-5 sm:space-y-4" data-inkwell-tour="shelf-books">
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
                 Books
@@ -3550,6 +3600,7 @@ export default function App() {
                   ) : (
                     <button
                       type="button"
+                      data-inkwell-tour={isFormatWorkspace ? 'header-workspace-publish' : 'header-workspace-format'}
                       onClick={() => {
                         if (isFormatWorkspace) navigateRoute('publish')
                         else {
@@ -3970,7 +4021,22 @@ export default function App() {
           }}
         />
       ) : null}
-      <GettingStartedTour open={gettingStartedTourOpen} onClose={closeGettingStartedTour} />
+      <GettingStartedTour
+        open={gettingStartedTourOpen}
+        persistRemindLater={tourPersistRemindLater}
+        resumeStepId={tourResumeStepId}
+        routeBucket={tourRouteBucket}
+        newProjectMenuOpen={newProjectMenuOpen}
+        projectKind={project.kind}
+        bookCreatedFromTourMenu={tourBookMenuCreate}
+        onClearBookCreatedFromTourMenu={() => setTourBookMenuCreate(false)}
+        onRequestBookshelf={tourGoBookshelf}
+        onRequestWrite={tourGoWrite}
+        onRequestFormat={tourGoFormat}
+        onRequestPublish={tourGoPublish}
+        onStepChange={handleTourStepChange}
+        onClose={handleTourClose}
+      />
     </div>
   )
 }
