@@ -505,6 +505,16 @@ body {
   color: var(--color-accent-warm);
 }
 
+.tiptap.ProseMirror .inkwell-wikilink {
+  color: var(--color-walnut);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.dark .tiptap.ProseMirror .inkwell-wikilink {
+  color: var(--color-accent-warm);
+}
+
 .inkwell-mention-popup {
   z-index: 200;
   min-width: 12rem;

@@ -106,11 +106,16 @@ Use a **matrix** over OS so native binaries are produced on real hosts:
 
 The repository includes `.github/workflows/desktop.yml` as a minimal unsigned matrix build; tighten secrets and signing steps when you are ready to ship.
 
+## App icon (electron-builder)
+
+`package.json` → `build.icon` references `build/icon.png`. When you change `public/favicon.svg`, run `npm run generate:brand-icons` to regenerate that PNG plus `public/apple-touch-icon.png` before cutting a desktop build.
+
 ## Commands
 
 | Command | Purpose |
 |---------|---------|
 | `npm run dev:desktop` | Vite (desktop `base`) + Electron against localhost |
 | `npm run build:desktop` | Typecheck, Vite production build with `INKWELL_DESKTOP=1`, then `electron-builder` |
+| `npm run generate:brand-icons` | Rasterize `public/favicon.svg` → `build/icon.png` (512) and `public/apple-touch-icon.png` (180) |
 
 Installers land in `release/` (see `package.json` → `build.directories.output`).

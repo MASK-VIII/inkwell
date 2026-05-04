@@ -32,7 +32,9 @@ import {
 } from 'react'
 import { BookTools } from './components/BookTools'
 import { FindReplaceModal } from './components/FindReplaceModal'
+import { InkwellEmblem } from './components/InkwellEmblem'
 import { GettingStartedTour, type TourRouteBucket } from './components/GettingStartedTour'
+import { NotesTour } from './components/NotesTour'
 import { SignInScreen } from './components/SignInScreen'
 import { SyncConflictModal } from './components/SyncConflictModal'
 import { SyncStatusStrip } from './components/SyncStatusStrip'
@@ -50,10 +52,12 @@ import { readInkwellPanelMotionDurationMs } from './lib/panelMotionMs'
 import {
   devClearForceSignInFlag,
   devIsForceSignInActive,
+  markNotesTutorialSeen,
   markSignInComplete,
   markSignedOut,
   markTutorialSeen,
   readBootstrap,
+  shouldShowNotesTutorial,
   shouldShowSignIn,
   shouldShowTutorial,
 } from './lib/bootstrapState'
@@ -117,9 +121,11 @@ import {
   type ImportArchiveResult,
 } from './lib/projectArchive'
 import { mergeDocContents, splitDocAtTopLevelIndex } from './lib/chapterSplit'
+import type { NotesTourStepId } from './lib/notesTutorialSteps'
 import type { TourStepId } from './lib/tutorialSteps'
 import { applyThemePreset, type ThemePresetId } from './lib/themePresets'
 import { countWordsInDoc } from './lib/wordCount'
+import { listBacklinksToNote } from './lib/noteLinkScan'
 import type {
   BookAssembly,
   BookMeta,
@@ -364,6 +370,14 @@ export default function App() {
   const [tourResumeStepId, setTourResumeStepId] = useState<string | null>(null)
   const [tourBookMenuCreate, setTourBookMenuCreate] = useState(false)
   const activeTourStepRef = useRef<TourStepId | null>(null)
+  const [notesTourStepId, setNotesTourStepId] = useState<NotesTourStepId | null>(null)
+  const [notesTourOpen, setNotesTourOpen] = useState(false)
+  /** True after Note (or Start Writing during the choose-note step) while the Notes tour expects auto-advance. */
+  const [notesTourNoteFromMenu, setNotesTourNoteFromMenu] = useState(false)
+  const [notesTourPersistRemindLater, setNotesTourPersistRemindLater] = useState(true)
+  const [notesTourResumeStepId, setNotesTourResumeStepId] = useState<string | null>(null)
+  const [shelfHelpMenuOpen, setShelfHelpMenuOpen] = useState(false)
+  const shelfHelpMenuRef = useRef<HTMLDivElement | null>(null)
   const prevRouteForSliceInitRef = useRef<Route | null>(null)
   const [findReplaceOpen, setFindReplaceOpen] = useState(false)
   const [stickyNotePopoutId, setStickyNotePopoutId] = useState<string | null>(null)
@@ -452,6 +466,30 @@ export default function App() {
     return listLinkedNotesForBookInShelfOrder(shelfParentIdForLinkedNotes).filter((n) => n.id !== project.id)
   }, [project.kind, project.id, shelfParentIdForLinkedNotes])
 
+  const wikilinkMentionItems = useMemo((): MentionItem[] => {
+    if (project.kind !== 'book' && project.kind !== 'note') return []
+    const metas = listLinkedNotesForBookInShelfOrder(shelfParentIdForLinkedNotes)
+    const out: MentionItem[] = []
+    for (const m of metas) {
+      if (m.id === project.id) continue
+      const p = loadProject(m.id)
+      if (!p || p.kind !== 'note') continue
+      const label = deriveNoteMetaTitle(p).trim() || 'Untitled note'
+      out.push({ id: m.id, label })
+    }
+    return out.slice(0, 64)
+  }, [project.kind, project.id, shelfParentIdForLinkedNotes])
+
+  const wikilinkItemsRef = useRef<MentionItem[]>([])
+  useLayoutEffect(() => {
+    wikilinkItemsRef.current = wikilinkMentionItems
+  }, [wikilinkMentionItems])
+
+  const noteBacklinks = useMemo(() => {
+    if (project.kind !== 'note') return []
+    return listBacklinksToNote(project.id, shelfParentIdForLinkedNotes)
+  }, [project.kind, project.id, shelfParentIdForLinkedNotes])
+
   const mentionItems = useMemo((): MentionItem[] => {
     const items: MentionItem[] = []
     const author = project.book.authorName.trim()
@@ -462,8 +500,14 @@ export default function App() {
       const t = ch.title.trim()
       if (t) items.push({ id: `mention:ch-${ch.id}`, label: t })
     }
+    for (const n of linkedNotesForBookPanel) {
+      const p = loadProject(n.id)
+      const label =
+        p?.kind === 'note' ? deriveNoteMetaTitle(p).trim() || 'Untitled note' : n.title.trim() || 'Untitled note'
+      items.push({ id: `mention:note:${n.id}`, label, noteProjectId: n.id })
+    }
     return items
-  }, [project.book.authorName, project.book.title, chapters])
+  }, [project.book.authorName, project.book.title, chapters, linkedNotesForBookPanel])
   const isNote = project.kind === 'note'
   const current = chapters.find((m) => m.id === currentId) ?? null
   const currentChapterIndex = useMemo(() => {
@@ -671,10 +715,34 @@ export default function App() {
     activeTourStepRef.current = id
   }, [])
 
+  const handleNotesTourStepChange = useCallback((id: NotesTourStepId | null) => {
+    setNotesTourStepId(id)
+  }, [])
+
+  useEffect(() => {
+    if (!notesTourOpen || route !== 'bookshelf') return
+    if (notesTourStepId !== 'notes-shelf-create-note') return
+    setShelfHelpMenuOpen(false)
+    setShelfAccountMenuOpen(false)
+    setNewProjectMenuOpen(true)
+  }, [notesTourOpen, route, notesTourStepId])
+
+  useEffect(() => {
+    if (!notesTourOpen || route !== 'write') return
+    if (notesTourStepId !== 'notes-write-tools' && notesTourStepId !== 'notes-write-linked-panel') return
+    setBookToolsOpen(true)
+  }, [notesTourOpen, route, notesTourStepId])
+
   const handleTourClose = useCallback((reason: 'complete' | 'remind') => {
     if (reason === 'complete') markTutorialSeen()
     setGettingStartedTourOpen(false)
     setTourBookMenuCreate(false)
+  }, [])
+
+  const handleNotesTourClose = useCallback((reason: 'complete' | 'remind') => {
+    if (reason === 'complete') markNotesTutorialSeen()
+    setNotesTourOpen(false)
+    setNotesTourNoteFromMenu(false)
   }, [])
 
   const tourRouteBucket = useMemo((): TourRouteBucket => {
@@ -747,6 +815,23 @@ export default function App() {
       window.removeEventListener('keydown', onKey)
     }
   }, [newProjectMenuOpen])
+
+  useEffect(() => {
+    if (!shelfHelpMenuOpen) return
+    const onDocMouseDown = (e: MouseEvent) => {
+      const el = shelfHelpMenuRef.current
+      if (el && !el.contains(e.target as Node)) setShelfHelpMenuOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShelfHelpMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onDocMouseDown)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDocMouseDown)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [shelfHelpMenuOpen])
 
   useEffect(() => {
     if (!shelfAccountMenuOpen) return
@@ -2387,9 +2472,7 @@ export default function App() {
                   aria-label="Inkwell"
                   title="Inkwell"
                 >
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-ink text-lg text-parchment transition-colors group-hover:bg-cream dark:bg-cream dark:text-ink dark:group-hover:bg-accent-warm sm:text-xl">
-                    🪶
-                  </div>
+                  <InkwellEmblem />
                   <span className="hidden font-serif text-xl font-semibold tracking-tight sm:block sm:text-2xl">
                     Inkwell
                   </span>
@@ -2423,24 +2506,60 @@ export default function App() {
                   >
                     {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShelfAccountMenuOpen(false)
-                      setNewProjectMenuOpen(false)
-                      setShelfNewImportSubmenuOpen(false)
-                      const b = readBootstrap()
-                      const persist = shouldShowTutorial(b)
-                      setTourPersistRemindLater(persist)
-                      setTourResumeStepId(persist ? (b.tutorialStepId ?? null) : null)
-                      setGettingStartedTourOpen(true)
-                    }}
-                    className="flex h-11 w-11 items-center justify-center rounded-3xl border border-dust bg-white/70 text-ink transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
-                    aria-label="Getting started"
-                    title="Show getting started tips"
-                  >
-                    <CircleHelp className="h-5 w-5" strokeWidth={2.25} />
-                  </button>
+                  <div className="relative" ref={shelfHelpMenuRef}>
+                    <button
+                      type="button"
+                      aria-expanded={shelfHelpMenuOpen}
+                      aria-haspopup="menu"
+                      onClick={() => {
+                        setShelfAccountMenuOpen(false)
+                        setNewProjectMenuOpen(false)
+                        setShelfNewImportSubmenuOpen(false)
+                        setShelfHelpMenuOpen((v) => !v)
+                      }}
+                      className="flex h-11 w-11 items-center justify-center rounded-3xl border border-dust bg-white/70 text-ink transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
+                      aria-label="Help"
+                      title="Help"
+                    >
+                      <CircleHelp className="h-5 w-5" strokeWidth={2.25} />
+                    </button>
+                    {shelfHelpMenuOpen ? (
+                      <div
+                        role="menu"
+                        className="absolute right-0 top-full z-[60] mt-2 min-w-[14rem] overflow-hidden rounded-2xl border border-dust bg-white py-1 shadow-xl dark:border-border-dark dark:bg-panel-dark"
+                      >
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="block w-full px-4 py-2.5 text-left text-sm font-medium text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
+                          onClick={() => {
+                            setShelfHelpMenuOpen(false)
+                            const b = readBootstrap()
+                            const persist = shouldShowTutorial(b)
+                            setTourPersistRemindLater(persist)
+                            setTourResumeStepId(persist ? (b.tutorialStepId ?? null) : null)
+                            setGettingStartedTourOpen(true)
+                          }}
+                        >
+                          Getting Started
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="block w-full px-4 py-2.5 text-left text-sm font-medium text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
+                          onClick={() => {
+                            setShelfHelpMenuOpen(false)
+                            const b = readBootstrap()
+                            setNotesTourPersistRemindLater(shouldShowNotesTutorial(b))
+                            setNotesTourResumeStepId(b.notesTutorialStepId ?? null)
+                            setNotesTourOpen(true)
+                          }}
+                        >
+                          Notes and Projects
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
                   <input
                     ref={docxShelfInputRef}
                     type="file"
@@ -2542,11 +2661,15 @@ export default function App() {
                         <button
                           type="button"
                           role="menuitem"
+                          data-inkwell-tour="shelf-menu-note"
                           className="block w-full px-4 py-2.5 text-left text-sm font-medium text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
                           onClick={() => {
                             setNewProjectMenuOpen(false)
                             setShelfNewImportSubmenuOpen(false)
                             syncPersistedState()
+                            if (notesTourOpen && notesTourStepId === 'notes-shelf-create-note') {
+                              setNotesTourNoteFromMenu(true)
+                            }
                             const p = createNoteProject()
                             setProject(p)
                             setCurrentId(p.chapters[0]?.id ?? null)
@@ -2748,6 +2871,9 @@ export default function App() {
                   setNewProjectMenuOpen(false)
                   setShelfNewImportSubmenuOpen(false)
                   syncPersistedState()
+                  if (notesTourOpen && notesTourStepId === 'notes-shelf-create-note') {
+                    setNotesTourNoteFromMenu(true)
+                  }
                   const p = createNoteProject()
                   setProject(p)
                   setCurrentId(p.chapters[0]?.id ?? null)
@@ -3201,6 +3327,7 @@ export default function App() {
           </section>
 
           <section
+            data-inkwell-tour="shelf-notes"
             className={`mt-10 space-y-3 sm:space-y-4 rounded-3xl transition-[transform,box-shadow] duration-300 ease-out ${
               shelfDropHoverNotesSection
                 ? 'inkwell-shelf-drop-target scale-[1.01] shadow-lg ring-2 ring-cream ring-offset-2 ring-offset-parchment dark:ring-accent-warm dark:ring-offset-panel-dark'
@@ -3490,9 +3617,7 @@ export default function App() {
                   aria-label="Back to Bookshelf"
                   title="Bookshelf"
                 >
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-ink text-lg text-parchment transition-colors group-hover:bg-cream dark:bg-cream dark:text-ink dark:group-hover:bg-accent-warm sm:text-xl">
-                    🪶
-                  </div>
+                  <InkwellEmblem />
                   <span className="hidden font-serif text-xl font-semibold tracking-tight sm:block sm:text-2xl">
                     Inkwell
                   </span>
@@ -3559,6 +3684,7 @@ export default function App() {
                   <div className="flex items-center gap-0 sm:gap-0.5">
                     <button
                       type="button"
+                      data-inkwell-tour="header-book-tools"
                       onClick={() => {
                         setBookToolsOpen(true)
                       }}
@@ -3754,6 +3880,9 @@ export default function App() {
                           onChapterTitleChange={updateCurrentTitle}
                           showChapterTitleOnPage
                           mentionItems={mentionItems}
+                          getWikilinkCandidates={() => wikilinkItemsRef.current}
+                          onNoteMentionClick={openLinkedNotePopout}
+                          onWikilinkClick={openLinkedNotePopout}
                           totalBookWords={liveTotalBookWords}
                           statsBookLabel={isNote ? 'Entire note' : 'Entire book'}
                           statsScopeLabel={isNote ? 'Note' : 'Chapter'}
@@ -3850,6 +3979,9 @@ export default function App() {
                   onChapterTitleChange={updateCurrentTitle}
                   showChapterTitleOnPage
                   mentionItems={mentionItems}
+                  getWikilinkCandidates={() => wikilinkItemsRef.current}
+                  onNoteMentionClick={openLinkedNotePopout}
+                  onWikilinkClick={openLinkedNotePopout}
                   totalBookWords={liveTotalBookWords}
                   statsBookLabel={isNote ? 'Entire note' : 'Entire book'}
                   statsScopeLabel={isNote ? 'Note' : 'Chapter'}
@@ -3941,6 +4073,11 @@ export default function App() {
               openProject(id)
               setBookToolsOpen(false)
             }}
+            backlinks={noteBacklinks}
+            onOpenBacklinkSource={(id) => {
+              syncPersistedState()
+              openProject(id)
+            }}
             assembly={project.assembly}
             onAssemblyChange={patchAssembly}
             seriesBible={project.seriesBible}
@@ -3983,6 +4120,7 @@ export default function App() {
                   : deriveNoteMetaTitle(project)
               }
               onClose={() => setStickyNotePopoutId(null)}
+              onOpenSiblingInPopout={setStickyNotePopoutId}
               onOpenInMainEditor={(id) => {
                 syncPersistedState()
                 openProject(id)
@@ -4036,6 +4174,21 @@ export default function App() {
         onRequestPublish={tourGoPublish}
         onStepChange={handleTourStepChange}
         onClose={handleTourClose}
+      />
+      <NotesTour
+        open={notesTourOpen}
+        persistRemindLater={notesTourPersistRemindLater}
+        resumeStepId={notesTourResumeStepId}
+        routeBucket={tourRouteBucket}
+        bookToolsOpen={bookToolsOpen}
+        newProjectMenuOpen={newProjectMenuOpen}
+        projectKind={project.kind}
+        noteCreatedFromTourMenu={notesTourNoteFromMenu}
+        onClearNoteCreatedFromTourMenu={() => setNotesTourNoteFromMenu(false)}
+        onRequestBookshelf={tourGoBookshelf}
+        onRequestWrite={tourGoWrite}
+        onStepChange={handleNotesTourStepChange}
+        onClose={handleNotesTourClose}
       />
     </div>
   )

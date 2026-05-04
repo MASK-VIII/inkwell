@@ -1,10 +1,24 @@
-import { type MutableRefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  type MutableRefObject,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import type { Editor } from '@tiptap/react'
 import type { JSONContent } from '@tiptap/core'
 import { GripVertical, PenLine, X } from 'lucide-react'
 
 import type { InkwellProject } from '../../types'
-import { deriveNoteMetaTitle, loadProject, saveProject, totalWordsInChapters } from '../../lib/manuscripts'
+import {
+  deriveNoteMetaTitle,
+  listLinkedNotesForBookInShelfOrder,
+  loadProject,
+  saveProject,
+  totalWordsInChapters,
+} from '../../lib/manuscripts'
 import type { MentionItem } from '../../lib/tiptap/mentionUi'
 import { ManuscriptEditor } from '../ManuscriptEditor'
 import { OpenProjectInNewTabLink } from '../OpenProjectInNewTabLink'
@@ -16,6 +30,8 @@ type Props = {
   onClose: () => void
   /** Flush save, close popout, then navigate shelf to this note */
   onOpenInMainEditor: (noteId: string) => void
+  /** Open another linked note in this same sticky stack */
+  onOpenSiblingInPopout: (noteId: string) => void
 }
 
 const SAVE_DEBOUNCE_MS = 450
@@ -25,6 +41,7 @@ export function StickyNotePopout({
   bookTitle,
   onClose,
   onOpenInMainEditor,
+  onOpenSiblingInPopout,
 }: Props) {
   const [noteProject, setNoteProject] = useState<InkwellProject | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -53,19 +70,22 @@ export function StickyNotePopout({
   }, [])
 
   useEffect(() => {
-    setLoadError(null)
-    setNoteProject(null)
-    const loaded = loadProject(noteId)
-    if (!loaded || loaded.kind !== 'note') {
-      persistRef.current = null
-      setLoadError(!loaded ? 'Note not found.' : 'Not a note.')
-      return () => {
-        flushSave()
+    let cancelled = false
+    queueMicrotask(() => {
+      if (cancelled) return
+      setLoadError(null)
+      setNoteProject(null)
+      const loaded = loadProject(noteId)
+      if (!loaded || loaded.kind !== 'note') {
+        persistRef.current = null
+        if (!cancelled) setLoadError(!loaded ? 'Note not found.' : 'Not a note.')
+        return
       }
-    }
-    persistRef.current = loaded
-    setNoteProject(loaded)
+      persistRef.current = loaded
+      if (!cancelled) setNoteProject(loaded)
+    })
     return () => {
+      cancelled = true
       flushSave()
     }
   }, [noteId, flushSave])
@@ -158,6 +178,27 @@ export function StickyNotePopout({
     [noteProject],
   )
 
+  const shelfParentId = noteProject?.linkedBookId?.trim() || noteId
+
+  const wikilinkMentionItems = useMemo((): MentionItem[] => {
+    if (!noteProject || noteProject.kind !== 'note') return []
+    const metas = listLinkedNotesForBookInShelfOrder(shelfParentId)
+    const out: MentionItem[] = []
+    for (const m of metas) {
+      if (m.id === noteId) continue
+      const p = loadProject(m.id)
+      if (!p || p.kind !== 'note') continue
+      const label = deriveNoteMetaTitle(p).trim() || 'Untitled note'
+      out.push({ id: m.id, label })
+    }
+    return out.slice(0, 64)
+  }, [noteProject, noteId, shelfParentId])
+
+  const wikilinkItemsRef = useRef<MentionItem[]>([])
+  useLayoutEffect(() => {
+    wikilinkItemsRef.current = wikilinkMentionItems
+  }, [wikilinkMentionItems])
+
   const mentionItems = useMemo((): MentionItem[] => {
     if (!noteProject) return []
     const items: MentionItem[] = []
@@ -168,8 +209,16 @@ export function StickyNotePopout({
     const ct = noteProject.chapters[0]?.title.trim()
     if (ct) items.push({ id: 'mention:chapter', label: ct })
     if (bookTitle.trim()) items.push({ id: 'mention:linked-book', label: bookTitle.trim() })
+    const metas = listLinkedNotesForBookInShelfOrder(shelfParentId)
+    for (const m of metas) {
+      if (m.id === noteId) continue
+      const p = loadProject(m.id)
+      const label =
+        p?.kind === 'note' ? deriveNoteMetaTitle(p).trim() || 'Untitled note' : m.title.trim() || 'Untitled note'
+      items.push({ id: `mention:note:${m.id}`, label, noteProjectId: m.id })
+    }
     return items
-  }, [noteProject, bookTitle])
+  }, [noteProject, bookTitle, noteId, shelfParentId])
 
   return (
     <div
@@ -235,6 +284,9 @@ export function StickyNotePopout({
             embedded
             compactFooterStats
             mentionItems={mentionItems}
+            getWikilinkCandidates={() => wikilinkItemsRef.current}
+            onNoteMentionClick={onOpenSiblingInPopout}
+            onWikilinkClick={onOpenSiblingInPopout}
             totalBookWords={noteTotalWords}
             statsBookLabel="Entire note"
             statsScopeLabel="Note"

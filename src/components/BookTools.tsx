@@ -10,6 +10,7 @@ import type {
 } from '../types'
 import { fileToBookCoverDataUrl } from '../lib/bookCoverImage'
 import { buildInkwellUrlForProject, type ProjectHistoryEntry } from '../lib/manuscripts'
+import type { BacklinkSource } from '../lib/noteLinkScan'
 import { readInkwellPanelMotionDurationMs } from '../lib/panelMotionMs'
 import { CollapsibleSection } from './book-tools/CollapsibleSection'
 import { HistoryPanel } from './book-tools/HistoryPanel'
@@ -68,6 +69,9 @@ type Props = {
   /** When set (build-time URL configured), shows upload full library to cloud. */
   onCloudBackupLibrary?: () => void
   cloudBackupBusy?: boolean
+  /** @mentions / [[wikilink]] from other notes in this shelf cluster pointing at the open note. */
+  backlinks?: BacklinkSource[]
+  onOpenBacklinkSource?: (sourceProjectId: string) => void
 }
 
 export function BookTools({
@@ -104,6 +108,8 @@ export function BookTools({
   onExportTxt,
   onCloudBackupLibrary,
   cloudBackupBusy = false,
+  backlinks = [],
+  onOpenBacklinkSource,
 }: Props) {
   const isNote = variant === 'note'
   const isFormat = workspaceRoute === 'format_print' || workspaceRoute === 'format_ebook'
@@ -188,6 +194,7 @@ export function BookTools({
         role="dialog"
         aria-modal="true"
         aria-labelledby="book-tools-title"
+        data-inkwell-tour="book-tools-drawer"
         className={`inkwell-drawer-panel fixed right-0 top-0 z-[101] flex h-full w-full max-w-md flex-col border-l border-dust bg-white shadow-2xl dark:border-border-dark dark:bg-panel-dark${drawerPanelMotionLive ? ' inkwell-panel-motion--live' : ''}`}
         style={{ transform: visible ? 'translateX(0)' : 'translateX(110%)' }}
         onTransitionEnd={onDrawerPanelTransitionEnd}
@@ -280,7 +287,7 @@ export function BookTools({
                   {isNote ? 'New note in this project' : 'New note for this book'}
                 </button>
               ) : null}
-              <div className="space-y-3">
+              <div className="space-y-3" data-inkwell-tour="book-tools-linked-notes">
                 {notesProjectMaster || linkedNotesForBook.length > 0 ? (
                   <ul className="space-y-2">
                     {notesProjectMaster ? (
@@ -408,6 +415,34 @@ export function BookTools({
               </div>
             </CollapsibleSection>
           : null
+          : null}
+
+          {isNote && workspaceRoute === 'write' && backlinks.length > 0 ?
+            <CollapsibleSection
+              title="Backlinks"
+              description="Other notes in this project that link here with @ or [[wikilink]]."
+              defaultOpen={false}
+            >
+              <ul className="space-y-2">
+                {backlinks.map((row) => (
+                  <li key={`${row.sourceProjectId}-${row.chapterId}`}>
+                    <button
+                      type="button"
+                      className="w-full rounded-2xl border border-dust bg-white/70 px-4 py-3 text-left transition-colors hover:border-walnut/40 hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:hover:border-accent-warm/45 dark:hover:bg-panel-dark/90"
+                      onClick={() => {
+                        onOpenBacklinkSource?.(row.sourceProjectId)
+                        onClose()
+                      }}
+                    >
+                      <span className="block truncate font-medium text-ink dark:text-ink-dark">{row.sourceTitle}</span>
+                      <span className="mt-0.5 block text-[11px] text-ink/45 dark:text-ink-dark/45">
+                        {row.chapterTitle}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </CollapsibleSection>
           : null}
 
           {!isNote && (workspaceRoute === 'write' || workspaceRoute === 'publish') ? (

@@ -1,5 +1,6 @@
 import { Moon, Sun } from 'lucide-react'
 import { useCallback, useState } from 'react'
+import { InkwellEmblem } from './InkwellEmblem'
 
 export type SignInCloudSyncProps = {
   sessionEmail: string | null
@@ -50,10 +51,8 @@ export function SignInScreen({ darkMode, onToggleTheme, onComplete, cloudSync }:
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-parchment text-ink transition-colors dark:bg-panel-dark dark:text-ink-dark">
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-dust/70 px-4 py-4 sm:px-6 dark:border-border-dark/80">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-ink text-parchment dark:bg-cream dark:text-ink">
-            🪶
-          </div>
+        <div className="group flex min-w-0 items-center gap-3">
+          <InkwellEmblem size="signin" />
           <div className="min-w-0">
             <h1 className="font-serif text-xl font-semibold tracking-tight sm:text-2xl">Inkwell</h1>
             <p className="text-sm text-ink/60 dark:text-ink-dark/60">

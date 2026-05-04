@@ -20,6 +20,7 @@ function mentionItemsEqual(a: MentionItem[], b: MentionItem[]): boolean {
   if (a.length !== b.length) return false
   for (let i = 0; i < a.length; i++) {
     if (a[i].id !== b[i].id || a[i].label !== b[i].label) return false
+    if ((a[i].noteProjectId ?? '') !== (b[i].noteProjectId ?? '')) return false
   }
   return true
 }
@@ -53,6 +54,12 @@ type Props = {
   onOpenFindReplace?: () => void
   /** Optional overlay rendered just below the toolbar, layered over the editor shell. Used for the Write Chapters drawer. */
   leftOverlay?: ReactNode
+  /** `[[` wikilink picker targets (same shape as @mention items; `id` = note project id). */
+  getWikilinkCandidates?: () => MentionItem[]
+  /** Click on @mention of a linked note (`noteProjectId`). */
+  onNoteMentionClick?: (noteProjectId: string) => void
+  /** Click on `[[wikilink]]` to a note project. */
+  onWikilinkClick?: (noteProjectId: string) => void
 }
 
 /** Offset from sticky top-right anchor (negative x moves left, positive y moves down). */
@@ -97,6 +104,9 @@ function ManuscriptEditorInner({
   toolbarVariant = 'full',
   onOpenFindReplace,
   leftOverlay,
+  getWikilinkCandidates,
+  onNoteMentionClick,
+  onWikilinkClick,
 }: Props) {
   const minimalBar = toolbarVariant === 'writeMinimal'
   const [, setToolbarVersion] = useState(0)
@@ -109,7 +119,16 @@ function ManuscriptEditorInner({
   const [statsPinned, setStatsPinned] = useState(true)
 
   const mentionItemsRef = useRef(mentionItems)
-  mentionItemsRef.current = mentionItems
+  const getWikilinkCandidatesRef = useRef(getWikilinkCandidates)
+  const onNoteMentionClickRef = useRef(onNoteMentionClick)
+  const onWikilinkClickRef = useRef(onWikilinkClick)
+
+  useLayoutEffect(() => {
+    mentionItemsRef.current = mentionItems
+    getWikilinkCandidatesRef.current = getWikilinkCandidates
+    onNoteMentionClickRef.current = onNoteMentionClick
+    onWikilinkClickRef.current = onWikilinkClick
+  }, [mentionItems, getWikilinkCandidates, onNoteMentionClick, onWikilinkClick])
 
   const dragMovedRef = useRef(false)
   const dragSessionRef = useRef<{
@@ -124,17 +143,47 @@ function ManuscriptEditorInner({
   } | null>(null)
   const pendingDragPosRef = useRef<{ x: number; y: number } | null>(null)
 
+  /* eslint-disable react-hooks/refs -- TipTap extensions read refs so `useEditor` deps stay [manuscriptId]. */
   const editor = useEditor(
     {
       extensions: createManuscriptTipTapExtensions({
         getMentionItems: () => mentionItemsRef.current,
         mentionMode: 'live',
+        getWikilinkCandidates: () => getWikilinkCandidatesRef.current?.() ?? [],
+        wikilinkMode: 'live',
       }),
       content,
       editorProps: {
         attributes: {
           class: 'tiptap',
           spellcheck: 'true',
+        },
+        handleDOMEvents: {
+          click: (_view, event) => {
+            const el = event.target as HTMLElement | null
+            if (!el?.closest) return false
+            const mention = el.closest('.inkwell-mention[data-note-project-id]') as HTMLElement | null
+            if (mention) {
+              const id = mention.getAttribute('data-note-project-id')
+              if (id && onNoteMentionClickRef.current) {
+                event.preventDefault()
+                event.stopPropagation()
+                onNoteMentionClickRef.current(id)
+                return true
+              }
+            }
+            const wiki = el.closest('[data-inkwell-wikilink]') as HTMLElement | null
+            if (wiki) {
+              const id = wiki.getAttribute('data-project-id')
+              if (id && onWikilinkClickRef.current) {
+                event.preventDefault()
+                event.stopPropagation()
+                onWikilinkClickRef.current(id)
+                return true
+              }
+            }
+            return false
+          },
         },
       },
       onUpdate: ({ editor }) => {
@@ -147,6 +196,7 @@ function ManuscriptEditorInner({
     // state updates (each keystroke). Extensions read fresh items via getMentionItems + ref.
     [manuscriptId],
   )
+  /* eslint-enable react-hooks/refs */
 
   useEffect(() => {
     editorRef.current = editor
@@ -435,6 +485,9 @@ export const ManuscriptEditor = memo(ManuscriptEditorInner, (prev, next) => {
     prev.wordStatStorageKey === next.wordStatStorageKey &&
     prev.toolbarVariant === next.toolbarVariant &&
     prev.onOpenFindReplace === next.onOpenFindReplace &&
-    prev.leftOverlay === next.leftOverlay
+    prev.leftOverlay === next.leftOverlay &&
+    prev.getWikilinkCandidates === next.getWikilinkCandidates &&
+    prev.onNoteMentionClick === next.onNoteMentionClick &&
+    prev.onWikilinkClick === next.onWikilinkClick
   )
 })

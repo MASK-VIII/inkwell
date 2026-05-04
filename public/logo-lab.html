@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Inkwell logo lab (dev)</title>
+    <style>
+      :root {
+        font-family: system-ui, sans-serif;
+        --bg: #1a1a1a;
+        --panel: #252525;
+        --text: #e8e8e8;
+        --muted: #9a9a9a;
+        --light-surface: #f4f0e8;
+      }
+      body {
+        margin: 0;
+        padding: 1.5rem;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.45;
+      }
+      h1 {
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin: 0 0 0.35rem;
+      }
+      .sub {
+        color: var(--muted);
+        font-size: 0.85rem;
+        max-width: 52rem;
+        margin-bottom: 1.25rem;
+      }
+      .shortlist {
+        background: var(--panel);
+        padding: 1rem 1.1rem;
+        border-radius: 8px;
+        margin-bottom: 1.5rem;
+        font-size: 0.88rem;
+      }
+      .shortlist h2 {
+        margin: 0 0 0.5rem;
+        font-size: 0.95rem;
+      }
+      .shortlist ul {
+        margin: 0;
+        padding-left: 1.2rem;
+      }
+      .shortlist li {
+        margin: 0.25rem 0;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        max-width: 72rem;
+        font-size: 0.8rem;
+      }
+      th,
+      td {
+        padding: 0.5rem 0.6rem;
+        text-align: left;
+        vertical-align: top;
+        border-bottom: 1px solid #333;
+      }
+      th {
+        color: var(--muted);
+        font-weight: 500;
+      }
+      .row-label {
+        color: var(--muted);
+        white-space: nowrap;
+        width: 10rem;
+      }
+      .sizes {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        align-items: flex-end;
+      }
+      .swatch {
+        text-align: center;
+      }
+      .swatch span {
+        display: block;
+        color: var(--muted);
+        font-size: 0.68rem;
+        margin-top: 0.25rem;
+      }
+      .box {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #2c241f;
+        border-radius: 6px;
+        image-rendering: pixelated;
+      }
+      .box.light {
+        background: var(--light-surface);
+      }
+      .silhouette img {
+        filter: brightness(0) invert(1);
+      }
+      .box.light.silhouette img {
+        filter: brightness(0);
+      }
+      .one-color {
+        background: #fff;
+        border: 1px solid #ccc;
+      }
+      .one-color img {
+        filter: brightness(0);
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Inkwell logo lab</h1>
+    <p class="sub">
+      Dev-only QA: open from the Vite dev server at
+      <code>/logo-lab.html</code>
+      (e.g. http://localhost:5173/logo-lab.html). Each row is one candidate; columns show pixel sizes on dark and
+      parchment tiles, silhouette (squint test), and pure black on white.
+    </p>
+    <section class="shortlist">
+      <h2>Shortlist (per brief in /brand/inkwell-logo-brief.md)</h2>
+      <ul>
+        <li><strong>03 — Book + gutter ink</strong> (chosen ship mark): evolves the existing bifolium with a bold ink point at the gutter—reads as “writing” without feather detail.</li>
+        <li><strong>01 — Well donut</strong>: abstract “depth / source”; very legible at 16px.</li>
+        <li><strong>02 — Ripple</strong>: water-well metaphor; slightly busier when tiny.</li>
+        <li><strong>04 — Bifolium classic</strong>: current-style control; no ink story.</li>
+        <li><strong>05 — Monogram</strong>: alternate wordmark-adjacent direction; thinner strokes—borderline at 16px.</li>
+      </ul>
+    </section>
+    <table id="grid">
+      <thead>
+        <tr>
+          <th>Mark</th>
+          <th>On dark tile</th>
+          <th>On light tile</th>
+          <th>Silhouette on dark</th>
+          <th>1-color (black on white)</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <script>
+      const marks = [
+        { id: '01', file: '/brand/candidates/01-well-donut.svg', name: 'Well donut' },
+        { id: '02', file: '/brand/candidates/02-ripple.svg', name: 'Ripple' },
+        { id: '03', file: '/brand/candidates/03-book-gutter-ink.svg', name: 'Book + gutter ink (ship)' },
+        { id: '04', file: '/brand/candidates/04-bifolium-classic.svg', name: 'Bifolium classic' },
+        { id: '05', file: '/brand/candidates/05-ink-monogram.svg', name: 'Ink monogram' },
+        { id: '★', file: '/favicon.svg', name: 'Production favicon' },
+      ]
+      const px = [16, 24, 32, 64]
+      function buildSizes(src, boxClass) {
+        const wrap = document.createElement('div')
+        wrap.className = 'sizes'
+        for (const w of px) {
+          const d = document.createElement('div')
+          d.className = 'swatch'
+          const box = document.createElement('div')
+          box.className = 'box' + (boxClass ? ' ' + boxClass : '')
+          box.style.width = w + 12 + 'px'
+          box.style.height = w + 12 + 'px'
+          const img = document.createElement('img')
+          img.src = src
+          img.width = w
+          img.height = w
+          img.alt = ''
+          box.append(img)
+          const cap = document.createElement('span')
+          cap.textContent = w + 'px'
+          d.append(box, cap)
+          wrap.append(d)
+        }
+        return wrap
+      }
+      const tbody = document.querySelector('#grid tbody')
+      for (const m of marks) {
+        const tr = document.createElement('tr')
+        const th = document.createElement('th')
+        th.className = 'row-label'
+        th.textContent = m.id + ' — ' + m.name
+        tr.append(th)
+        tr.appendChild(document.createElement('td')).append(buildSizes(m.file, ''))
+        tr.appendChild(document.createElement('td')).append(buildSizes(m.file, 'light'))
+        tr.appendChild(document.createElement('td')).append(buildSizes(m.file, 'silhouette'))
+        tr.appendChild(document.createElement('td')).append(buildSizes(m.file, 'one-color'))
+        tbody.append(tr)
+      }
+    </script>
+  </body>
+</html>

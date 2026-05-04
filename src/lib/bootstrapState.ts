@@ -7,6 +7,9 @@ const LEGACY_V2 = 'inkwell-project-v2'
 /** Bump when tutorial steps or copy change so users see the new tour once. */
 export const CURRENT_TUTORIAL_VERSION = 3
 
+/** Bump when the Notes tour copy or steps change (separate from main getting-started). */
+export const CURRENT_NOTES_TUTORIAL_VERSION = 5
+
 export type WriterPresetId = 'author'
 
 export type InkwellBootstrap = {
@@ -20,10 +23,14 @@ export type InkwellBootstrap = {
   tutorialVersion: number
   /** When set, first-run tour resumes at this step after “Remind me later” (does not bump `tutorialVersion`). */
   tutorialStepId?: string
+  /** Last Notes tour content version completed or skipped (independent of `tutorialVersion`). */
+  notesTutorialVersion?: number
+  /** Mid–Notes tour resume id (see `notesTutorialSteps`). */
+  notesTutorialStepId?: string
 }
 
 function emptyBootstrap(): InkwellBootstrap {
-  return { version: 1, welcomeDone: false, tutorialVersion: 0 }
+  return { version: 1, welcomeDone: false, tutorialVersion: 0, notesTutorialVersion: 0 }
 }
 
 function hasLegacyInkwellData(): boolean {
@@ -58,6 +65,14 @@ function parseBootstrap(raw: string | null): InkwellBootstrap | null {
       const preferSignInGate = o.preferSignInGate === true
       const tutorialStepId =
         typeof o.tutorialStepId === 'string' && o.tutorialStepId.trim() ? o.tutorialStepId.trim() : undefined
+      const notesTutorialVersion =
+        typeof o.notesTutorialVersion === 'number' && Number.isFinite(o.notesTutorialVersion) ?
+          o.notesTutorialVersion
+        : 0
+      const notesTutorialStepId =
+        typeof o.notesTutorialStepId === 'string' && o.notesTutorialStepId.trim() ?
+          o.notesTutorialStepId.trim()
+        : undefined
       return {
         version: 1,
         writerPreset,
@@ -65,6 +80,8 @@ function parseBootstrap(raw: string | null): InkwellBootstrap | null {
         preferSignInGate: preferSignInGate ? true : undefined,
         tutorialVersion: Number.isFinite(o.tutorialVersion) ? o.tutorialVersion : 0,
         tutorialStepId,
+        notesTutorialVersion,
+        notesTutorialStepId,
       }
     }
   } catch {
@@ -88,7 +105,13 @@ function saveBootstrap(state: InkwellBootstrap): void {
  */
 export function readBootstrap(): InkwellBootstrap {
   if (typeof window === 'undefined')
-    return { ...emptyBootstrap(), welcomeDone: true, tutorialVersion: CURRENT_TUTORIAL_VERSION, tutorialStepId: undefined }
+    return {
+      ...emptyBootstrap(),
+      welcomeDone: true,
+      tutorialVersion: CURRENT_TUTORIAL_VERSION,
+      tutorialStepId: undefined,
+      notesTutorialVersion: 0,
+    }
   let raw: string | null
   try {
     raw = localStorage.getItem(STORAGE_BOOTSTRAP)
@@ -171,6 +194,36 @@ export function clearTutorialResumeStep(): void {
   saveBootstrap({ ...prev, version: 1, tutorialStepId: undefined })
 }
 
+export function shouldShowNotesTutorial(bootstrap: InkwellBootstrap): boolean {
+  const v = bootstrap.notesTutorialVersion ?? 0
+  return v < CURRENT_NOTES_TUTORIAL_VERSION
+}
+
+export function markNotesTutorialSeen(version: number = CURRENT_NOTES_TUTORIAL_VERSION): void {
+  const prev = readBootstrap()
+  saveBootstrap({
+    ...prev,
+    version: 1,
+    notesTutorialVersion: Math.max(prev.notesTutorialVersion ?? 0, version),
+    notesTutorialStepId: undefined,
+  })
+}
+
+export function saveNotesTutorialResumeStep(stepId: string): void {
+  const prev = readBootstrap()
+  saveBootstrap({
+    ...prev,
+    version: 1,
+    notesTutorialStepId: stepId,
+  })
+}
+
+export function clearNotesTutorialResumeStep(): void {
+  const prev = readBootstrap()
+  if (!prev.notesTutorialStepId) return
+  saveBootstrap({ ...prev, version: 1, notesTutorialStepId: undefined })
+}
+
 /** Hook for future shelf defaults per writer type; Author uses current bookshelf as-is. */
 export function applyWriterPreset(_preset: WriterPresetId): void {
   void _preset
@@ -227,6 +280,8 @@ export function devResetTutorialForReplay(): void {
         version: 1,
         tutorialVersion: 0,
         tutorialStepId: undefined,
+        notesTutorialVersion: 0,
+        notesTutorialStepId: undefined,
       } satisfies InkwellBootstrap),
     )
   } catch {
