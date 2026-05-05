@@ -16,6 +16,11 @@
     <priority>0.3</priority>
   </url>
   <url>
+    <loc>https://inkwell.enterthelimelight.com/refund</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
     <loc>https://inkwell.enterthelimelight.com/changelog</loc>
     <changefreq>weekly</changefreq>
     <priority>0.4</priority>

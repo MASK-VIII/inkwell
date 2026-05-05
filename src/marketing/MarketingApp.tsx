@@ -1,7 +1,7 @@
 import { classifyMarketingPath } from './marketingRouting'
 import { MarketingPage } from './MarketingPage'
 import { NotFoundPage } from './NotFoundPage'
-import { PrivacyPage, TermsPage } from './LegalPage'
+import { PrivacyPage, RefundPage, TermsPage } from './LegalPage'
 import { ChangelogPage } from './ChangelogPage'
 
 /**
@@ -18,6 +18,8 @@ export function MarketingApp() {
       return <PrivacyPage />
     case 'terms':
       return <TermsPage />
+    case 'refund':
+      return <RefundPage />
     case 'changelog':
       return <ChangelogPage />
     case 'not_found':

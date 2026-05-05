@@ -8,10 +8,10 @@
  *
  * On the production Inkwell subdomain, unknown paths resolve to the same SPA bundle;
  * send those to `/` so visitors always see the landing page unless they are on
- * `/app`, `/privacy`, `/terms`, or `/changelog`.
+ * `/app`, `/privacy`, `/terms`, `/refund`, or `/changelog`.
  */
 
-export type MarketingView = 'landing' | 'privacy' | 'terms' | 'changelog' | 'not_found'
+export type MarketingView = 'landing' | 'privacy' | 'terms' | 'refund' | 'changelog' | 'not_found'
 
 /** Canonical hostname for the public marketing + web app deployment. */
 export const INKWELL_MARKETING_HOST = 'inkwell.enterthelimelight.com'
@@ -40,6 +40,7 @@ export function classifyMarketingPath(pathname: string): MarketingView {
   if (normalized === '' || normalized === '/') return 'landing'
   if (normalized === '/privacy') return 'privacy'
   if (normalized === '/terms') return 'terms'
+  if (normalized === '/refund') return 'refund'
   if (normalized === '/changelog') return 'changelog'
   return 'not_found'
 }

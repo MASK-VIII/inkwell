@@ -83,6 +83,44 @@ export function PrivacyPage() {
   )
 }
 
+export function RefundPage() {
+  return (
+    <LegalPage
+      title="Refund policy"
+      pageTitle={'Refunds \u2014 Inkwell'}
+      lastUpdated="Last updated: this is a beta placeholder."
+    >
+      <p>
+        This is a placeholder refund policy for Inkwell while the product is in beta. A full,
+        legally reviewed version will replace this before paid purchases launch.
+      </p>
+
+      <h2>Before you buy</h2>
+      <p>
+        Inkwell is digital software. Please review the feature list and beta status on the site
+        before purchasing a paid tier.
+      </p>
+
+      <h2>How to request a refund</h2>
+      <p>
+        Email{' '}
+        <a className="text-ink underline" href="mailto:support@enterthelimelight.com">
+          support@enterthelimelight.com
+        </a>{' '}
+        from the address used for your purchase and include your receipt or transaction reference.
+        Paid checkout may be processed by our reseller (Paddle); where Paddle handles payment
+        support for your order, their process may apply in addition to this policy.
+      </p>
+
+      <h2>Statutory rights</h2>
+      <p>
+        Nothing here limits consumer rights that apply in your country or region where those rights
+        cannot be waived by contract.
+      </p>
+    </LegalPage>
+  )
+}
+
 export function TermsPage() {
   return (
     <LegalPage

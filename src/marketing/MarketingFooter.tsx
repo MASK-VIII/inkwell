@@ -52,6 +52,11 @@ export function MarketingFooter() {
                   Terms
                 </a>
               </li>
+              <li>
+                <a className="hover:text-ink" href="/refund">
+                  Refunds
+                </a>
+              </li>
             </ul>
           </nav>
 
