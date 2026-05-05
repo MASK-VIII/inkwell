@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPersistentTwoWaySyncQueue, type SyncFlushContext } from '../cloudSync/syncQueue'
-import { getSessionSnapshot, signOutInkwellCloud, subscribeAuthSession } from './authSession'
+import { getSessionSnapshot, signOutInkwellCloud, subscribeAuthSession, updatePassword } from './authSession'
 import { readCachedLibraryHead } from './libraryHeadCache'
 import { exportLibraryZip } from '../projectArchive'
 import { clearCachedLibraryHead, fetchRemoteLibraryHead, forcePushLibraryZip, pullLibraryIfNewer, pushLibraryZip } from './syncEngine'
@@ -27,6 +27,7 @@ export function useInkwellLibrarySync(options: SyncOptions) {
   }, [options])
 
   const [userEmail, setUserEmail] = useState<string | null>(null)
+  const [needsPasswordRecovery, setNeedsPasswordRecovery] = useState(false)
   const [status, setStatus] = useState<LibrarySyncStatus>('idle')
   const [statusDetail, setStatusDetail] = useState('')
   const [conflict, setConflict] = useState<LibrarySyncConflict | null>(null)
@@ -165,8 +166,10 @@ export function useInkwellLibrarySync(options: SyncOptions) {
         if (!cancelled) setUserEmail(s.user?.email ?? null)
       })
     })
-    const unsub = subscribeAuthSession(cfg, (snap) => {
+    const unsub = subscribeAuthSession(cfg, (snap, event) => {
       queueMicrotask(() => {
+        if (event === 'PASSWORD_RECOVERY') setNeedsPasswordRecovery(true)
+        if (event === 'SIGNED_OUT') setNeedsPasswordRecovery(false)
         setUserEmail(snap.user?.email ?? null)
         if (!snap.user) {
           void clearCachedLibraryHead()
@@ -340,8 +343,17 @@ export function useInkwellLibrarySync(options: SyncOptions) {
     unresolvedConflictRef.current = false
     setConflict(null)
     setUserEmail(null)
+    setNeedsPasswordRecovery(false)
     setStatus('idle')
     setStatusDetail('')
+  }, [])
+
+  const completePasswordRecovery = useCallback(async (newPassword: string) => {
+    const cfg = optsRef.current.supabaseConfig
+    if (!cfg) return { ok: false as const, error: 'Cloud sync is not configured' }
+    const r = await updatePassword(cfg, newPassword)
+    if (r.ok) setNeedsPasswordRecovery(false)
+    return r
   }, [])
 
   const snapshot = useCallback(() => syncQueue.snapshot(), [syncQueue])
@@ -349,6 +361,7 @@ export function useInkwellLibrarySync(options: SyncOptions) {
   return useMemo(
     () => ({
       userEmail,
+      needsPasswordRecovery,
       status,
       statusDetail,
       conflict,
@@ -359,11 +372,13 @@ export function useInkwellLibrarySync(options: SyncOptions) {
       resolveUseCloud,
       exportBothZips,
       signOutCloudOnly,
+      completePasswordRecovery,
       flushQueue,
       snapshot,
     }),
     [
       userEmail,
+      needsPasswordRecovery,
       status,
       statusDetail,
       conflict,
@@ -374,6 +389,7 @@ export function useInkwellLibrarySync(options: SyncOptions) {
       resolveUseCloud,
       exportBothZips,
       signOutCloudOnly,
+      completePasswordRecovery,
       flushQueue,
       snapshot,
     ],

@@ -14,7 +14,12 @@ import { InkwellTabIndent } from './extensions/InkwellTabIndent'
 export function createManuscriptTipTapExtensions(opts: {
   getMentionItems: () => MentionItem[]
   mentionMode: 'live' | 'import'
+  /** Reserved for `[[wikilink]]` suggestion (wired in editor; extension TBD). */
+  getWikilinkCandidates?: () => MentionItem[]
+  wikilinkMode?: 'live' | 'import'
 }) {
+  void opts.getWikilinkCandidates
+  void opts.wikilinkMode
   return [
     StarterKit.configure({
       heading: { levels: [1, 2, 3] },

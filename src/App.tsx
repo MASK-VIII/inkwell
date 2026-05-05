@@ -115,7 +115,12 @@ import { buildKdpPdf } from './lib/export/pdfKdp'
 import { buildEpub, epubFilename } from './lib/export/epub'
 import { importDocxToChapters } from './lib/import/docx'
 import { isCloudBackupConfigured, uploadFullLibraryCloudBackup } from './lib/cloudBackup'
-import { signInWithEmailPassword } from './lib/sync/authSession'
+import {
+  requestPasswordResetEmail,
+  signInWithEmailPassword,
+  signUpWithEmailPassword,
+  stripSupabaseAuthParamsFromBrowserUrl,
+} from './lib/sync/authSession'
 import { getInkwellSupabasePublicConfig, isInkwellCloudSyncConfigured } from './lib/sync/syncEnv'
 import { useInkwellLibrarySync } from './lib/sync/useInkwellLibrarySync'
 import {
@@ -264,6 +269,21 @@ function routeToHash(route: Route): string {
   }
 }
 
+/** Supabase magic-link / recovery / PKCE returns leave tokens in the hash or `?code=`; route to sign-in until the client consumes them. */
+function locationHasSupabaseAuthCallback(): boolean {
+  if (typeof window === 'undefined') return false
+  const h = window.location.hash.slice(1)
+  if (
+    h.includes('access_token=') ||
+    h.includes('type=recovery') ||
+    h.includes('token_hash=') ||
+    h.includes('error=')
+  ) {
+    return true
+  }
+  return new URLSearchParams(window.location.search).has('code')
+}
+
 function readInitialAppRoute(): Route {
   if (typeof window === 'undefined') return 'write'
   if (readOpenProjectIdFromLocation()) return readRouteFromHash()
@@ -274,6 +294,9 @@ function readInitialAppRoute(): Route {
     return 'signin'
   }
   const boot = readBootstrap()
+  if (isInkwellCloudSyncConfigured() && locationHasSupabaseAuthCallback()) {
+    return 'signin'
+  }
   if (shouldShowSignIn(boot)) {
     if (window.location.hash !== '#signin') {
       window.history.replaceState(null, '', '#signin')
@@ -2414,6 +2437,7 @@ export default function App() {
   )
   const inkwellLibrarySync = useInkwellLibrarySync(librarySyncOptions)
   const [cloudSignInBusy, setCloudSignInBusy] = useState(false)
+  const [passwordRecoveryBusy, setPasswordRecoveryBusy] = useState(false)
   const [syncConflictBusy, setSyncConflictBusy] = useState(false)
 
   useEffect(() => {
@@ -2449,6 +2473,60 @@ export default function App() {
     [supabasePublicConfig, navigateRoute],
   )
 
+  const signUpFromSignIn = useCallback(
+    async (email: string, password: string) => {
+      if (!supabasePublicConfig) return { ok: false as const, error: 'Cloud sync is not configured' }
+      const origin = typeof window !== 'undefined' ? window.location.origin : ''
+      setCloudSignInBusy(true)
+      try {
+        const r = await signUpWithEmailPassword(supabasePublicConfig, email, password, `${origin}/`)
+        if (r.ok && !r.needsEmailConfirmation) {
+          devClearForceSignInFlag()
+          markSignInComplete()
+          navigateRoute('bookshelf')
+        }
+        return r
+      } finally {
+        setCloudSignInBusy(false)
+      }
+    },
+    [supabasePublicConfig, navigateRoute],
+  )
+
+  const requestPasswordResetFromSignIn = useCallback(
+    async (email: string) => {
+      if (!supabasePublicConfig) return { ok: false as const, error: 'Cloud sync is not configured' }
+      const origin = typeof window !== 'undefined' ? window.location.origin : ''
+      setCloudSignInBusy(true)
+      try {
+        return await requestPasswordResetEmail(supabasePublicConfig, email, `${origin}/`)
+      } finally {
+        setCloudSignInBusy(false)
+      }
+    },
+    [supabasePublicConfig],
+  )
+
+  const submitNewPasswordFromRecovery = useCallback(
+    async (password: string) => {
+      if (!supabasePublicConfig) return { ok: false as const, error: 'Cloud sync is not configured' }
+      setPasswordRecoveryBusy(true)
+      try {
+        const r = await inkwellLibrarySync.completePasswordRecovery(password)
+        if (r.ok) {
+          stripSupabaseAuthParamsFromBrowserUrl()
+          devClearForceSignInFlag()
+          markSignInComplete()
+          navigateRoute('bookshelf')
+        }
+        return r
+      } finally {
+        setPasswordRecoveryBusy(false)
+      }
+    },
+    [supabasePublicConfig, inkwellLibrarySync.completePasswordRecovery, navigateRoute],
+  )
+
   return (
     <div className="inkwell-theme-bridge flex h-full min-h-0 flex-col bg-parchment text-ink dark:bg-panel-dark dark:text-ink-dark">
       {route === 'signin' ? (
@@ -2466,7 +2544,16 @@ export default function App() {
                 sessionEmail: inkwellLibrarySync.userEmail,
                 cloudSignInBusy,
                 onSignInWithEmailPassword: signInWithPasswordFromSignIn,
+                onSignUpWithEmailPassword: signUpFromSignIn,
+                onRequestPasswordResetEmail: requestPasswordResetFromSignIn,
                 onSignOutCloud: () => void inkwellLibrarySync.signOutCloudOnly(),
+                passwordRecovery:
+                  inkwellLibrarySync.needsPasswordRecovery ?
+                    {
+                      busy: passwordRecoveryBusy,
+                      onSubmitNewPassword: submitNewPasswordFromRecovery,
+                    }
+                  : null,
               }
             : undefined
           }

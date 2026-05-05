@@ -1,6 +1,6 @@
 import type { SuggestionProps } from '@tiptap/suggestion'
 
-export type MentionItem = { id: string; label: string }
+export type MentionItem = { id: string; label: string; noteProjectId?: string }
 
 export function filterMentionItems(items: MentionItem[], query: string): MentionItem[] {
   const q = query.trim().toLowerCase()

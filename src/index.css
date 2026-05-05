@@ -323,6 +323,8 @@ select {
   .inkwell-hub-card,
   .inkwell-shelf-card,
   .inkwell-signin-form-card,
+  .inkwell-signin-mode-switch,
+  .inkwell-signin-mode-switch-thumb,
   .inkwell-theme-bridge,
   .tiptap.ProseMirror,
   .tiptap.ProseMirror :where(
@@ -429,19 +431,21 @@ select {
 
 /* Sign-in: manuscript-like canvas (static; no motion on background) */
 .inkwell-signin-canvas {
-  background-color: var(--color-parchment);
+  background-color: color-mix(in srgb, var(--color-parchment) 68%, white);
   background-image:
     radial-gradient(
-      ellipse 120% 80% at 50% -20%,
-      color-mix(in srgb, var(--color-dust) 45%, transparent),
-      transparent 55%
+      ellipse 118% 78% at 50% -22%,
+      color-mix(in srgb, white 88%, var(--color-parchment)),
+      transparent 52%
     ),
     radial-gradient(
-      ellipse 90% 65% at 50% 100%,
-      color-mix(in srgb, var(--color-walnut) 12%, var(--color-parchment)),
-      transparent 50%
+      ellipse 92% 58% at 50% 104%,
+      color-mix(in srgb, var(--color-dust) 28%, transparent),
+      transparent 52%
     );
-  box-shadow: inset 0 0 80px -20px color-mix(in srgb, var(--color-walnut) 10%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 65%, transparent),
+    inset 0 0 88px -36px color-mix(in srgb, var(--color-walnut) 6%, transparent);
 }
 
 .dark .inkwell-signin-canvas {
@@ -487,30 +491,145 @@ select {
 /* Sign-in: cloud sync form as a desk card (inner form supplies flex + gap) */
 .inkwell-signin-form-card {
   width: 100%;
-  margin-bottom: 2rem;
-  padding: 1.25rem;
-  border-radius: 1rem;
-  border: 1px solid color-mix(in srgb, var(--color-dust) 80%, transparent);
+  margin-bottom: 0;
+  padding: 1.5rem;
+  border-radius: 1.25rem;
+  border: 1px solid color-mix(in srgb, var(--color-dust) 48%, white);
   background: linear-gradient(
-    165deg,
-    color-mix(in srgb, var(--color-parchment) 70%, white),
-    color-mix(in srgb, var(--color-parchment) 55%, var(--color-dust))
+    168deg,
+    #ffffff,
+    color-mix(in srgb, var(--color-parchment) 38%, white)
   );
   box-shadow:
-    0 1px 0 color-mix(in srgb, white 60%, transparent),
-    0 12px 32px -12px color-mix(in srgb, var(--color-walnut) 22%, transparent);
+    0 1px 0 color-mix(in srgb, white 80%, transparent),
+    0 1px 2px color-mix(in srgb, var(--color-ink) 5%, transparent),
+    0 10px 32px -10px color-mix(in srgb, var(--color-walnut) 12%, transparent),
+    0 26px 56px -22px color-mix(in srgb, var(--color-walnut) 10%, transparent);
 }
 
 .dark .inkwell-signin-form-card {
-  border-color: color-mix(in srgb, var(--color-border-dark) 95%, transparent);
+  border-color: color-mix(in srgb, var(--color-border-dark) 90%, transparent);
   background: linear-gradient(
     165deg,
-    color-mix(in srgb, var(--color-panel-dark) 92%, var(--color-border-dark)),
-    color-mix(in srgb, var(--color-panel-dark) 88%, #121418)
+    color-mix(in srgb, var(--color-panel-dark) 94%, var(--color-border-dark)),
+    color-mix(in srgb, var(--color-panel-dark) 86%, #0e1014)
   );
   box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--color-cream) 10%, transparent),
-    0 16px 40px -14px rgba(0, 0, 0, 0.55);
+    0 0 0 1px color-mix(in srgb, var(--color-cream) 9%, transparent),
+    0 20px 50px -18px rgba(0, 0, 0, 0.62);
+}
+
+/* Sign-in: mode switcher (Sign in / Create account) — sliding thumb */
+.inkwell-signin-mode-switch {
+  position: relative;
+  display: flex;
+  width: 100%;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border-radius: 1rem;
+  border: 1px solid color-mix(in srgb, var(--color-dust) 42%, white);
+  background: color-mix(in srgb, white 58%, var(--color-parchment));
+  box-shadow: inset 0 1px 2px color-mix(in srgb, var(--color-ink) 4%, transparent);
+}
+
+.dark .inkwell-signin-mode-switch {
+  border-color: color-mix(in srgb, var(--color-border-dark) 80%, transparent);
+  background: color-mix(in srgb, var(--color-panel-dark) 55%, #0a0b0d);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--color-cream) 6%, transparent);
+}
+
+.inkwell-signin-mode-switch-thumb {
+  position: absolute;
+  top: 0.25rem;
+  bottom: 0.25rem;
+  left: 0.25rem;
+  z-index: 0;
+  width: calc((100% - 0.75rem) / 2);
+  border-radius: 0.65rem;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    #ffffff,
+    color-mix(in srgb, white 90%, var(--color-parchment))
+  );
+  box-shadow:
+    0 1px 0 color-mix(in srgb, white 95%, transparent),
+    0 1px 2px color-mix(in srgb, var(--color-ink) 5%, transparent),
+    0 6px 16px -4px color-mix(in srgb, var(--color-walnut) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-dust) 38%, white);
+  transform: translate3d(0, 0, 0);
+  /* Sliding thumb: always animate (functional feedback; not decorative motion). */
+  transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dark .inkwell-signin-mode-switch-thumb {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-panel-dark) 96%, var(--color-border-dark)),
+    color-mix(in srgb, var(--color-panel-dark) 88%, #12151a)
+  );
+  border-color: color-mix(in srgb, var(--color-border-dark) 70%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-cream) 8%, transparent),
+    0 6px 16px -6px rgba(0, 0, 0, 0.45);
+}
+
+.inkwell-signin-mode-switch--signup .inkwell-signin-mode-switch-thumb {
+  transform: translate3d(calc(100% + 0.25rem), 0, 0);
+}
+
+.inkwell-signin-mode-switch-tab {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 0;
+  border-radius: 0.65rem;
+  padding-top: 0.625rem;
+  padding-bottom: 0.625rem;
+  text-align: center;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  outline: none;
+  transition:
+    color 0.2s ease,
+    font-weight 0.2s ease;
+}
+
+.inkwell-signin-mode-switch-tab:focus-visible {
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, white 88%, var(--color-parchment)),
+    0 0 0 4px color-mix(in srgb, var(--color-walnut) 42%, transparent);
+}
+
+.dark .inkwell-signin-mode-switch-tab:focus-visible {
+  box-shadow:
+    0 0 0 2px var(--color-panel-dark),
+    0 0 0 4px color-mix(in srgb, var(--color-cream) 45%, transparent);
+}
+
+.inkwell-signin-mode-switch-tab--active {
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.dark .inkwell-signin-mode-switch-tab--active {
+  color: var(--color-ink-dark);
+}
+
+.inkwell-signin-mode-switch-tab--inactive {
+  font-weight: 500;
+  color: color-mix(in srgb, var(--color-ink) 52%, transparent);
+}
+
+.inkwell-signin-mode-switch-tab--inactive:hover {
+  color: color-mix(in srgb, var(--color-ink) 78%, transparent);
+}
+
+.dark .inkwell-signin-mode-switch-tab--inactive {
+  color: color-mix(in srgb, var(--color-ink-dark) 48%, transparent);
+}
+
+.dark .inkwell-signin-mode-switch-tab--inactive:hover {
+  color: color-mix(in srgb, var(--color-ink-dark) 78%, transparent);
 }
 
 .inkwell-signin-error {
