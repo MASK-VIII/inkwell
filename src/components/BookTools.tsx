@@ -1,5 +1,13 @@
 import { ExternalLink, Trash2, X } from 'lucide-react'
-import { useEffect, useRef, useState, type TransitionEvent } from 'react'
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type TransitionEvent,
+} from 'react'
 import type {
   BookAssembly,
   BookMeta,
@@ -37,9 +45,10 @@ type Props = {
   workspaceRoute: WorkspaceRoute
   onSetWorkspaceRoute: (route: WorkspaceRoute) => void
   book: BookMeta
-  onBookChange: (patch: Partial<BookMeta>) => void
+  /** Applied on debounced typing + flush when closing drawer — avoids parent re-render each keystroke. */
+  onBookCommit: (book: BookMeta) => void
   goals: WritingGoals
-  onGoalsChange: (patch: Partial<WritingGoals>) => void
+  onGoalsCommit: (goals: WritingGoals) => void
   totalBookWords: number
   wordsWrittenToday: number
   onExportPdfKdp: () => void
@@ -76,7 +85,7 @@ type Props = {
   onOpenBacklinkSource?: (sourceProjectId: string) => void
 }
 
-export function BookTools({
+function BookToolsInner({
   open,
   onClose,
   projectId,
@@ -84,9 +93,9 @@ export function BookTools({
   workspaceRoute,
   onSetWorkspaceRoute,
   book,
-  onBookChange,
+  onBookCommit,
   goals,
-  onGoalsChange,
+  onGoalsCommit,
   totalBookWords,
   wordsWrittenToday,
   onExportPdfKdp,
@@ -124,6 +133,80 @@ export function BookTools({
   const coverInputRef = useRef<HTMLInputElement | null>(null)
   const [coverBusy, setCoverBusy] = useState(false)
   const [coverErr, setCoverErr] = useState<string | null>(null)
+
+  const [draftBook, setDraftBook] = useState(book)
+  const [draftGoals, setDraftGoals] = useState(goals)
+  const draftBookRef = useRef(book)
+  const draftGoalsRef = useRef(goals)
+  draftBookRef.current = draftBook
+  draftGoalsRef.current = draftGoals
+  const bookPersistTimerRef = useRef<number | undefined>(undefined)
+  const goalsPersistTimerRef = useRef<number | undefined>(undefined)
+  const prevDrawerOpenRef = useRef(false)
+  const prevProjectIdRef = useRef(projectId)
+
+  const scheduleBookPersist = useCallback(() => {
+    if (bookPersistTimerRef.current != null) window.clearTimeout(bookPersistTimerRef.current)
+    bookPersistTimerRef.current = window.setTimeout(() => {
+      bookPersistTimerRef.current = undefined
+      onBookCommit(draftBookRef.current)
+    }, 220)
+  }, [onBookCommit])
+
+  const scheduleGoalsPersist = useCallback(() => {
+    if (goalsPersistTimerRef.current != null) window.clearTimeout(goalsPersistTimerRef.current)
+    goalsPersistTimerRef.current = window.setTimeout(() => {
+      goalsPersistTimerRef.current = undefined
+      onGoalsCommit(draftGoalsRef.current)
+    }, 220)
+  }, [onGoalsCommit])
+
+  const commitBookPatchNow = useCallback(
+    (patch: Partial<BookMeta>) => {
+      if (bookPersistTimerRef.current != null) {
+        window.clearTimeout(bookPersistTimerRef.current)
+        bookPersistTimerRef.current = undefined
+      }
+      setDraftBook((prev) => {
+        const next = { ...prev, ...patch }
+        onBookCommit(next)
+        return next
+      })
+    },
+    [onBookCommit],
+  )
+
+  useLayoutEffect(() => {
+    if (projectId !== prevProjectIdRef.current) {
+      prevProjectIdRef.current = projectId
+      setDraftBook(book)
+      setDraftGoals(goals)
+      draftBookRef.current = book
+      draftGoalsRef.current = goals
+    }
+  }, [projectId, book, goals])
+
+  useLayoutEffect(() => {
+    if (open && !prevDrawerOpenRef.current) {
+      setDraftBook(book)
+      setDraftGoals(goals)
+      draftBookRef.current = book
+      draftGoalsRef.current = goals
+    }
+    if (!open && prevDrawerOpenRef.current) {
+      if (bookPersistTimerRef.current != null) {
+        window.clearTimeout(bookPersistTimerRef.current)
+        bookPersistTimerRef.current = undefined
+      }
+      if (goalsPersistTimerRef.current != null) {
+        window.clearTimeout(goalsPersistTimerRef.current)
+        goalsPersistTimerRef.current = undefined
+      }
+      onBookCommit(draftBookRef.current)
+      onGoalsCommit(draftGoalsRef.current)
+    }
+    prevDrawerOpenRef.current = open
+  }, [open, book, goals, onBookCommit, onGoalsCommit])
 
   useEffect(() => {
     if (phase === 'entering' || phase === 'closing') {
@@ -503,13 +586,13 @@ export function BookTools({
               <div className="rounded-2xl border border-dust/80 bg-parchment/40 p-4 dark:border-border-dark dark:bg-panel-dark/40">
                 <div className="flex items-start justify-between gap-3">
                   <span className="text-xs font-medium text-ink/70 dark:text-ink-dark/70">Book cover</span>
-                  {book.coverImageDataUrl ? (
+                  {draftBook.coverImageDataUrl ? (
                     <button
                       type="button"
                       className="shrink-0 text-xs font-semibold text-ink/55 underline decoration-dotted underline-offset-2 hover:text-ink dark:text-ink-dark/55 dark:hover:text-ink-dark"
                       onClick={() => {
                         setCoverErr(null)
-                        onBookChange({ coverImageDataUrl: undefined })
+                        commitBookPatchNow({ coverImageDataUrl: undefined })
                       }}
                     >
                       Remove
@@ -519,12 +602,12 @@ export function BookTools({
                 <div className="mt-3 flex items-start gap-4">
                   <div
                     className={`flex h-[4.5rem] w-[3.15rem] shrink-0 overflow-hidden rounded-xl border border-dust/70 dark:border-border-dark ${
-                      book.coverImageDataUrl ? '' : 'items-center justify-center bg-dust/35 dark:bg-border-dark/40'
+                      draftBook.coverImageDataUrl ? '' : 'items-center justify-center bg-dust/35 dark:bg-border-dark/40'
                     }`}
                   >
-                    {book.coverImageDataUrl ? (
+                    {draftBook.coverImageDataUrl ? (
                       <img
-                        src={book.coverImageDataUrl}
+                        src={draftBook.coverImageDataUrl}
                         alt=""
                         className="h-full w-full object-cover"
                       />
@@ -548,7 +631,7 @@ export function BookTools({
                         setCoverBusy(true)
                         try {
                           const url = await fileToBookCoverDataUrl(file)
-                          onBookChange({ coverImageDataUrl: url })
+                          commitBookPatchNow({ coverImageDataUrl: url })
                         } catch (err) {
                           setCoverErr(err instanceof Error ? err.message : 'Could not read that image')
                         } finally {
@@ -562,7 +645,7 @@ export function BookTools({
                       onClick={() => coverInputRef.current?.click()}
                       className="rounded-2xl border border-dust bg-white px-3 py-2 text-xs font-semibold text-ink shadow-sm transition-colors hover:bg-dust/20 disabled:opacity-60 dark:border-border-dark dark:bg-panel-dark dark:text-ink-dark dark:hover:bg-border-dark/40"
                     >
-                      {coverBusy ? 'Processing…' : book.coverImageDataUrl ? 'Replace image…' : 'Upload image…'}
+                      {coverBusy ? 'Processing…' : draftBook.coverImageDataUrl ? 'Replace image…' : 'Upload image…'}
                     </button>
                     <p className="text-[11px] leading-snug text-ink/50 dark:text-ink-dark/50">
                       Shown on the bookshelf. Stored only on this device.
@@ -577,8 +660,12 @@ export function BookTools({
                 <span className="text-xs font-medium text-ink/70 dark:text-ink-dark/70">Title</span>
                 <input
                   type="text"
-                  value={book.title}
-                  onChange={(e) => onBookChange({ title: e.target.value })}
+                  value={draftBook.title}
+                  onChange={(e) => {
+                    const title = e.target.value
+                    setDraftBook((prev) => ({ ...prev, title }))
+                    scheduleBookPersist()
+                  }}
                   placeholder="Working title"
                   className="w-full rounded-2xl border border-dust bg-parchment px-4 py-2.5 text-sm focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:focus:border-cream"
                 />
@@ -588,8 +675,12 @@ export function BookTools({
                     <span className="text-xs font-medium text-ink/70 dark:text-ink-dark/70">Subtitle</span>
                     <input
                       type="text"
-                      value={book.subtitle}
-                      onChange={(e) => onBookChange({ subtitle: e.target.value })}
+                      value={draftBook.subtitle}
+                      onChange={(e) => {
+                        const subtitle = e.target.value
+                        setDraftBook((prev) => ({ ...prev, subtitle }))
+                        scheduleBookPersist()
+                      }}
                       placeholder="Optional"
                       className="w-full rounded-2xl border border-dust bg-parchment px-4 py-2.5 text-sm focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:focus:border-cream"
                     />
@@ -598,8 +689,12 @@ export function BookTools({
                     <span className="text-xs font-medium text-ink/70 dark:text-ink-dark/70">Author</span>
                     <input
                       type="text"
-                      value={book.authorName}
-                      onChange={(e) => onBookChange({ authorName: e.target.value })}
+                      value={draftBook.authorName}
+                      onChange={(e) => {
+                        const authorName = e.target.value
+                        setDraftBook((prev) => ({ ...prev, authorName }))
+                        scheduleBookPersist()
+                      }}
                       placeholder="Your name"
                       className="w-full rounded-2xl border border-dust bg-parchment px-4 py-2.5 text-sm focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:focus:border-cream"
                     />
@@ -608,8 +703,12 @@ export function BookTools({
                     <span className="text-xs font-medium text-ink/70 dark:text-ink-dark/70">Series</span>
                     <input
                       type="text"
-                      value={book.series}
-                      onChange={(e) => onBookChange({ series: e.target.value })}
+                      value={draftBook.series}
+                      onChange={(e) => {
+                        const series = e.target.value
+                        setDraftBook((prev) => ({ ...prev, series }))
+                        scheduleBookPersist()
+                      }}
                       placeholder="Optional"
                       className="w-full rounded-2xl border border-dust bg-parchment px-4 py-2.5 text-sm focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:focus:border-cream"
                     />
@@ -618,8 +717,12 @@ export function BookTools({
                     <span className="text-xs font-medium text-ink/70 dark:text-ink-dark/70">Language (EPUB)</span>
                     <input
                       type="text"
-                      value={book.language ?? ''}
-                      onChange={(e) => onBookChange({ language: e.target.value || undefined })}
+                      value={draftBook.language ?? ''}
+                      onChange={(e) => {
+                        const language = e.target.value || undefined
+                        setDraftBook((prev) => ({ ...prev, language }))
+                        scheduleBookPersist()
+                      }}
                       placeholder="en"
                       className="w-full rounded-2xl border border-dust bg-parchment px-4 py-2.5 text-sm focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:focus:border-cream"
                     />
@@ -628,8 +731,12 @@ export function BookTools({
                     <span className="text-xs font-medium text-ink/70 dark:text-ink-dark/70">ISBN (optional)</span>
                     <input
                       type="text"
-                      value={book.isbn ?? ''}
-                      onChange={(e) => onBookChange({ isbn: e.target.value || undefined })}
+                      value={draftBook.isbn ?? ''}
+                      onChange={(e) => {
+                        const isbn = e.target.value || undefined
+                        setDraftBook((prev) => ({ ...prev, isbn }))
+                        scheduleBookPersist()
+                      }}
                       placeholder="978…"
                       className="w-full rounded-2xl border border-dust bg-parchment px-4 py-2.5 text-sm focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:focus:border-cream"
                     />
@@ -640,12 +747,12 @@ export function BookTools({
                       type="number"
                       min={0}
                       step={1}
-                      value={book.seriesIndex ?? ''}
+                      value={draftBook.seriesIndex ?? ''}
                       onChange={(e) => {
                         const raw = e.target.value
-                        onBookChange({
-                          seriesIndex: raw === '' ? null : Math.max(0, Number(raw) || 0),
-                        })
+                        const seriesIndex = raw === '' ? null : Math.max(0, Number(raw) || 0)
+                        setDraftBook((prev) => ({ ...prev, seriesIndex }))
+                        scheduleBookPersist()
                       }}
                       placeholder="Optional"
                       className="w-full rounded-2xl border border-dust bg-parchment px-4 py-2.5 text-sm focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:focus:border-cream"
@@ -654,8 +761,12 @@ export function BookTools({
                   <label className="block space-y-1">
                     <span className="text-xs font-medium text-ink/70 dark:text-ink-dark/70">Description</span>
                     <textarea
-                      value={book.description ?? ''}
-                      onChange={(e) => onBookChange({ description: e.target.value || undefined })}
+                      value={draftBook.description ?? ''}
+                      onChange={(e) => {
+                        const description = e.target.value || undefined
+                        setDraftBook((prev) => ({ ...prev, description }))
+                        scheduleBookPersist()
+                      }}
                       placeholder="Short synopsis for EPUB metadata"
                       rows={3}
                       className="w-full resize-y rounded-2xl border border-dust bg-parchment px-4 py-2.5 text-sm focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:focus:border-cream"
@@ -665,8 +776,12 @@ export function BookTools({
                     <span className="text-xs font-medium text-ink/70 dark:text-ink-dark/70">Publisher</span>
                     <input
                       type="text"
-                      value={book.publisher ?? ''}
-                      onChange={(e) => onBookChange({ publisher: e.target.value || undefined })}
+                      value={draftBook.publisher ?? ''}
+                      onChange={(e) => {
+                        const publisher = e.target.value || undefined
+                        setDraftBook((prev) => ({ ...prev, publisher }))
+                        scheduleBookPersist()
+                      }}
                       placeholder="Optional"
                       className="w-full rounded-2xl border border-dust bg-parchment px-4 py-2.5 text-sm focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:focus:border-cream"
                     />
@@ -811,12 +926,12 @@ export function BookTools({
                 <input
                   type="number"
                   min={0}
-                  value={goals.manuscriptTargetWords ?? ''}
+                  value={draftGoals.manuscriptTargetWords ?? ''}
                   onChange={(e) => {
                     const raw = e.target.value
-                    onGoalsChange({
-                      manuscriptTargetWords: raw === '' ? null : Math.max(0, Number(raw) || 0),
-                    })
+                    const manuscriptTargetWords = raw === '' ? null : Math.max(0, Number(raw) || 0)
+                    setDraftGoals((prev) => ({ ...prev, manuscriptTargetWords }))
+                    scheduleGoalsPersist()
                   }}
                   placeholder="e.g. 80000"
                   className="w-full rounded-2xl border border-dust bg-parchment px-4 py-2.5 text-sm focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:focus:border-cream"
@@ -827,12 +942,12 @@ export function BookTools({
                 <input
                   type="number"
                   min={0}
-                  value={goals.dailyWordGoal ?? ''}
+                  value={draftGoals.dailyWordGoal ?? ''}
                   onChange={(e) => {
                     const raw = e.target.value
-                    onGoalsChange({
-                      dailyWordGoal: raw === '' ? null : Math.max(0, Number(raw) || 0),
-                    })
+                    const dailyWordGoal = raw === '' ? null : Math.max(0, Number(raw) || 0)
+                    setDraftGoals((prev) => ({ ...prev, dailyWordGoal }))
+                    scheduleGoalsPersist()
                   }}
                   placeholder="e.g. 1000"
                   className="w-full rounded-2xl border border-dust bg-parchment px-4 py-2.5 text-sm focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:focus:border-cream"
@@ -840,15 +955,19 @@ export function BookTools({
               </label>
             </div>
 
-            {goals.manuscriptTargetWords != null && goals.manuscriptTargetWords > 0 && (
+            {draftGoals.manuscriptTargetWords != null && draftGoals.manuscriptTargetWords > 0 && (
               <ProgressBar
                 label="Toward manuscript target"
                 current={totalBookWords}
-                target={goals.manuscriptTargetWords}
+                target={draftGoals.manuscriptTargetWords}
               />
             )}
-            {goals.dailyWordGoal != null && goals.dailyWordGoal > 0 && (
-              <ProgressBar label="Today's progress" current={wordsWrittenToday} target={goals.dailyWordGoal} />
+            {draftGoals.dailyWordGoal != null && draftGoals.dailyWordGoal > 0 && (
+              <ProgressBar
+                label="Today's progress"
+                current={wordsWrittenToday}
+                target={draftGoals.dailyWordGoal}
+              />
             )}
           </CollapsibleSection>
           ) : null}
@@ -959,3 +1078,5 @@ export function BookTools({
     </>
   )
 }
+
+export const BookTools = memo(BookToolsInner)

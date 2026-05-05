@@ -1,16 +1,69 @@
-import { mkdir, readFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import sharp from 'sharp'
+import png2icons from 'png2icons'
+
+/**
+ * Web favicon assets are rasterized from the simple SVG mark.
+ * Desktop app/installer assets are rasterized from the gold-quill emblem
+ * (`public/brand/inkwell-emblem.png`), center-cropped to match the in-app
+ * emblem. Output is **opaque** (no circular alpha): Windows often fails to
+ * render transparent regions on desktop shortcut / shell icons.
+ */
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const faviconSvg = join(root, 'public', 'favicon.svg')
-const outDir = join(root, 'build')
-const icon512 = join(outDir, 'icon.png')
+const emblemPng = join(root, 'public', 'brand', 'inkwell-emblem.png')
+const buildDir = join(root, 'build')
 const apple180 = join(root, 'public', 'apple-touch-icon.png')
 
-await mkdir(outDir, { recursive: true })
+await mkdir(buildDir, { recursive: true })
+
+/* Web: 180x180 apple-touch-icon from the SVG favicon (unchanged). */
 const svg = await readFile(faviconSvg)
-await sharp(svg).resize(512, 512).png().toFile(icon512)
 await sharp(svg).resize(180, 180).png().toFile(apple180)
-console.log('Wrote', icon512, 'and', apple180)
+
+/* Desktop: tight-disc emblem master + multi-size .ico / .icns.
+   Geometry mirrors src/components/InkwellEmblem.tsx (scale 1.36 with
+   object-[50%_47%]): we visibly use ~73.5% of the source, shifted ~3%
+   above center to track the disc. */
+const SIZE = 1024
+const cropFrac = 0.735
+const yBiasFrac = -0.03
+
+const meta = await sharp(emblemPng).metadata()
+if (!meta.width || !meta.height) throw new Error('Could not read emblem dimensions')
+const side = Math.round(Math.min(meta.width, meta.height) * cropFrac)
+const left = Math.round((meta.width - side) / 2)
+const topRaw = Math.round((meta.height - side) / 2 + meta.height * yBiasFrac)
+const top = Math.max(0, Math.min(topRaw, meta.height - side))
+
+/* Opaque master only — do not apply a circular alpha mask for .ico: Explorer
+   and NSIS desktop shortcuts often show a wrong/empty icon when the embedded
+   image is mostly transparent. Corners keep the source artwork (dark field). */
+const masterPng = await sharp(emblemPng)
+  .extract({ left, top, width: side, height: side })
+  .resize(SIZE, SIZE)
+  .png()
+  .toBuffer()
+
+const iconPng = join(buildDir, 'icon.png')
+const iconIco = join(buildDir, 'icon.ico')
+const iconIcns = join(buildDir, 'icon.icns')
+
+await writeFile(iconPng, masterPng)
+
+/* forWinExe=true: stores small sizes as BMP (compatible with the file
+   properties dialog of older Windows) while keeping large sizes as PNG.
+   numOfColors=0 = lossless. */
+const ico = png2icons.createICO(masterPng, png2icons.BICUBIC, 0, false, true)
+if (!ico) throw new Error('png2icons.createICO returned null')
+await writeFile(iconIco, ico)
+
+const icns = png2icons.createICNS(masterPng, png2icons.BICUBIC, 0)
+if (!icns) throw new Error('png2icons.createICNS returned null')
+await writeFile(iconIcns, icns)
+
+console.log('Wrote', apple180)
+console.log('Wrote', iconPng, iconIco, iconIcns)

@@ -77,7 +77,9 @@ Do **not** run the updater from the renderer; keep trust boundaries in the main 
 
 ### Windows packaging without Developer Mode
 
-`electron-builder` can try to unpack tooling that contains symbolic links (for code-sign metadata). On Windows without symlink privileges, that step fails. This repo sets **`build.win.signAndEditExecutable": false`** so local and CI builds produce an NSIS installer without that path. For **retail Windows releases** with a real certificate, turn signing back on and run builds in an environment that can create symlinks (Developer Mode enabled, or elevated CI).
+`electron-builder` can try to unpack tooling that contains symbolic links (for code-sign metadata). On Windows without symlink privileges, that step can fail.
+
+**Custom app icon (`.exe` + shortcuts):** Windows embeds the icon by **editing the executable** (rcedit). If you set **`build.win.signAndEditExecutable` to `false`**, that step is skipped and the packaged **`Inkwell.exe` keeps the default Electron icon**, even if your installer and `build/icon.ico` look correct. This repo leaves **`signAndEditExecutable` at the default (true)** so the emblem is applied. If a build fails on symlink limits, enable **Developer Mode** (or use a CI image that can create symlinks) rather than turning this off, or you will lose the custom Windows icon.
 
 ### Code signing
 

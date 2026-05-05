@@ -1,4 +1,4 @@
-import { Moon, Sun } from 'lucide-react'
+import { Download, Moon, Sun } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
 import { InkwellEmblem } from './InkwellEmblem'
 import { InkwellProfileMenu, type InkwellProfileMenuProps } from './InkwellProfileMenu'
@@ -45,6 +45,13 @@ const inputClassName =
 
 const labelClassName = 'text-sm font-medium text-ink/70 dark:text-ink-dark/65'
 
+function desktopDownloadHref(): string | null {
+  const raw = import.meta.env.VITE_INKWELL_DESKTOP_DOWNLOAD_URL
+  if (typeof raw !== 'string') return null
+  const t = raw.trim()
+  return t.length ? t : null
+}
+
 export function SignInScreen({ darkMode, onToggleTheme, onComplete, cloudSync, profileMenu }: Props) {
   const [email, setEmail] = useState(() => {
     if (typeof window === 'undefined') return ''
@@ -62,6 +69,10 @@ export function SignInScreen({ darkMode, onToggleTheme, onComplete, cloudSync, p
   const [mode, setMode] = useState<AuthMode>('signin')
   const brandRef = useRef<HTMLButtonElement>(null)
   useThemeShine(brandRef)
+
+  const isDesktopShell = typeof window !== 'undefined' && Boolean(window.inkwellDesktop)
+  const desktopDownloadUrl = desktopDownloadHref()
+  const showDesktopDownload = !isDesktopShell && desktopDownloadUrl != null
 
   const onContinue = useCallback(() => {
     onComplete()
@@ -249,6 +260,20 @@ export function SignInScreen({ darkMode, onToggleTheme, onComplete, cloudSync, p
             </h1>
             {heroSubtitleEl}
           </div>
+
+          {showDesktopDownload && desktopDownloadUrl ? (
+            <div className="mb-8 w-full max-w-sm">
+              <a
+                href={desktopDownloadUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inkwell-hub-secondary inline-flex w-full items-center justify-center gap-2"
+              >
+                <Download className="h-4 w-4 shrink-0" aria-hidden />
+                Download desktop app
+              </a>
+            </div>
+          ) : null}
 
           {!cloudSync ? (
             <button type="button" onClick={onContinue} className="inkwell-hub-primary sm:min-w-[14rem]">

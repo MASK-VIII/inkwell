@@ -291,12 +291,24 @@ function buildAppMenu(win) {
 }
 
 function createWindow() {
+  /** Packaged Windows: ship `build/icon.ico` via `extraResources` so the window/taskbar can use the emblem. */
+  let windowIcon
+  if (!isDev && process.platform === 'win32') {
+    const iconPath = path.join(process.resourcesPath, 'icon.ico')
+    try {
+      if (fs.existsSync(iconPath)) windowIcon = iconPath
+    } catch {
+      /* ignore */
+    }
+  }
+
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 840,
     minWidth: 900,
     minHeight: 600,
     show: false,
+    ...(windowIcon ? { icon: windowIcon } : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,

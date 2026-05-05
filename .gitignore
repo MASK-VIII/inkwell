@@ -14,6 +14,9 @@ dist-ssr
 
 # Electron-builder output (large binaries; never commit)
 release/
+release-build/
+ebuild-out/
+inkwell-pack/
 
 # Editor directories and files
 .vscode/*

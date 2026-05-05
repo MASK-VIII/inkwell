@@ -10,7 +10,7 @@
     "dev": "vite",
     "dev:desktop": "concurrently -k \"cross-env INKWELL_DESKTOP=1 vite\" \"wait-on http://localhost:5173 && cross-env INKWELL_DESKTOP=1 electron electron/main.cjs\"",
     "build": "tsc -b && vite build",
-    "build:desktop": "tsc -b && cross-env INKWELL_DESKTOP=1 vite build && electron-builder",
+    "build:desktop": "npm run generate:brand-icons && tsc -b && cross-env INKWELL_DESKTOP=1 vite build && electron-builder",
     "lint": "eslint .",
     "preview": "vite preview",
     "generate:brand-icons": "node scripts/generate-brand-icons.mjs",
@@ -79,6 +79,7 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.5.0",
+    "png2icons": "^2.0.1",
     "sharp": "^0.34.5",
     "svgo": "^4.0.0",
     "typescript": "~6.0.2",
@@ -91,7 +92,7 @@
     "icon": "build/icon.png",
     "productName": "Inkwell",
     "directories": {
-      "output": "release"
+      "output": "ebuild-out"
     },
     "files": [
       "dist/**/*",
@@ -99,16 +100,23 @@
       "package.json"
     ],
     "asar": true,
+    "extraResources": [
+      {
+        "from": "build/icon.ico",
+        "to": "icon.ico"
+      }
+    ],
     "win": {
       "target": [
         "nsis"
       ],
-      "signAndEditExecutable": false
+      "icon": "build/icon.ico"
     },
     "mac": {
       "target": [
         "dmg"
       ],
+      "icon": "build/icon.icns",
       "category": "public.app-category.productivity"
     },
     "fileAssociations": [
@@ -121,7 +129,9 @@
     ],
     "nsis": {
       "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+      "createStartMenuShortcut": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico"
     },
     "protocols": [
       {

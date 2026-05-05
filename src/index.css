@@ -696,6 +696,22 @@ select {
     0 16px 45px -22px rgba(0, 0, 0, 0.65);
 }
 
+/* Format → Ebook split editor: full-viewport ProseMirror min-height spills over the preview column (flex). */
+[data-inkwell-format-split] .tiptap.ProseMirror {
+  min-height: 12rem;
+}
+
+[data-inkwell-format-split] .inkwell-editor-shell--format-split {
+  box-shadow: inset 0 0 40px -18px rgba(139, 69, 19, 0.14);
+}
+
+.dark [data-inkwell-format-split] .inkwell-editor-shell--format-split {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-cream) 8%, transparent),
+    inset 0 0 48px -20px rgba(139, 69, 19, 0.2),
+    0 6px 20px -14px rgba(0, 0, 0, 0.45);
+}
+
 .tiptap.ProseMirror {
   outline: none;
   min-height: calc(100vh - 14rem);

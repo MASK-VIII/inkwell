@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import {
   lazy,
+  startTransition,
   Suspense,
   useCallback,
   useDeferredValue,
@@ -37,6 +38,7 @@ import { InkwellEmblem } from './components/InkwellEmblem'
 import { InkwellWordmark } from './components/InkwellWordmark'
 import { GettingStartedTour, type TourRouteBucket } from './components/GettingStartedTour'
 import { NotesTour } from './components/NotesTour'
+import { AccountScreen } from './components/AccountScreen'
 import { InkwellProfileMenu } from './components/InkwellProfileMenu'
 import { SignInScreen } from './components/SignInScreen'
 import { useThemeShine } from './components/useThemeShine'
@@ -182,6 +184,7 @@ type DeletedSnapshot = Manuscript & { originalIndex: number }
 
 type Route =
   | 'signin'
+  | 'account'
   | 'bookshelf'
   | 'write'
   | 'format_print'
@@ -225,6 +228,7 @@ function readInitialDarkMode(): boolean {
 function readRouteFromHash(): Route {
   const hash = (typeof window === 'undefined' ? '' : window.location.hash).replace(/^#/, '')
   if (hash === 'signin' || hash === 'welcome' || hash === 'cloud-signin') return 'signin'
+  if (hash === 'account') return 'account'
   if (hash === 'bookshelf') return 'bookshelf'
   if (hash === 'format/print' || hash === 'review/print') return 'format_print'
   if (hash === 'format/ebook' || hash === 'review/ebook') return 'format_ebook'
@@ -255,6 +259,8 @@ function routeToHash(route: Route): string {
       return '#signin'
     case 'bookshelf':
       return '#bookshelf'
+    case 'account':
+      return '#account'
     case 'format_print':
       return '#format/print'
     case 'format_ebook':
@@ -414,6 +420,7 @@ export default function App() {
   const pendingInkwellThemeShineRef = useRef(false)
   const bookshelfBrandRef = useRef<HTMLButtonElement | null>(null)
   const writeHeaderBrandRef = useRef<HTMLAnchorElement | null>(null)
+  const publishExportMenuRef = useRef<HTMLDetailsElement>(null)
   useThemeShine(bookshelfBrandRef)
   useThemeShine(writeHeaderBrandRef)
   const lastDeletedRef = useRef<DeletedSnapshot | null>(null)
@@ -469,7 +476,9 @@ export default function App() {
     return project.id
   }, [project.kind, project.id, project.linkedBookId])
 
-  /** First row in BookTools “Notebook” / “Linked notes”; book or note master. */
+  /** First row in BookTools “Notebook” / “Linked notes”. For notes, title can follow body — use derived string, not `project.chapters` ref, as the memo dep. */
+  const noteDerivedShelfTitle =
+    project.kind === 'note' ? deriveNoteMetaTitle(project) : ''
   const notesProjectMaster = useMemo(() => {
     if (project.kind !== 'book' && project.kind !== 'note') return null
     const parentId = project.linkedBookId?.trim()
@@ -488,9 +497,9 @@ export default function App() {
       return { id: m.id, title, kind: m.kind, isCurrent: false, missing: false as const }
     }
     const title =
-      project.kind === 'book' ? project.book.title.trim() || 'Untitled book' : deriveNoteMetaTitle(project)
+      project.kind === 'book' ? project.book.title.trim() || 'Untitled book' : noteDerivedShelfTitle || 'Untitled note'
     return { id: project.id, title, kind: project.kind, isCurrent: true, missing: false as const }
-  }, [project.kind, project.id, project.linkedBookId, project.book.title, project.chapters])
+  }, [project.kind, project.id, project.linkedBookId, project.book.title, noteDerivedShelfTitle])
 
   /** Child notes under the shelf parent; excludes current note so it isn’t duplicated in the list. */
   const linkedNotesForBookPanel = useMemo(() => {
@@ -522,13 +531,15 @@ export default function App() {
     return listBacklinksToNote(project.id, shelfParentIdForLinkedNotes)
   }, [project.kind, project.id, shelfParentIdForLinkedNotes])
 
+  /** Chapter @mention labels depend only on ids + titles — not full manuscript bodies (body typing used to invalidate every keystroke). */
+  const chapterMentionTitlesKey = project.chapters.map((c) => `${c.id}\u0000${c.title}`).join('\u0001')
   const mentionItems = useMemo((): MentionItem[] => {
     const items: MentionItem[] = []
     const author = project.book.authorName.trim()
     if (author) items.push({ id: 'mention:author', label: author })
     const bookTitle = project.book.title.trim()
     if (bookTitle) items.push({ id: 'mention:book', label: bookTitle })
-    for (const ch of chapters) {
+    for (const ch of project.chapters) {
       const t = ch.title.trim()
       if (t) items.push({ id: `mention:ch-${ch.id}`, label: t })
     }
@@ -539,7 +550,7 @@ export default function App() {
       items.push({ id: `mention:note:${n.id}`, label, noteProjectId: n.id })
     }
     return items
-  }, [project.book.authorName, project.book.title, chapters, linkedNotesForBookPanel])
+  }, [project.book.authorName, project.book.title, chapterMentionTitlesKey, linkedNotesForBookPanel])
   const isNote = project.kind === 'note'
   const current = chapters.find((m) => m.id === currentId) ?? null
   const currentChapterIndex = useMemo(() => {
@@ -560,7 +571,21 @@ export default function App() {
   }, [chapters, currentChapterIndex])
 
   const deferredProject = useDeferredValue(project)
-  const liveTotalBookWords = useMemo(() => totalWordsInChapters(chapters), [chapters])
+  const deferredBaseBookWords = useMemo(
+    () => totalWordsInChapters(deferredProject.chapters),
+    [deferredProject.chapters],
+  )
+  const liveTotalBookWords = useMemo(() => {
+    if (currentId == null) return deferredBaseBookWords
+    const liveCh = chapters.find((c) => c.id === currentId)
+    const defCh = deferredProject.chapters.find((c) => c.id === currentId)
+    if (!liveCh || !defCh) return totalWordsInChapters(chapters)
+    return (
+      deferredBaseBookWords -
+      countWordsInDoc(defCh.content) +
+      countWordsInDoc(liveCh.content)
+    )
+  }, [chapters, deferredProject.chapters, currentId, deferredBaseBookWords])
   const totalBookWords = useMemo(
     () => totalWordsInChapters(deferredProject.chapters),
     [deferredProject.chapters],
@@ -1044,22 +1069,21 @@ export default function App() {
     }
   }, [project.kind, project.id, stickyNotePopoutId])
 
-  const patchBook = useCallback(
-    (patch: Partial<BookMeta>) => {
-      setProject((prev) => {
-        const next = saveProject({ ...prev, book: { ...prev.book, ...patch } })
-        return next
+  /** BookTools debounces these full-object commits so typing in the drawer does not re-render the whole app every key. */
+  const commitBookMeta = useCallback(
+    (book: BookMeta) => {
+      startTransition(() => {
+        setProject((prev) => saveProject({ ...prev, book }))
       })
       recordHistorySoon('Auto')
     },
     [recordHistorySoon],
   )
 
-  const patchGoals = useCallback(
-    (patch: Partial<WritingGoals>) => {
-      setProject((prev) => {
-        const next = saveProject({ ...prev, goals: { ...prev.goals, ...patch } })
-        return next
+  const commitGoals = useCallback(
+    (goals: WritingGoals) => {
+      startTransition(() => {
+        setProject((prev) => saveProject({ ...prev, goals }))
       })
       recordHistorySoon('Auto')
     },
@@ -1153,7 +1177,9 @@ export default function App() {
 
   const patchAssembly = useCallback(
     (patch: Partial<BookAssembly>) => {
-      setProject((prev) => saveProject({ ...prev, assembly: { ...prev.assembly, ...patch } }))
+      startTransition(() => {
+        setProject((prev) => saveProject({ ...prev, assembly: { ...prev.assembly, ...patch } }))
+      })
       recordHistorySoon('Auto')
     },
     [recordHistorySoon],
@@ -1161,7 +1187,9 @@ export default function App() {
 
   const patchSeriesBible = useCallback(
     (rows: SeriesBibleEntry[]) => {
-      setProject((prev) => saveProject({ ...prev, seriesBible: rows }))
+      startTransition(() => {
+        setProject((prev) => saveProject({ ...prev, seriesBible: rows }))
+      })
       recordHistorySoon('Auto')
     },
     [recordHistorySoon],
@@ -1242,10 +1270,12 @@ export default function App() {
   const updateCurrentContent = useCallback(
     (json: JSONContent) => {
       if (currentId === null) return
-      setProject((prev) => ({
-        ...prev,
-        chapters: prev.chapters.map((m) => (m.id === currentId ? { ...m, content: json } : m)),
-      }))
+      startTransition(() => {
+        setProject((prev) => ({
+          ...prev,
+          chapters: prev.chapters.map((m) => (m.id === currentId ? { ...m, content: json } : m)),
+        }))
+      })
       scheduleIdlePersist()
       recordHistorySoon('Auto')
     },
@@ -1255,10 +1285,12 @@ export default function App() {
   const updateCurrentTitle = useCallback(
     (title: string) => {
       if (currentId === null) return
-      setProject((prev) => ({
-        ...prev,
-        chapters: prev.chapters.map((m) => (m.id === currentId ? { ...m, title } : m)),
-      }))
+      startTransition(() => {
+        setProject((prev) => ({
+          ...prev,
+          chapters: prev.chapters.map((m) => (m.id === currentId ? { ...m, title } : m)),
+        }))
+      })
       scheduleIdlePersist()
       recordHistorySoon('Auto')
     },
@@ -1461,6 +1493,11 @@ export default function App() {
       showToast('Library export failed')
     }
   }, [showToast])
+
+  const closePublishExportMenu = useCallback(() => {
+    const el = publishExportMenuRef.current
+    if (el) el.open = false
+  }, [])
 
   const uploadLibraryCloudBackup = useCallback(async () => {
     if (!isCloudBackupConfigured()) return
@@ -2396,7 +2433,6 @@ export default function App() {
                   onSelectChapter={selectChapter}
                   onDeleteChapter={deleteChapter}
                   onDropReorder={onReorder}
-                  wordCount={countWordsInDoc(ms.content)}
                   onSplitChapter={splitChapterAtCursor}
                   onMergeWithNext={mergeChapterWithNext}
                   canMergeWithNext={i < chapters.length - 1}
@@ -2564,11 +2600,48 @@ export default function App() {
             onSignOutCloud: () => void inkwellLibrarySync.signOutCloudOnly(),
             onAppSignOut: onBookshelfSignOut,
             showLibraryHubLink: !shouldShowSignIn(readBootstrap()),
+            onGoToAccount: !shouldShowSignIn(readBootstrap())
+              ? () => {
+                  syncPersistedState()
+                  navigateRoute('account')
+                }
+              : undefined,
             onGoToLibraryHub: () => {
               syncPersistedState()
               navigateRoute('bookshelf')
             },
           }}
+        />
+      ) : route === 'account' ? (
+        <AccountScreen
+          darkMode={darkMode}
+          onToggleTheme={toggleTheme}
+          onBackToBookshelf={() => {
+            syncPersistedState()
+            navigateRoute('bookshelf')
+          }}
+          profileMenu={{
+            userEmail: inkwellLibrarySync.userEmail,
+            cloudSyncConfigured: isInkwellCloudSyncConfigured(),
+            onSyncNow: () => inkwellLibrarySync.syncNow(),
+            onSignOutCloud: () => void inkwellLibrarySync.signOutCloudOnly(),
+            onAppSignOut: onBookshelfSignOut,
+            showLibraryHubLink: !shouldShowSignIn(readBootstrap()),
+            onGoToLibraryHub: () => {
+              syncPersistedState()
+              navigateRoute('bookshelf')
+            },
+          }}
+          userEmail={inkwellLibrarySync.userEmail}
+          cloudSyncConfigured={isInkwellCloudSyncConfigured()}
+          syncStatus={inkwellLibrarySync.status}
+          syncStatusDetail={inkwellLibrarySync.statusDetail}
+          queueHasWork={inkwellLibrarySync.queueHasWork}
+          hasSyncConflict={Boolean(inkwellLibrarySync.conflict)}
+          onSyncNow={() => inkwellLibrarySync.syncNow()}
+          onSignOutCloud={() => void inkwellLibrarySync.signOutCloudOnly()}
+          onAppSignOut={onBookshelfSignOut}
+          onOpenCloudSignIn={navigateToCloudSignIn}
         />
       ) : route === 'bookshelf' ? (
         <div className="flex min-h-0 flex-1 flex-col">
@@ -2848,6 +2921,10 @@ export default function App() {
                     onSignOutCloud={() => void inkwellLibrarySync.signOutCloudOnly()}
                     onAppSignOut={onBookshelfSignOut}
                     showLibraryHubLink
+                    onGoToAccount={() => {
+                      syncPersistedState()
+                      navigateRoute('account')
+                    }}
                     onGoToLibraryHub={() => {
                       syncPersistedState()
                       navigateRoute('bookshelf')
@@ -3639,8 +3716,20 @@ export default function App() {
         <>
           <header className="inkwell-chrome-header sticky top-0 z-50 border-b border-dust bg-white/90 backdrop-blur-md dark:border-border-dark dark:bg-panel-dark/90">
             <div className="flex w-full min-h-[3.25rem] items-stretch sm:min-h-[3.5rem]">
-              <div className="inkwell-theme-bridge flex min-w-0 flex-1 items-center justify-start bg-white/70 py-2 pl-3 sm:py-3 sm:pl-5 dark:bg-panel-dark/70">
-                <div className={!isNote && isFormatWorkspace ? chaptersAsideWidthClass : 'min-w-0'}>
+              <div
+                className={`inkwell-theme-bridge flex min-w-0 flex-1 items-center justify-start bg-white/70 py-2 sm:py-3 dark:bg-panel-dark/70 ${
+                  !isNote && (isFormatWorkspace || route === 'publish') ? 'pl-0 sm:pl-0' : 'pl-3 sm:pl-5'
+                }`}
+              >
+                <div
+                  className={
+                    !isNote && isFormatWorkspace ?
+                      `flex min-w-0 items-center justify-between gap-2 pl-3 sm:pl-5 ${chaptersAsideWidthClass}`
+                    : !isNote && route === 'publish' ?
+                      `flex min-w-0 items-center justify-between gap-2 pl-3 sm:pl-5 ${FORMAT_WORKSPACE_SIDE_PANEL_WIDTH_CLASS}`
+                    : 'min-w-0'
+                  }
+                >
                   <a
                     ref={writeHeaderBrandRef}
                     href={buildInkwellUrlForProject(project.id)}
@@ -3657,13 +3746,43 @@ export default function App() {
                         syncPersistedState()
                       }
                     }}
-                    className="inkwell-header-brand group inline-flex w-fit max-w-full items-center gap-2 rounded-2xl px-2 py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-walnut/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream/50 dark:focus-visible:ring-offset-panel-dark sm:gap-3"
+                    className="inkwell-header-brand group inline-flex w-fit max-w-full shrink-0 items-center gap-2 rounded-2xl px-2 py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-walnut/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream/50 dark:focus-visible:ring-offset-panel-dark sm:gap-3"
                     aria-label="Back to Bookshelf"
                     title="Bookshelf"
                   >
                     <InkwellEmblem darkMode={darkMode} />
                     <InkwellWordmark className="hidden sm:block" />
                   </a>
+                  {!isNote && isFormatWorkspace ?
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEbookEditOpen(false)
+                        navigateRoute('write')
+                      }}
+                      className="flex shrink-0 items-center gap-2 rounded-3xl bg-ink px-3 py-2 text-sm font-medium text-parchment outline-none transition-colors hover:bg-walnut focus-visible:ring-2 focus-visible:ring-walnut/45 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:bg-cream dark:text-ink dark:hover:bg-accent-warm dark:focus-visible:ring-cream/55 dark:focus-visible:ring-offset-panel-dark sm:px-5 sm:py-2.5"
+                      aria-label="Back to writing"
+                      title="Back to writing"
+                    >
+                      <PenLine className="h-4 w-4 shrink-0" strokeWidth={2.25} />
+                      <span className="hidden sm:inline">Write</span>
+                    </button>
+                  : !isNote && route === 'publish' ?
+                    <button
+                      type="button"
+                      onClick={() => {
+                        syncPersistedState()
+                        setEbookEditOpen(false)
+                        navigateRoute('format_ebook')
+                      }}
+                      className="flex shrink-0 items-center gap-2 rounded-3xl bg-ink px-3 py-2 text-sm font-medium text-parchment outline-none transition-colors hover:bg-walnut focus-visible:ring-2 focus-visible:ring-walnut/45 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:bg-cream dark:text-ink dark:hover:bg-accent-warm dark:focus-visible:ring-cream/55 dark:focus-visible:ring-offset-panel-dark sm:px-5 sm:py-2.5"
+                      aria-label="Open Format workspace"
+                      title="Ebook & print previews"
+                    >
+                      <LayoutTemplate className="h-4 w-4 shrink-0" strokeWidth={2.25} />
+                      <span className="hidden sm:inline">Format</span>
+                    </button>
+                  : null}
                 </div>
               </div>
 
@@ -3769,6 +3888,49 @@ export default function App() {
                       )}
                       <span className="hidden sm:inline">{route === 'note_export' ? 'Write' : 'Export'}</span>
                     </button>
+                  ) : route === 'publish' ? (
+                    <details ref={publishExportMenuRef} className="group relative shrink-0">
+                      <summary className="flex list-none cursor-pointer select-none items-center gap-1.5 rounded-3xl bg-ink px-3 py-2 text-sm font-medium text-parchment outline-none transition-colors hover:bg-walnut focus-visible:ring-2 focus-visible:ring-walnut/45 focus-visible:ring-offset-2 focus-visible:ring-offset-white [&::-webkit-details-marker]:hidden dark:bg-cream dark:text-ink dark:hover:bg-accent-warm dark:focus-visible:ring-cream/55 dark:focus-visible:ring-offset-panel-dark sm:gap-2 sm:px-5 sm:py-2.5">
+                        <Download className="h-4 w-4 shrink-0" strokeWidth={2.25} />
+                        <span className="hidden sm:inline">Export</span>
+                        <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-75 transition-transform group-open:rotate-180 dark:opacity-80" />
+                      </summary>
+                      <div className="absolute right-0 top-full z-[60] mt-1.5 min-w-[15rem] overflow-hidden rounded-2xl border border-dust bg-white/95 py-1 shadow-lg backdrop-blur-md dark:border-border-dark dark:bg-panel-dark/95">
+                        <button
+                          type="button"
+                          className="block w-full px-3 py-2.5 text-left text-sm font-medium text-ink hover:bg-parchment/80 dark:text-ink-dark dark:hover:bg-panel-dark/80"
+                          onClick={() => {
+                            closePublishExportMenu()
+                            syncPersistedState()
+                            void exportPdfKdp()
+                          }}
+                        >
+                          Export PDF (KDP)
+                        </button>
+                        <button
+                          type="button"
+                          className="block w-full px-3 py-2.5 text-left text-sm font-medium text-ink hover:bg-parchment/80 dark:text-ink-dark dark:hover:bg-panel-dark/80"
+                          onClick={() => {
+                            closePublishExportMenu()
+                            syncPersistedState()
+                            void exportEpub()
+                          }}
+                        >
+                          Export EPUB
+                        </button>
+                        <div className="my-1 border-t border-dust dark:border-border-dark" />
+                        <button
+                          type="button"
+                          className="block w-full px-3 py-2.5 text-left text-sm font-medium text-ink hover:bg-parchment/80 dark:text-ink-dark dark:hover:bg-panel-dark/80"
+                          onClick={() => {
+                            closePublishExportMenu()
+                            setBookToolsOpen(true)
+                          }}
+                        >
+                          Import & backups…
+                        </button>
+                      </div>
+                    </details>
                   ) : (
                     <button
                       type="button"
@@ -3802,6 +3964,10 @@ export default function App() {
                   onSignOutCloud={() => void inkwellLibrarySync.signOutCloudOnly()}
                   onAppSignOut={onBookshelfSignOut}
                   showLibraryHubLink
+                  onGoToAccount={() => {
+                    syncPersistedState()
+                    navigateRoute('account')
+                  }}
                   onGoToLibraryHub={() => {
                     syncPersistedState()
                     navigateRoute('bookshelf')
@@ -3813,7 +3979,7 @@ export default function App() {
           </header>
 
           <div className="flex min-h-0 w-full flex-1">
-            {!isNote && route !== 'write' ?
+            {!isNote && route !== 'write' && route !== 'publish' ?
               <aside
                 className={`flex shrink-0 flex-col border-r border-dust bg-white/70 transition-[width] duration-300 ease-out dark:border-border-dark dark:bg-panel-dark/70 ${chaptersAsideWidthClass}`}
               >
@@ -3879,7 +4045,6 @@ export default function App() {
                           onSelectChapter={selectChapter}
                           onDeleteChapter={deleteChapter}
                           onDropReorder={onReorder}
-                          wordCount={countWordsInDoc(ms.content)}
                           onSplitChapter={splitChapterAtCursor}
                           onMergeWithNext={mergeChapterWithNext}
                           canMergeWithNext={i < chapters.length - 1}
@@ -3923,9 +4088,9 @@ export default function App() {
                   />
                 </Suspense>
               ) : route === 'format_ebook' ? (
-                <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:flex-row">
                   {ebookEditOpen && (
-                    <div className="min-h-0 flex-1">
+                    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:min-h-0">
                       {current ? (
                         <ManuscriptEditor
                           key={`${current.id}-${editorEpoch}`}
@@ -3933,7 +4098,7 @@ export default function App() {
                           content={current.content}
                           onDocumentChange={updateCurrentContent}
                           editorRef={editorRef}
-                          toolbarVariant="full"
+                          toolbarVariant="formatSplit"
                           compactFooterStats
                           chapterTitle={current.title}
                           onChapterTitleChange={updateCurrentTitle}
@@ -4088,9 +4253,9 @@ export default function App() {
             }
             onSetWorkspaceRoute={(next) => navigateRoute(next)}
             book={project.book}
-            onBookChange={patchBook}
+            onBookCommit={commitBookMeta}
             goals={project.goals}
-            onGoalsChange={patchGoals}
+            onGoalsCommit={commitGoals}
             totalBookWords={totalBookWords}
             wordsWrittenToday={wordsWrittenToday}
             onExportPdfKdp={() => {

@@ -1,6 +1,7 @@
 import { BookOpen, MoreVertical } from 'lucide-react'
-import { memo, useCallback, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { attachInkwellDragGhost } from '../lib/dragGhost'
+import { countWordsInDoc } from '../lib/wordCount'
 import type { Manuscript } from '../types'
 
 const CHAPTER_DRAG_MIME = 'application/x-inkwell-chapter-id'
@@ -23,7 +24,6 @@ export type ManuscriptRowProps = {
   onSelectChapter: (id: number) => void
   onDeleteChapter: (id: number) => void
   onDropReorder: (draggedId: number, targetId: number) => void
-  wordCount?: number
   onSplitChapter?: (id: number) => void
   onMergeWithNext?: (id: number) => void
   canMergeWithNext?: boolean
@@ -35,7 +35,6 @@ function ManuscriptRowInner({
   onSelectChapter,
   onDeleteChapter,
   onDropReorder,
-  wordCount,
   onSplitChapter,
   onMergeWithNext,
   canMergeWithNext,
@@ -68,6 +67,7 @@ function ManuscriptRowInner({
     }
   }, [menuOpen])
 
+  const wordCount = useMemo(() => countWordsInDoc(manuscript.content), [manuscript.content])
   const displayTitle = manuscript.title?.trim() || 'Untitled section'
   const showMerge = Boolean(onMergeWithNext && canMergeWithNext)
   const showSplit = Boolean(onSplitChapter)
@@ -177,15 +177,13 @@ function ManuscriptRowInner({
 
         <div className="min-w-0 flex-1">
           <p className="break-words font-medium leading-snug">{displayTitle}</p>
-          {wordCount != null ? (
-            <p
-              className={`mt-0.5 text-[11px] tabular-nums ${
-                active ? 'text-parchment/70 dark:text-ink/55' : 'text-ink/50 dark:text-ink-dark/50'
-              }`}
-            >
-              {wordCount.toLocaleString()} words
-            </p>
-          ) : null}
+          <p
+            className={`mt-0.5 text-[11px] tabular-nums ${
+              active ? 'text-parchment/70 dark:text-ink/55' : 'text-ink/50 dark:text-ink-dark/50'
+            }`}
+          >
+            {wordCount.toLocaleString()} words
+          </p>
         </div>
 
         <div ref={menuRef} data-chapter-row-actions className="relative shrink-0">

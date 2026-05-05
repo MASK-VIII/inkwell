@@ -48,8 +48,8 @@ type Props = {
   statsScopeLabel?: string
   /** Persist drag position + “keep visible” preference (e.g. project id). */
   wordStatStorageKey?: string | null
-  /** Slim one-row bar for main Write workspace; full bar for format/ebook editor and popouts. */
-  toolbarVariant?: 'writeMinimal' | 'full'
+  /** Slim one-row bar for Write; full bar for popouts; `formatSplit` = Format→Ebook side-by-side (no toolbar chrome). */
+  toolbarVariant?: 'writeMinimal' | 'full' | 'formatSplit'
   /** Shown in the Write toolbar next to Undo/Redo when using `writeMinimal`. */
   onOpenFindReplace?: () => void
   /** Optional overlay rendered just below the toolbar, layered over the editor shell. Used for the Write Chapters drawer. */
@@ -109,6 +109,7 @@ function ManuscriptEditorInner({
   onWikilinkClick,
 }: Props) {
   const minimalBar = toolbarVariant === 'writeMinimal'
+  const formatSplitMode = toolbarVariant === 'formatSplit'
   const [, setToolbarVersion] = useState(0)
   const bumpToolbar = useCallback(() => setToolbarVersion((v) => v + 1), [])
 
@@ -371,24 +372,39 @@ function ManuscriptEditorInner({
     [floatPos, wordStatStorageKey, toggleWordstatPinned],
   )
 
-  const shellPad = embedded ? 'p-3 sm:p-4' : 'p-6 sm:p-12'
-  const editorMinH = embedded ? 'min-h-[9rem]' : 'min-h-[50vh]'
+  const shellPad =
+    formatSplitMode ? 'px-4 pt-4 pb-6 sm:px-5 sm:pt-5 sm:pb-8'
+    : embedded ? 'p-3 sm:p-4'
+    : 'p-6 sm:p-12'
+  const editorMinH =
+    formatSplitMode ? 'min-h-[10rem]'
+    : embedded ? 'min-h-[9rem]'
+    : 'min-h-[50vh]'
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col" data-inkwell-tour="editor-toolbar">
-      <ManuscriptToolbar
-        manuscriptId={manuscriptId}
-        editor={editor}
-        minimalBar={minimalBar}
-        embedded={embedded}
-        bumpToolbar={bumpToolbar}
-        onOpenFindReplace={onOpenFindReplace}
-      />
+    <div
+      className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+      data-inkwell-tour="editor-toolbar"
+      {...(formatSplitMode ? { 'data-inkwell-format-split': true } : {})}
+    >
+      {!formatSplitMode ?
+        <ManuscriptToolbar
+          manuscriptId={manuscriptId}
+          editor={editor}
+          minimalBar={minimalBar}
+          embedded={embedded}
+          bumpToolbar={bumpToolbar}
+          onOpenFindReplace={onOpenFindReplace}
+        />
+      : null}
 
-      <div className="relative flex min-h-0 flex-1 flex-col">
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       {leftOverlay}
-      <div ref={shellRef} className={`inkwell-editor-shell relative flex-1 overflow-auto ${shellPad}`}>
-        {floatPos !== null ? (
+      <div
+        ref={shellRef}
+        className={`inkwell-editor-shell relative min-h-0 flex-1 overflow-auto ${shellPad} ${formatSplitMode ? 'inkwell-editor-shell--format-split' : ''}`}
+      >
+        {floatPos !== null && !formatSplitMode ? (
           <div className="sticky top-2 z-30 flex h-0 w-full justify-end overflow-visible pr-2 pt-1 pointer-events-none">
             <div
               ref={floatClusterRef}
@@ -437,7 +453,9 @@ function ManuscriptEditorInner({
         ) : null}
         {showChapterTitleOnPage && onChapterTitleChange ? (
           <div
-            className={`mx-auto max-w-[720px] ${embedded ? 'mb-5 px-1' : 'mb-8 px-2 sm:px-4'}`}
+            className={`mx-auto max-w-[720px] ${
+              formatSplitMode ? 'mb-3 px-1 sm:mb-4' : embedded ? 'mb-5 px-1' : 'mb-8 px-2 sm:px-4'
+            }`}
           >
             <label className="sr-only" htmlFor={`inkwell-chapter-title-${manuscriptId}`}>
               Chapter title
@@ -457,7 +475,7 @@ function ManuscriptEditorInner({
         ) : (
           <div
             className={`mx-auto max-w-[720px] animate-pulse rounded-xl bg-dust/20 dark:bg-border-dark/30 ${
-              embedded ? 'min-h-[9rem]' : 'min-h-[40vh]'
+              formatSplitMode ? 'min-h-[10rem]' : embedded ? 'min-h-[9rem]' : 'min-h-[40vh]'
             }`}
           />
         )}
