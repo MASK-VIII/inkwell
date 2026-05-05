@@ -3619,11 +3619,12 @@ export default function App() {
               </div>
 
               <div className="relative z-10 flex min-w-0 flex-1 items-center justify-end gap-2 py-2 pl-2 pr-3 sm:py-3 sm:pr-5">
+                {/* Keep profile menu outside overflow-x-auto (Format toolbar); otherwise the dropdown is clipped. */}
                 <div
-                  className={`flex min-w-0 max-w-full items-center justify-end gap-1 sm:gap-2 ${
+                  className={`flex min-w-0 flex-1 items-center justify-end gap-1 sm:gap-2 ${
                     !isNote && isFormatWorkspace
-                      ? 'flex-nowrap overflow-x-auto overscroll-x-contain px-0.5 sm:px-1'
-                      : 'flex-wrap'
+                      ? 'max-w-full flex-nowrap overflow-x-auto overscroll-x-contain px-0.5 sm:px-1'
+                      : 'max-w-full flex-wrap'
                   }`}
                 >
                   <button
@@ -3706,20 +3707,20 @@ export default function App() {
                       <span className="hidden sm:inline">{isFormatWorkspace ? 'Publish!' : 'Format'}</span>
                     </button>
                   )}
-                  <InkwellProfileMenu
-                    userEmail={inkwellLibrarySync.userEmail}
-                    cloudSyncConfigured={isInkwellCloudSyncConfigured()}
-                    onSyncNow={() => inkwellLibrarySync.syncNow()}
-                    onSignOutCloud={() => void inkwellLibrarySync.signOutCloudOnly()}
-                    onAppSignOut={onBookshelfSignOut}
-                    showLibraryHubLink
-                    onGoToLibraryHub={() => {
-                      syncPersistedState()
-                      navigateRoute('bookshelf')
-                    }}
-                    onRequestExclusiveOpen={() => setBookToolsOpen(false)}
-                  />
                 </div>
+                <InkwellProfileMenu
+                  userEmail={inkwellLibrarySync.userEmail}
+                  cloudSyncConfigured={isInkwellCloudSyncConfigured()}
+                  onSyncNow={() => inkwellLibrarySync.syncNow()}
+                  onSignOutCloud={() => void inkwellLibrarySync.signOutCloudOnly()}
+                  onAppSignOut={onBookshelfSignOut}
+                  showLibraryHubLink
+                  onGoToLibraryHub={() => {
+                    syncPersistedState()
+                    navigateRoute('bookshelf')
+                  }}
+                  onRequestExclusiveOpen={() => setBookToolsOpen(false)}
+                />
               </div>
             </div>
           </header>
@@ -4038,6 +4039,7 @@ export default function App() {
             }
             linkedNotesForBook={linkedNotesForBookPanel}
             onPopoutLinkedNote={openLinkedNotePopout}
+            onDeleteLinkedNote={deleteShelfLinkedChildNote}
             notesProjectMaster={notesProjectMaster}
             onOpenProjectInMain={(id) => {
               syncPersistedState()

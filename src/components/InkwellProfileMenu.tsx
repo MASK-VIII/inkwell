@@ -70,7 +70,7 @@ export function InkwellProfileMenu({
     'block w-full rounded-lg px-3 py-2 text-left text-sm text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50'
 
   return (
-    <div className="relative" ref={wrapRef}>
+    <div className="relative shrink-0" ref={wrapRef}>
       <button
         type="button"
         onClick={toggle}

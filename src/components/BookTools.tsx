@@ -1,4 +1,4 @@
-import { ExternalLink, X } from 'lucide-react'
+import { ExternalLink, Trash2, X } from 'lucide-react'
 import { useEffect, useRef, useState, type TransitionEvent } from 'react'
 import type {
   BookAssembly,
@@ -54,6 +54,8 @@ type Props = {
   linkedNotesForBook?: ProjectMeta[]
   /** Open a linked note in a floating editor over the workspace */
   onPopoutLinkedNote?: (noteId: string) => void
+  /** Permanently delete a linked child note or a non-current master note (same as shelf). */
+  onDeleteLinkedNote?: (noteId: string) => void
   /** Master workspace (book or note) for this project’s note list; shown first in the list. */
   notesProjectMaster?: NotesProjectMasterRow | null
   /** Open a book or note in the main editor (used for the master row). */
@@ -96,6 +98,7 @@ export function BookTools({
   onNewNoteForBook,
   linkedNotesForBook = [],
   onPopoutLinkedNote,
+  onDeleteLinkedNote,
   notesProjectMaster = null,
   onOpenProjectInMain,
   assembly,
@@ -336,20 +339,40 @@ export function BookTools({
                                 Open in main editor
                               </span>
                             </a>
-                            {notesProjectMaster.kind === 'note' ? (
-                              <button
-                                type="button"
-                                title="Open floating editor"
-                                aria-label="Open floating editor"
-                                className="inline-flex w-11 shrink-0 items-center justify-center border-l-2 border-walnut/25 bg-transparent text-ink/55 transition-colors group-hover:text-ink dark:border-accent-warm/30 dark:group-hover:text-ink-dark"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  onPopoutLinkedNote?.(notesProjectMaster.id)
-                                  onClose()
-                                }}
-                              >
-                                <ExternalLink className="h-4 w-4" strokeWidth={2.25} />
-                              </button>
+                            {notesProjectMaster.kind === 'note' &&
+                            (onPopoutLinkedNote != null || onDeleteLinkedNote != null) ? (
+                              <div className="flex shrink-0 border-l-2 border-walnut/25 dark:border-accent-warm/30">
+                                {onPopoutLinkedNote != null ? (
+                                  <button
+                                    type="button"
+                                    title="Open floating editor"
+                                    aria-label="Open floating editor"
+                                    className="inline-flex w-11 items-center justify-center bg-transparent text-ink/55 transition-colors hover:bg-dust/50 hover:text-ink group-hover:text-ink dark:text-ink-dark/55 dark:hover:bg-border-dark/50 dark:hover:text-ink-dark dark:group-hover:text-ink-dark"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      onPopoutLinkedNote(notesProjectMaster.id)
+                                      onClose()
+                                    }}
+                                  >
+                                    <ExternalLink className="h-4 w-4" strokeWidth={2} />
+                                  </button>
+                                ) : null}
+                                {onDeleteLinkedNote != null ? (
+                                  <button
+                                    type="button"
+                                    title="Delete note from this device"
+                                    aria-label={`Delete note ${notesProjectMaster.title || 'Untitled'}`}
+                                    className={`inline-flex w-11 items-center justify-center bg-transparent text-ink/55 transition-colors hover:bg-red-500/10 hover:text-red-600 group-hover:text-ink dark:text-ink-dark/55 dark:hover:bg-red-400/10 dark:hover:text-red-400 dark:group-hover:text-ink-dark ${onPopoutLinkedNote != null ? 'border-l border-walnut/25 dark:border-accent-warm/30' : ''}`}
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      onDeleteLinkedNote(notesProjectMaster.id)
+                                      onClose()
+                                    }}
+                                  >
+                                    <Trash2 className="h-4 w-4" strokeWidth={2} />
+                                  </button>
+                                ) : null}
+                              </div>
                             ) : null}
                           </div>
                         )}
@@ -374,19 +397,40 @@ export function BookTools({
                               Open in main editor
                             </span>
                           </a>
-                          <button
-                            type="button"
-                            title="Open floating editor"
-                            aria-label="Open floating editor"
-                            className="inline-flex w-11 shrink-0 items-center justify-center border-l border-dust/80 bg-transparent text-ink/55 transition-colors group-hover:text-ink dark:border-border-dark dark:group-hover:text-ink-dark"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              onPopoutLinkedNote?.(n.id)
-                              onClose()
-                            }}
-                          >
-                            <ExternalLink className="h-4 w-4" strokeWidth={2.25} />
-                          </button>
+                          {onPopoutLinkedNote != null || onDeleteLinkedNote != null ? (
+                            <div className="flex shrink-0 border-l border-dust/80 dark:border-border-dark">
+                              {onPopoutLinkedNote != null ? (
+                                <button
+                                  type="button"
+                                  title="Open floating editor"
+                                  aria-label="Open floating editor"
+                                  className="inline-flex w-11 items-center justify-center bg-transparent text-ink/55 transition-colors hover:bg-dust/50 hover:text-ink group-hover:text-ink dark:text-ink-dark/55 dark:hover:bg-border-dark/50 dark:hover:text-ink-dark dark:group-hover:text-ink-dark"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    onPopoutLinkedNote(n.id)
+                                    onClose()
+                                  }}
+                                >
+                                  <ExternalLink className="h-4 w-4" strokeWidth={2} />
+                                </button>
+                              ) : null}
+                              {onDeleteLinkedNote != null ? (
+                                <button
+                                  type="button"
+                                  title="Delete note from this device"
+                                  aria-label={`Delete note ${n.title || 'Untitled note'}`}
+                                  className={`inline-flex w-11 items-center justify-center bg-transparent text-ink/55 transition-colors hover:bg-red-500/10 hover:text-red-600 group-hover:text-ink dark:text-ink-dark/55 dark:hover:bg-red-400/10 dark:hover:text-red-400 dark:group-hover:text-ink-dark ${onPopoutLinkedNote != null ? 'border-l border-dust/80 dark:border-border-dark' : ''}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    onDeleteLinkedNote(n.id)
+                                    onClose()
+                                  }}
+                                >
+                                  <Trash2 className="h-4 w-4" strokeWidth={2} />
+                                </button>
+                              ) : null}
+                            </div>
+                          ) : null}
                         </div>
                       </li>
                     ))}
