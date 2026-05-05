@@ -15,7 +15,7 @@ export type LibrarySyncConflict = {
 
 function friendlyCloudSyncError(message: string): string {
   if (message === 'sync_not_entitled' || message === 'pro_required') {
-    return 'Inkwell Ebook Suite or Pro is required for cloud library sync.'
+    return 'Inkwell Basic or Pro is required for cloud library sync.'
   }
   return message
 }
@@ -61,7 +61,7 @@ export function useInkwellLibrarySync(options: SyncOptions) {
             if (op.kind === 'pull_library' || op.kind === 'push_library') {
               if (!optsRef.current.canUseCloudSync) {
                 if (firstTry) {
-                  optsRef.current.showToast('Cloud library sync requires Inkwell Ebook Suite or Pro.')
+                  optsRef.current.showToast('Cloud library sync requires Inkwell Basic or Pro.')
                 }
                 return { ok: false, error: 'sync_not_entitled' }
               }
@@ -249,7 +249,7 @@ export function useInkwellLibrarySync(options: SyncOptions) {
       return
     }
     if (!optsRef.current.canUseCloudSync) {
-      showToast('Cloud library sync requires Inkwell Ebook Suite or Pro.')
+      showToast('Cloud library sync requires Inkwell Basic or Pro.')
       return
     }
     if (!shouldAttemptNetworkSync()) {

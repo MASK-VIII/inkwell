@@ -1316,7 +1316,7 @@ export default function App() {
     const env = getPaddleCheckoutEnv()
     const url = appendInkwellUserToCheckoutUrl(env.upgrade, inkwellEntitlements.userId)
     if (!openPaddleCheckoutUrl(url)) {
-      showToast('Add VITE_PADDLE_CHECKOUT_UPGRADE for the $99 Ebook → Pro upgrade.')
+      showToast('Add VITE_PADDLE_CHECKOUT_UPGRADE for the $99 Basic → Pro upgrade.')
     }
   }, [inkwellEntitlements.userId, showToast])
 
@@ -1329,7 +1329,7 @@ export default function App() {
           return
         }
         if (next === 'format_ebook' && !inkwellEntitlements.gates.canUseEbookFormat) {
-          showToast('Unlock Inkwell Ebook Suite or Pro to use ebook formatting.')
+          showToast('Unlock Inkwell Basic or Pro to use ebook formatting.')
           openEbookSuiteCheckout()
           return
         }
@@ -1353,7 +1353,7 @@ export default function App() {
       return
     }
     if (route === 'format_ebook' && !inkwellEntitlements.gates.canUseEbookFormat) {
-      showToast('Unlock Inkwell Ebook Suite or Pro to use ebook formatting.')
+      showToast('Unlock Inkwell Basic or Pro to use ebook formatting.')
       navigateRouteBase('publish')
     }
   }, [
@@ -1570,7 +1570,7 @@ export default function App() {
 
   const exportEpub = async () => {
     if (!inkwellEntitlements.loading && !inkwellEntitlements.gates.canExportEpub) {
-      showToast('EPUB export unlocks with Inkwell Ebook Suite or Pro.')
+      showToast('EPUB export unlocks with Inkwell Basic or Pro.')
       openEbookSuiteCheckout()
       return
     }
@@ -1666,7 +1666,7 @@ export default function App() {
   const uploadLibraryCloudBackup = useCallback(async () => {
     if (!isCloudBackupConfigured()) return
     if (!inkwellEntitlements.loading && !inkwellEntitlements.gates.canUseCloudSync) {
-      showToast('Cloud backup upload requires Inkwell Ebook Suite or Pro.')
+      showToast('Cloud backup upload requires Inkwell Basic or Pro.')
       openProCheckout()
       return
     }

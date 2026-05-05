@@ -14,8 +14,12 @@ import { applyInkwellMotionDataset, readInitialPlayAnimations } from './lib/moti
 import {
   isDesktopShell,
   pathIsApp,
+  redirectInkwellMarketingToLandingRoot,
   redirectLegacyUserToApp,
+  redirectWwwInkwellToApex,
+  shouldRedirectInkwellMarketingUnknownPathToLanding,
   shouldRedirectLegacyUserToApp,
+  shouldRedirectWwwInkwellToApex,
 } from './marketing/marketingRouting'
 
 applyInkwellMotionDataset(readInitialPlayAnimations())
@@ -30,6 +34,16 @@ const root = createRoot(rootEl)
  */
 function bootstrap() {
   if (typeof window === 'undefined') return
+
+  if (shouldRedirectWwwInkwellToApex()) {
+    redirectWwwInkwellToApex()
+    return
+  }
+
+  if (shouldRedirectInkwellMarketingUnknownPathToLanding()) {
+    redirectInkwellMarketingToLandingRoot()
+    return
+  }
 
   if (shouldRedirectLegacyUserToApp()) {
     redirectLegacyUserToApp()

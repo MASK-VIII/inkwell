@@ -6,15 +6,15 @@ type Qa = {
 const FAQ: Qa[] = [
   {
     q: 'What do I get for free?',
-    a: 'The full writing experience: projects, chapters, notes, organization, and formatting previews. You can use Inkwell indefinitely on the Free plan.',
+    a: 'The full writing experience: projects, chapters, notes, organization, and formatting previews. Your library stays on this device only—no cloud backup. You can use Inkwell indefinitely on the Free plan.',
   },
   {
     q: 'What is locked on Free?',
-    a: 'Exports and cloud sync. Upgrade when you are ready to publish (exports) or write across devices (cloud sync).',
+    a: 'EPUB export and cloud library backup. Free is local-only storage; Basic unlocks cloud sync and EPUB, and Pro unlocks the full export suite.',
   },
   {
-    q: 'What does Ebook Suite unlock?',
-    a: 'EPUB export. It is the simplest finish line if you are publishing digitally and want an ebook file you can take to readers and platforms.',
+    q: 'What does Basic unlock?',
+    a: 'Cloud library sync and backup across your devices when you sign in, plus EPUB export—the simplest finish line if you are publishing digitally.',
   },
   {
     q: 'Why are exports paid?',
@@ -22,11 +22,11 @@ const FAQ: Qa[] = [
   },
   {
     q: 'Where is my work stored?',
-    a: 'On your device first. Cloud sync is optional (Pro) and keeps a backup that travels across devices.',
+    a: 'On Free, your library lives only on your device. Basic and Pro can optionally keep an encrypted cloud backup that travels across devices when you sign in.',
   },
   {
     q: 'Do I need an internet connection?',
-    a: 'No. Inkwell works fully offline. Cloud sync is optional and runs in the background when you are online.',
+    a: 'No. Inkwell works fully offline. Cloud backup is optional on Basic and Pro; it runs in the background when you are online.',
   },
 ]
 

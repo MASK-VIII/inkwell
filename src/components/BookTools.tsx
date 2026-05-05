@@ -1020,7 +1020,7 @@ function BookToolsInner({
                   className="inkwell-hub-row-btn"
                 >
                   Export EPUB
-                  {!pa.allowEpub ? <span className="ml-1 text-[11px] opacity-80">· Ebook Suite</span> : null}
+                  {!pa.allowEpub ? <span className="ml-1 text-[11px] opacity-80">· Basic</span> : null}
                 </button>
                 <label className="block">
                   <input

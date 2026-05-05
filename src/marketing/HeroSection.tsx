@@ -33,7 +33,7 @@ export function HeroSection() {
             </a>
           </div>
           <p className="text-xs text-walnut/65 dark:text-ink-dark/55">
-            Free forever. No credit card. Unlimited local storage. Exports unlock when you are ready to publish.
+            Free forever. No credit card. Local-only library on Free; Basic adds cloud backup and EPUB when you upgrade.
           </p>
         </div>
 

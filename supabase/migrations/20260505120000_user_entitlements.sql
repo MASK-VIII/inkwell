@@ -1,4 +1,4 @@
--- Inkwell licensing: per-user tier (free / ebook_suite / pro) + cloud library sync for Ebook Suite and Pro.
+-- Inkwell licensing: per-user tier (free / ebook_suite / pro) + cloud library sync for Basic and Pro.
 -- Apply via Supabase SQL editor or `supabase db push`.
 
 -- ---------------------------------------------------------------------------
@@ -74,7 +74,7 @@ WHERE ue.user_id = lh.user_id
   AND ue.tier = 'free';
 
 -- ---------------------------------------------------------------------------
--- Cloud sync (library_heads + Storage): Ebook Suite or Pro
+-- Cloud sync (library_heads + Storage): Basic or Pro
 -- ---------------------------------------------------------------------------
 DROP POLICY IF EXISTS "library_heads_select_own" ON public.library_heads;
 DROP POLICY IF EXISTS "library_heads_insert_own" ON public.library_heads;
@@ -209,7 +209,7 @@ CREATE POLICY "libraries_delete_own"
   );
 
 -- ---------------------------------------------------------------------------
--- RPC: require Ebook Suite or Pro inside commit functions (defense in depth)
+-- RPC: require Basic or Pro inside commit functions (defense in depth)
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.inkwell_commit_library_push(p_base_rev bigint, p_storage_path text)
 RETURNS jsonb

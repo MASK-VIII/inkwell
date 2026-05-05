@@ -148,7 +148,7 @@ export function PublishHub({
             className="inkwell-hub-secondary"
           >
             Export EPUB
-            {!pa.allowEpub ? <span className="ml-1 text-[11px] font-normal opacity-80">· Ebook Suite</span> : null}
+            {!pa.allowEpub ? <span className="ml-1 text-[11px] font-normal opacity-80">· Basic</span> : null}
           </button>
         </div>
         <p className="text-xs text-ink/60 dark:text-ink-dark/60">

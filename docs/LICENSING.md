@@ -5,7 +5,7 @@
 | Tier        | EPUB | Full exports / DOCX / archives | Cloud library sync |
 |------------|------|--------------------------------|--------------------|
 | Free       | No   | No                             | No                 |
-| Ebook Suite| Yes  | No                             | Yes                |
+| Basic      | Yes  | No                             | Yes                |
 | Pro        | Yes  | Yes                            | Yes                |
 
 Entitlements live in `public.user_entitlements` (see migrations `20260505120000_user_entitlements.sql` and `20260506120000_ebook_suite_cloud_sync.sql`).
@@ -38,7 +38,7 @@ Optional hosted checkout URLs (opened in a new tab):
 
 - `VITE_PADDLE_CHECKOUT_EBOOK_SUITE`
 - `VITE_PADDLE_CHECKOUT_PRO`
-- `VITE_PADDLE_CHECKOUT_UPGRADE` ($99.99 Ebook → Pro)
+- `VITE_PADDLE_CHECKOUT_UPGRADE` ($99.99 Basic → Pro)
 
 The app appends `inkwell_user_id` when the user is signed in to cloud sync.
 
@@ -47,7 +47,7 @@ The app appends `inkwell_user_id` when the user is signed in to cloud sync.
 1. **Create / open your project** at [supabase.com](https://supabase.com) and note **Project URL** and **anon** / **publishable** key (Settings → API). Put them in your app as `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` (or `VITE_SUPABASE_ANON_KEY`) plus `VITE_INKWELL_CLOUD_SYNC=1` (see `docs/CLOUD_SYNC.md` if you use that flow).
 
 2. **Run SQL migrations** so the database matches the repo:
-   - **Option A — SQL Editor:** Open **SQL** → **New query**, paste the contents of `supabase/migrations/20260503120000_inkwell_library_sync.sql`, run it, then paste and run `20260505120000_user_entitlements.sql`, then `20260506120000_ebook_suite_cloud_sync.sql` (skip any file you already applied; the third file is safe to re-run and fixes Ebook Suite + cloud sync if you only ran the first entitlement migration).
+   - **Option A — SQL Editor:** Open **SQL** → **New query**, paste the contents of `supabase/migrations/20260503120000_inkwell_library_sync.sql`, run it, then paste and run `20260505120000_user_entitlements.sql`, then `20260506120000_ebook_suite_cloud_sync.sql` (skip any file you already applied; the third file is safe to re-run and fixes Basic-tier cloud sync if you only ran the first entitlement migration).
    - **Option B — CLI:** `supabase link` to the project, then `supabase db push` from the repo root so all migrations apply in order.
 
 3. **Data API / grants:** If `user_entitlements` queries fail with “permission denied” or the table is not exposed, in **Project Settings → Data API** ensure the `public` schema (or `user_entitlements`) is exposed, and keep **RLS enabled** on `user_entitlements` (migration already adds `GRANT SELECT` for `authenticated`).

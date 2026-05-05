@@ -36,7 +36,7 @@ export type AccountScreenProps = {
 function tierLabel(tier: InkwellTier): string {
   switch (tier) {
     case 'ebook_suite':
-      return 'Ebook Suite'
+      return 'Basic'
     case 'pro':
       return 'Pro'
     case 'free':
@@ -166,12 +166,13 @@ export function AccountScreen({
                   {licensing.tier === 'free' ?
                     <span className="text-ink/65 dark:text-ink-dark/65">
                       {' '}
-                      — Write and organize locally. Upgrade to export EPUB or unlock the full publishing suite.
+                      — Local-only storage on this device. Upgrade to Basic for cloud backup and EPUB, or Pro for the full
+                      export suite.
                     </span>
                   : licensing.tier === 'ebook_suite' ?
                     <span className="text-ink/65 dark:text-ink-dark/65">
                       {' '}
-                      — EPUB export and cloud library sync included. Go Pro for print PDFs and the full export suite.
+                      — Cloud library sync and EPUB export included. Go Pro for print PDFs and the full export suite.
                     </span>
                   : (
                     <span className="text-ink/65 dark:text-ink-dark/65">
@@ -190,7 +191,7 @@ export function AccountScreen({
                     onClick={licensing.onUnlockEbookSuite}
                     className="inkwell-hub-secondary w-full sm:w-auto sm:min-w-[10rem]"
                   >
-                    Unlock Ebook Suite ($49.99)
+                    Unlock Basic ($49.99)
                   </button>
                 ) : null}
                 {licensing.tier === 'ebook_suite' ? (
@@ -224,9 +225,9 @@ export function AccountScreen({
             {!licensing?.loading && licensing && !licensing.canUseCloudSync ?
               <p className="mt-3 text-sm text-ink/70 dark:text-ink-dark/70">
                 Cloud library sync unlocks with{' '}
-                <span className="font-medium text-ink dark:text-ink-dark">Inkwell Ebook Suite</span> or{' '}
-                <span className="font-medium text-ink dark:text-ink-dark">Pro</span>. On the Free plan your library
-                stays on this device until you upgrade or use local exports.
+                <span className="font-medium text-ink dark:text-ink-dark">Inkwell Basic</span> or{' '}
+                <span className="font-medium text-ink dark:text-ink-dark">Pro</span>. On the Free plan your library is
+                local-only on this device until you upgrade or use local exports.
               </p>
             : null}
             <dl className="mt-4 space-y-3 text-sm">
@@ -275,7 +276,7 @@ export function AccountScreen({
                 }
                 title={
                   licensing && !licensing.loading && !licensing.canUseCloudSync ?
-                    'Upgrade to Ebook Suite or Pro to sync your library to the cloud.'
+                    'Upgrade to Basic or Pro to sync your library to the cloud.'
                   : undefined
                 }
                 className="inkwell-hub-secondary w-full sm:w-auto sm:min-w-[10rem] disabled:pointer-events-none disabled:opacity-40"

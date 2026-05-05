@@ -16,7 +16,7 @@ export function CtaSection() {
             Open Inkwell
           </a>
           <a
-            href="mailto:hello@enterthelimelight.com"
+            href="mailto:inkwell@enterthelimelight.com"
             className="inline-flex items-center justify-center rounded-full border border-walnut/30 px-6 py-3 text-base font-medium text-ink transition hover:border-walnut/60 hover:bg-white/60 dark:border-border-dark dark:text-ink-dark dark:hover:border-accent-warm/45 dark:hover:bg-panel-dark/60"
           >
             Say hello

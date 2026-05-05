@@ -1,4 +1,4 @@
--- Allow cloud library sync for Ebook Suite (not only Pro).
+-- Allow cloud library sync for Basic (ebook_suite tier, not only Pro).
 -- Safe if 20260505120000_user_entitlements.sql already applied with Pro-only policies.
 
 DROP POLICY IF EXISTS "library_heads_select_own" ON public.library_heads;

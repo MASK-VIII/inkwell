@@ -1,5 +1,10 @@
 -- Inkwell library sync: metadata row + Storage bucket + RPC for optimistic concurrency.
 -- Apply in Supabase SQL editor or via `supabase db push` after linking the project.
+--
+-- Policies use DROP IF EXISTS so this script is safe to re-run once. If you already applied
+-- `20260505120000_user_entitlements.sql` / `20260506120000_ebook_suite_cloud_sync.sql`, those
+-- migrations replaced library/storage policies with tier-aware rules — re-run those files after
+-- this one if you ever need to replay this migration alone.
 
 -- ---------------------------------------------------------------------------
 -- Library head (one row per authenticated user)
@@ -14,6 +19,10 @@ CREATE TABLE IF NOT EXISTS public.library_heads (
 CREATE INDEX IF NOT EXISTS library_heads_updated_at_idx ON public.library_heads (updated_at DESC);
 
 ALTER TABLE public.library_heads ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "library_heads_select_own" ON public.library_heads;
+DROP POLICY IF EXISTS "library_heads_insert_own" ON public.library_heads;
+DROP POLICY IF EXISTS "library_heads_update_own" ON public.library_heads;
 
 CREATE POLICY "library_heads_select_own"
   ON public.library_heads FOR SELECT
@@ -45,6 +54,11 @@ VALUES (
 ON CONFLICT (id) DO NOTHING;
 
 -- Storage RLS: first path segment must equal auth.uid()
+DROP POLICY IF EXISTS "libraries_select_own" ON storage.objects;
+DROP POLICY IF EXISTS "libraries_insert_own" ON storage.objects;
+DROP POLICY IF EXISTS "libraries_update_own" ON storage.objects;
+DROP POLICY IF EXISTS "libraries_delete_own" ON storage.objects;
+
 CREATE POLICY "libraries_select_own"
   ON storage.objects FOR SELECT
   TO authenticated
