@@ -62,8 +62,10 @@ const year = new Date().getFullYear()
 
     <footer class="footer">
       <p>&copy; {year} Enter the Limelight.</p>
-      <p>
-        <a href="mailto:inkwell@enterthelimelight.com">inkwell@enterthelimelight.com</a>
+      <p class="footer-emails">
+        <a href="mailto:contact@enterthelimelight.com">contact@enterthelimelight.com</a>
+        <span class="footer-email-sep" aria-hidden="true">·</span>
+        <a href="mailto:support@enterthelimelight.com">support@enterthelimelight.com</a>
       </p>
     </footer>
   </main>
@@ -218,5 +220,19 @@ const year = new Date().getFullYear()
   .footer a:hover {
     color: var(--color-ink);
     border-bottom-color: var(--color-ink);
+  }
+
+  .footer-emails {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem 0.5rem;
+    max-width: 100%;
+  }
+
+  .footer-email-sep {
+    user-select: none;
+    opacity: 0.55;
   }
 </style>

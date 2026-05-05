@@ -22,7 +22,7 @@ export function NotFoundPage() {
           <h1 className="mt-3 font-serif text-4xl leading-[1.1] text-ink sm:text-5xl dark:text-ink-dark">
             That page is not here.
           </h1>
-          <p className="mt-5 text-base leading-relaxed text-walnut/90 dark:text-ink-dark/70">
+          <p className="mt-5 text-base leading-relaxed text-walnut/90 dark:text-ink-dark/80">
             The link may be old or mistyped. Inkwell is happy to take you home.
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-4">

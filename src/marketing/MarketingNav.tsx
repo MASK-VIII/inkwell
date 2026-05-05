@@ -20,29 +20,44 @@ export function MarketingNav({ showAnchors = true, darkMode, onToggleDarkMode }:
 
         <div className="flex items-center gap-2 sm:gap-6">
           {showAnchors && (
-            <ul className="hidden items-center gap-6 text-sm text-walnut/85 md:flex dark:text-ink-dark/80">
+            <ul className="hidden items-center gap-6 text-sm text-walnut/85 md:flex dark:text-ink-dark/85">
               <li>
-                <a className="hover:text-ink dark:hover:text-ink-dark" href="#features">
+                <a
+                  className="rounded-sm transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-walnut/35 dark:hover:text-cream dark:focus-visible:ring-cream/40"
+                  href="#features"
+                >
                   Features
                 </a>
               </li>
               <li>
-                <a className="hover:text-ink dark:hover:text-ink-dark" href="#how-it-works">
+                <a
+                  className="rounded-sm transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-walnut/35 dark:hover:text-cream dark:focus-visible:ring-cream/40"
+                  href="#how-it-works"
+                >
                   How it works
                 </a>
               </li>
               <li>
-                <a className="hover:text-ink dark:hover:text-ink-dark" href="#pricing">
+                <a
+                  className="rounded-sm transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-walnut/35 dark:hover:text-cream dark:focus-visible:ring-cream/40"
+                  href="#pricing"
+                >
                   Pricing
                 </a>
               </li>
               <li>
-                <a className="hover:text-ink dark:hover:text-ink-dark" href="/changelog">
+                <a
+                  className="rounded-sm transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-walnut/35 dark:hover:text-cream dark:focus-visible:ring-cream/40"
+                  href="/changelog"
+                >
                   Changelog
                 </a>
               </li>
               <li>
-                <a className="hover:text-ink dark:hover:text-ink-dark" href="#faq">
+                <a
+                  className="rounded-sm transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-walnut/35 dark:hover:text-cream dark:focus-visible:ring-cream/40"
+                  href="#faq"
+                >
                   FAQ
                 </a>
               </li>

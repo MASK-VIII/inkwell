@@ -6,7 +6,7 @@ export function MarketingFooter() {
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <p className="font-serif text-lg text-ink dark:text-ink-dark">Inkwell</p>
-            <p className="mt-2 text-sm leading-relaxed text-walnut/80 dark:text-ink-dark/70">
+            <p className="mt-2 text-sm leading-relaxed text-walnut/80 dark:text-ink-dark/80">
               A workspace built for the long form. Beta.
             </p>
           </div>
@@ -15,24 +15,36 @@ export function MarketingFooter() {
             <p className="text-xs font-medium uppercase tracking-widest text-walnut/70 dark:text-ink-dark/60">
               Product
             </p>
-            <ul className="mt-3 space-y-2 text-walnut/85 dark:text-ink-dark/75">
+            <ul className="mt-3 space-y-2 text-walnut/85 dark:text-ink-dark/80">
               <li>
-                <a className="hover:text-ink" href="#features">
+                <a
+                  className="rounded-sm transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-walnut/35 dark:hover:text-cream dark:focus-visible:ring-cream/40"
+                  href="#features"
+                >
                   Features
                 </a>
               </li>
               <li>
-                <a className="hover:text-ink" href="#how-it-works">
+                <a
+                  className="rounded-sm transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-walnut/35 dark:hover:text-cream dark:focus-visible:ring-cream/40"
+                  href="#how-it-works"
+                >
                   How it works
                 </a>
               </li>
               <li>
-                <a className="hover:text-ink" href="#faq">
+                <a
+                  className="rounded-sm transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-walnut/35 dark:hover:text-cream dark:focus-visible:ring-cream/40"
+                  href="#faq"
+                >
                   FAQ
                 </a>
               </li>
               <li>
-                <a className="hover:text-ink" href="/app">
+                <a
+                  className="rounded-sm transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-walnut/35 dark:hover:text-cream dark:focus-visible:ring-cream/40"
+                  href="/app"
+                >
                   Open the app
                 </a>
               </li>
@@ -41,19 +53,28 @@ export function MarketingFooter() {
 
           <nav aria-label="Legal" className="text-sm">
             <p className="text-xs font-medium uppercase tracking-widest text-walnut/70 dark:text-ink-dark/60">Legal</p>
-            <ul className="mt-3 space-y-2 text-walnut/85 dark:text-ink-dark/75">
+            <ul className="mt-3 space-y-2 text-walnut/85 dark:text-ink-dark/80">
               <li>
-                <a className="hover:text-ink" href="/privacy">
+                <a
+                  className="rounded-sm transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-walnut/35 dark:hover:text-cream dark:focus-visible:ring-cream/40"
+                  href="/privacy"
+                >
                   Privacy
                 </a>
               </li>
               <li>
-                <a className="hover:text-ink" href="/terms">
+                <a
+                  className="rounded-sm transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-walnut/35 dark:hover:text-cream dark:focus-visible:ring-cream/40"
+                  href="/terms"
+                >
                   Terms
                 </a>
               </li>
               <li>
-                <a className="hover:text-ink" href="/refund">
+                <a
+                  className="rounded-sm transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-walnut/35 dark:hover:text-cream dark:focus-visible:ring-cream/40"
+                  href="/refund"
+                >
                   Refunds
                 </a>
               </li>
@@ -62,14 +83,30 @@ export function MarketingFooter() {
 
           <div className="text-sm">
             <p className="text-xs font-medium uppercase tracking-widest text-walnut/70 dark:text-ink-dark/60">Contact</p>
-            <ul className="mt-3 space-y-2 text-walnut/85 dark:text-ink-dark/75">
+            <ul className="mt-3 space-y-2 text-walnut/85 dark:text-ink-dark/80">
               <li>
-                <a className="hover:text-ink" href="mailto:support@enterthelimelight.com">
-                  support@enterthelimelight.com
+                <a
+                  className="rounded-sm font-medium underline decoration-walnut/45 underline-offset-2 transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-walnut/35 dark:decoration-accent-warm/50 dark:hover:text-cream dark:focus-visible:ring-cream/40"
+                  href="mailto:contact@enterthelimelight.com"
+                >
+                  contact@enterthelimelight.com
                 </a>
+                <span className="mt-0.5 block text-xs text-walnut/65 dark:text-ink-dark/55">General</span>
               </li>
               <li>
-                <a className="hover:text-ink" href="https://enterthelimelight.com">
+                <a
+                  className="rounded-sm font-medium underline decoration-walnut/45 underline-offset-2 transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-walnut/35 dark:decoration-accent-warm/50 dark:hover:text-cream dark:focus-visible:ring-cream/40"
+                  href="mailto:support@enterthelimelight.com"
+                >
+                  support@enterthelimelight.com
+                </a>
+                <span className="mt-0.5 block text-xs text-walnut/65 dark:text-ink-dark/55">Help &amp; billing</span>
+              </li>
+              <li>
+                <a
+                  className="rounded-sm font-medium underline decoration-walnut/45 underline-offset-2 transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-walnut/35 dark:decoration-accent-warm/50 dark:hover:text-cream dark:focus-visible:ring-cream/40"
+                  href="https://enterthelimelight.com"
+                >
                   enterthelimelight.com
                 </a>
               </li>
@@ -77,7 +114,7 @@ export function MarketingFooter() {
           </div>
         </div>
 
-        <div className="mt-12 flex flex-col gap-2 border-t border-dust/60 pt-6 text-xs text-walnut/70 sm:flex-row sm:items-center sm:justify-between dark:border-border-dark/80 dark:text-ink-dark/60">
+        <div className="mt-12 flex flex-col gap-2 border-t border-dust/60 pt-6 text-xs text-walnut/70 sm:flex-row sm:items-center sm:justify-between dark:border-border-dark/80 dark:text-ink-dark/70">
           <p>&copy; {year} Inkwell. Part of enterthelimelight.com.</p>
           <p>Made for writers, slowly and on purpose.</p>
         </div>

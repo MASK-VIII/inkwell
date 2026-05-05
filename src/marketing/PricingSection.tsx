@@ -55,7 +55,7 @@ function TrustRow() {
       {items.map((it) => (
         <div
           key={it.label}
-          className="rounded-xl border border-dust/70 bg-white/40 px-4 py-3 text-sm text-walnut/85 dark:border-border-dark dark:bg-panel-dark/50 dark:text-ink-dark/70"
+          className="rounded-xl border border-dust/70 bg-white/40 px-4 py-3 text-sm text-walnut/85 dark:border-border-dark dark:bg-panel-dark/50 dark:text-ink-dark/78"
         >
           <p className="text-xs font-medium uppercase tracking-widest text-walnut/70 dark:text-ink-dark/60">{it.label}</p>
           <p className="mt-1">{it.detail}</p>
@@ -77,7 +77,7 @@ function FreeTierStrip() {
               Local only
             </span>
           </div>
-          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-walnut/90 dark:text-ink-dark/75">
+          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-walnut/90 dark:text-ink-dark/85">
             Start with the full writing experience—projects, chapters, notes, organization, and formatting previews. Your
             library stays on this device until you choose Basic or Pro; no credit card required.
           </p>
@@ -124,7 +124,7 @@ function PlanCard({
       <div className="flex items-start justify-between gap-4">
         <div>
           <h3 className="font-serif text-2xl leading-tight text-ink dark:text-ink-dark">{plan.name}</h3>
-          <p className="mt-2 text-sm text-walnut/85 dark:text-ink-dark/70">{plan.forWhom}</p>
+          <p className="mt-2 text-sm text-walnut/85 dark:text-ink-dark/78">{plan.forWhom}</p>
         </div>
         <div className="text-right">
           <div className="flex items-baseline justify-end gap-2">
@@ -143,7 +143,7 @@ function PlanCard({
         </div>
       </div>
 
-      <ul className="mt-6 space-y-2 text-sm text-walnut/90 dark:text-ink-dark/70">
+      <ul className="mt-6 space-y-2 text-sm text-walnut/90 dark:text-ink-dark/82">
         {plan.bullets.map((b) => (
           <li key={b} className="flex gap-2">
             <span className="mt-[0.35rem] h-1.5 w-1.5 shrink-0 rounded-full bg-walnut/45 dark:bg-cream/35" aria-hidden />
@@ -177,7 +177,7 @@ export function PricingSection() {
           <h2 className="mt-3 font-serif text-3xl leading-[1.15] text-ink sm:text-4xl dark:text-ink-dark">
             Start free. Upgrade when you are ready to publish.
           </h2>
-          <p className="mt-4 text-base leading-relaxed text-walnut/85 dark:text-ink-dark/70">
+          <p className="mt-4 text-base leading-relaxed text-walnut/85 dark:text-ink-dark/80">
             The workspace is free and local-first. Basic adds cloud backup and EPUB; Pro unlocks every export format—pick
             the finish line that fits.
           </p>
@@ -187,7 +187,7 @@ export function PricingSection() {
 
         <FreeTierStrip />
 
-        <p className="mt-10 text-center text-xs font-medium uppercase tracking-[0.18em] text-walnut/70 dark:text-ink-dark/55">
+        <p className="mt-10 text-center text-xs font-medium uppercase tracking-[0.18em] text-walnut/70 dark:text-ink-dark/65">
           Paid upgrades
         </p>
         <div className="mt-4 grid gap-6 md:grid-cols-2">

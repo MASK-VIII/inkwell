@@ -25,11 +25,23 @@ export function LegalPage({ title, pageTitle, lastUpdated, children }: Props) {
     <main className="min-h-screen bg-parchment text-ink antialiased dark:bg-panel-dark dark:text-ink-dark">
       <MarketingNav showAnchors={false} darkMode={darkMode} onToggleDarkMode={toggle} />
       <article className="mx-auto max-w-3xl px-5 py-20 sm:px-8">
-        <p className="text-xs font-medium uppercase tracking-[0.18em] text-walnut/75 dark:text-ink-dark/60">
+        <p className="text-xs font-medium uppercase tracking-[0.18em] text-walnut/75 dark:text-ink-dark/70">
           {lastUpdated}
         </p>
         <h1 className="mt-3 font-serif text-4xl leading-[1.1] text-ink sm:text-5xl dark:text-ink-dark">{title}</h1>
-        <div className="prose prose-sm mt-10 max-w-none text-walnut/90 dark:prose-invert dark:text-ink-dark/75 [&_h2]:mt-10 [&_h2]:font-serif [&_h2]:text-2xl [&_h2]:text-ink [&_h3]:mt-6 [&_h3]:font-serif [&_h3]:text-lg [&_h3]:text-ink [&_p]:mt-4 [&_p]:leading-relaxed [&_ul]:mt-4 [&_ul]:list-disc [&_ul]:pl-6 [&_li]:mt-1">
+        <div
+          className={[
+            'prose prose-sm mt-10 max-w-none text-walnut/90 dark:text-ink-dark/90',
+            '[&_h2]:mt-10 [&_h2]:font-serif [&_h2]:text-2xl [&_h2]:text-ink [&_h2]:dark:text-ink-dark',
+            '[&_h3]:mt-6 [&_h3]:font-serif [&_h3]:text-lg [&_h3]:text-ink [&_h3]:dark:text-ink-dark',
+            '[&_p]:mt-4 [&_p]:leading-relaxed',
+            '[&_strong]:text-ink [&_strong]:dark:text-ink-dark',
+            '[&_ul]:mt-4 [&_ul]:list-disc [&_ul]:pl-6 [&_li]:mt-1 [&_li]:marker:text-walnut/60 [&_li]:dark:marker:text-ink-dark/50',
+            '[&_a]:font-medium [&_a]:text-ink [&_a]:underline [&_a]:underline-offset-2 [&_a]:decoration-walnut/55',
+            '[&_a]:dark:text-accent-warm [&_a]:dark:decoration-accent-warm/55 [&_a]:transition-colors',
+            '[&_a]:hover:text-walnut [&_a]:dark:hover:text-cream',
+          ].join(' ')}
+        >
           {children}
         </div>
       </article>
@@ -74,10 +86,10 @@ export function PrivacyPage() {
       <h2>Contact</h2>
       <p>
         Questions about privacy can go to{' '}
-        <a className="text-ink underline" href="mailto:support@enterthelimelight.com">
-          support@enterthelimelight.com
-        </a>
-        .
+        <a href="mailto:support@enterthelimelight.com">support@enterthelimelight.com</a>
+        {'. '}
+        For other inquiries,{' '}
+        <a href="mailto:contact@enterthelimelight.com">contact@enterthelimelight.com</a>.
       </p>
     </LegalPage>
   )
@@ -103,11 +115,8 @@ export function RefundPage() {
 
       <h2>How to request a refund</h2>
       <p>
-        Email{' '}
-        <a className="text-ink underline" href="mailto:support@enterthelimelight.com">
-          support@enterthelimelight.com
-        </a>{' '}
-        from the address used for your purchase and include your receipt or transaction reference.
+        Email <a href="mailto:support@enterthelimelight.com">support@enterthelimelight.com</a> from the address used for
+        your purchase and include your receipt or transaction reference.
         Paid checkout may be processed by our reseller (Paddle); where Paddle handles payment
         support for your order, their process may apply in addition to this policy.
       </p>
@@ -154,10 +163,10 @@ export function TermsPage() {
       <h2>Contact</h2>
       <p>
         Questions about these terms can go to{' '}
-        <a className="text-ink underline" href="mailto:support@enterthelimelight.com">
-          support@enterthelimelight.com
-        </a>
-        .
+        <a href="mailto:support@enterthelimelight.com">support@enterthelimelight.com</a>
+        {'. '}
+        General contact:{' '}
+        <a href="mailto:contact@enterthelimelight.com">contact@enterthelimelight.com</a>.
       </p>
     </LegalPage>
   )

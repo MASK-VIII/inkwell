@@ -38,7 +38,7 @@ export function ScreenshotsSection() {
           <h2 className="mt-3 font-serif text-3xl leading-[1.15] text-ink sm:text-4xl dark:text-ink-dark">
             The interface, on purpose.
           </h2>
-          <p className="mt-4 text-base leading-relaxed text-walnut/85 dark:text-ink-dark/70">
+          <p className="mt-4 text-base leading-relaxed text-walnut/85 dark:text-ink-dark/80">
             Type-driven, parchment-warm, dark-mode-friendly. Inkwell looks like a place you would want to spend an afternoon.
           </p>
         </div>

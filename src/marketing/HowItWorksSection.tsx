@@ -42,7 +42,7 @@ export function HowItWorksSection() {
                 {String(i + 1).padStart(2, '0')}
               </p>
               <h3 className="mt-4 font-serif text-xl leading-snug text-ink dark:text-ink-dark">{step.title}</h3>
-              <p className="mt-3 text-sm leading-relaxed text-walnut/90 dark:text-ink-dark/70">{step.body}</p>
+              <p className="mt-3 text-sm leading-relaxed text-walnut/90 dark:text-ink-dark/80">{step.body}</p>
             </li>
           ))}
         </ol>

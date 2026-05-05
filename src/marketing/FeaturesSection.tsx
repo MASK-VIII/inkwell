@@ -40,7 +40,7 @@ export function FeaturesSection() {
           <h2 className="mt-3 font-serif text-3xl leading-[1.15] text-ink sm:text-4xl dark:text-ink-dark">
             Built for the part of writing that takes the longest.
           </h2>
-          <p className="mt-4 text-base leading-relaxed text-walnut/85 dark:text-ink-dark/70">
+          <p className="mt-4 text-base leading-relaxed text-walnut/85 dark:text-ink-dark/80">
             Most writing apps are tuned for short notes. Inkwell is tuned for the months between an idea and a finished manuscript.
           </p>
         </div>
@@ -51,11 +51,11 @@ export function FeaturesSection() {
               key={feature.title}
               className="relative rounded-2xl border border-dust/70 bg-parchment/70 p-7 transition hover:border-walnut/40 hover:bg-parchment dark:border-border-dark dark:bg-panel-dark/60 dark:hover:border-accent-warm/40 dark:hover:bg-panel-dark/75"
             >
-              <p className="font-serif text-xs uppercase tracking-widest text-walnut/60 dark:text-ink-dark/50">
+              <p className="font-serif text-xs uppercase tracking-widest text-walnut/60 dark:text-ink-dark/58">
                 {String(i + 1).padStart(2, '0')}
               </p>
               <h3 className="mt-3 font-serif text-xl leading-snug text-ink dark:text-ink-dark">{feature.title}</h3>
-              <p className="mt-3 text-sm leading-relaxed text-walnut/90 dark:text-ink-dark/70">{feature.body}</p>
+              <p className="mt-3 text-sm leading-relaxed text-walnut/90 dark:text-ink-dark/80">{feature.body}</p>
             </li>
           ))}
         </ul>

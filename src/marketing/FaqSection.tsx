@@ -49,7 +49,7 @@ export function FaqSection() {
                   <span className="font-serif text-lg text-ink dark:text-ink-dark">{qa.q}</span>
                   <span
                     aria-hidden
-                    className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-walnut/30 text-walnut transition group-open:rotate-45 dark:border-border-dark dark:text-ink-dark/70"
+                    className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-walnut/30 text-walnut transition group-open:rotate-45 dark:border-border-dark dark:text-ink-dark/82"
                   >
                     <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
                       <line x1="6" y1="2" x2="6" y2="10" />
@@ -57,7 +57,9 @@ export function FaqSection() {
                     </svg>
                   </span>
                 </summary>
-                <p className="mt-3 max-w-3xl text-sm leading-relaxed text-walnut/90 dark:text-ink-dark/70">{qa.a}</p>
+                <p className="mt-3 max-w-3xl text-sm leading-relaxed text-walnut/90 dark:text-ink-dark/82">
+                  {qa.a}
+                </p>
               </details>
             </li>
           ))}

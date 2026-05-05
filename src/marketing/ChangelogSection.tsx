@@ -58,17 +58,17 @@ export function ChangelogSection() {
           <h2 className="mt-3 font-serif text-3xl leading-[1.15] text-ink sm:text-4xl dark:text-ink-dark">
             What’s new in Inkwell.
           </h2>
-          <p className="mt-4 text-base leading-relaxed text-walnut/85 dark:text-ink-dark/70">
+          <p className="mt-4 text-base leading-relaxed text-walnut/85 dark:text-ink-dark/80">
             A short, user-facing record of improvements. Updated as we ship.
           </p>
         </div>
 
         {failed ? (
-          <div className="rounded-2xl border border-dust/70 bg-parchment/70 p-7 text-sm text-walnut/85 dark:border-border-dark dark:bg-panel-dark/60 dark:text-ink-dark/70">
+          <div className="rounded-2xl border border-dust/70 bg-parchment/70 p-7 text-sm text-walnut/85 dark:border-border-dark dark:bg-panel-dark/60 dark:text-ink-dark/80">
             Changelog is unavailable right now.
           </div>
         ) : items.length === 0 ? (
-          <div className="rounded-2xl border border-dust/70 bg-parchment/70 p-7 text-sm text-walnut/85 dark:border-border-dark dark:bg-panel-dark/60 dark:text-ink-dark/70">
+          <div className="rounded-2xl border border-dust/70 bg-parchment/70 p-7 text-sm text-walnut/85 dark:border-border-dark dark:bg-panel-dark/60 dark:text-ink-dark/80">
             No updates posted yet.
           </div>
         ) : (
@@ -81,11 +81,11 @@ export function ChangelogSection() {
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <Badge kind={it.kind} />
-                    <p className="text-xs font-medium uppercase tracking-widest text-walnut/60 dark:text-ink-dark/50">
+                    <p className="text-xs font-medium uppercase tracking-widest text-walnut/60 dark:text-ink-dark/58">
                       {it.date}
                     </p>
                   </div>
-                  <p className="text-xs text-walnut/50 dark:text-ink-dark/45">#{it.hash}</p>
+                  <p className="text-xs text-walnut/50 dark:text-ink-dark/58">#{it.hash}</p>
                 </div>
                 <p className="mt-3 font-serif text-lg text-ink dark:text-ink-dark">{it.title}</p>
               </li>
@@ -94,7 +94,7 @@ export function ChangelogSection() {
         )}
 
         {feed?.generatedAt && (
-          <p className="mt-8 text-xs text-walnut/60 dark:text-ink-dark/50">
+          <p className="mt-8 text-xs text-walnut/60 dark:text-ink-dark/62">
             Updated {new Date(feed.generatedAt).toLocaleDateString()}.
           </p>
         )}

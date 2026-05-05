@@ -40,11 +40,11 @@ export function MarketingScreenshot({ src, alt, caption, aspectRatio = '16 / 10'
           <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-gradient-to-br from-parchment via-white/70 to-dust/30 px-6 text-center dark:from-panel-dark dark:via-panel-dark/80 dark:to-border-dark/40">
             <div className="h-px w-16 bg-walnut/30 dark:bg-cream/25" aria-hidden />
             <p className="font-serif text-base text-walnut/85 sm:text-lg dark:text-ink-dark/80">{caption}</p>
-            <p className="text-xs uppercase tracking-widest text-walnut/55 dark:text-ink-dark/55">Screenshot placeholder</p>
+            <p className="text-xs uppercase tracking-widest text-walnut/55 dark:text-ink-dark/62">Screenshot placeholder</p>
           </div>
         )}
       </div>
-      <figcaption className="text-center text-xs uppercase tracking-widest text-walnut/65 dark:text-ink-dark/55">
+      <figcaption className="text-center text-xs uppercase tracking-widest text-walnut/65 dark:text-ink-dark/62">
         {caption}
       </figcaption>
     </figure>
