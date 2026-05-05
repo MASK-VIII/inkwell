@@ -119,6 +119,29 @@ function ManuscriptEditorInner({
   const [floatPos, setFloatPos] = useState<{ x: number; y: number } | null>(null)
   const [statsPinned, setStatsPinned] = useState(true)
 
+  /**
+   * TipTap transactions can fire multiple times per keypress. Calling `editor.getJSON()` and
+   * propagating it to app state on every update becomes very expensive for large documents.
+   * Throttle to at most once per animation frame while keeping the most recent editor state.
+   */
+  const latestEditorForUpdateRef = useRef<Editor | null>(null)
+  const updateRafRef = useRef<number | null>(null)
+  const flushDocumentUpdate = useCallback(() => {
+    updateRafRef.current = null
+    const ed = latestEditorForUpdateRef.current
+    if (!ed) return
+    onDocumentChange(ed.getJSON())
+  }, [onDocumentChange])
+
+  useEffect(() => {
+    return () => {
+      if (updateRafRef.current != null) {
+        window.cancelAnimationFrame(updateRafRef.current)
+        updateRafRef.current = null
+      }
+    }
+  }, [])
+
   const mentionItemsRef = useRef(mentionItems)
   const getWikilinkCandidatesRef = useRef(getWikilinkCandidates)
   const onNoteMentionClickRef = useRef(onNoteMentionClick)
@@ -188,7 +211,9 @@ function ManuscriptEditorInner({
         },
       },
       onUpdate: ({ editor }) => {
-        onDocumentChange(editor.getJSON())
+        latestEditorForUpdateRef.current = editor
+        if (updateRafRef.current != null) return
+        updateRafRef.current = window.requestAnimationFrame(flushDocumentUpdate)
         // Intentionally no toolbar bump here: normal typing moves the selection,
         // so `selectionUpdate` keeps the bar in sync without double React work per key.
       },

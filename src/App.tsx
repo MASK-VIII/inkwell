@@ -125,6 +125,12 @@ import {
 } from './lib/sync/authSession'
 import { getInkwellSupabasePublicConfig, isInkwellCloudSyncConfigured } from './lib/sync/syncEnv'
 import { useInkwellLibrarySync } from './lib/sync/useInkwellLibrarySync'
+import { useInkwellEntitlements } from './hooks/useInkwellEntitlements'
+import {
+  appendInkwellUserToCheckoutUrl,
+  getPaddleCheckoutEnv,
+  openPaddleCheckoutUrl,
+} from './lib/paddleCheckout'
 import {
   exportLibraryZip,
   exportProjectZip,
@@ -454,6 +460,8 @@ export default function App() {
 
   const editorRef = useRef<Editor | null>(null)
   const projectRef = useRef(project)
+  const supabasePublicConfig = useMemo(() => getInkwellSupabasePublicConfig(), [])
+  const inkwellEntitlements = useInkwellEntitlements(supabasePublicConfig)
   const historyTimerRef = useRef<number | null>(null)
   const historyLastRecordAtRef = useRef<number>(0)
   const persistIdleTimerRef = useRef<number | null>(null)
@@ -513,9 +521,9 @@ export default function App() {
     const out: MentionItem[] = []
     for (const m of metas) {
       if (m.id === project.id) continue
-      const p = loadProject(m.id)
-      if (!p || p.kind !== 'note') continue
-      const label = deriveNoteMetaTitle(p).trim() || 'Untitled note'
+      // ProjectMeta titles are already maintained by `saveProject` (notes: derived from chapter title/body).
+      // Avoid `loadProject()` + doc scanning here — this runs during typing.
+      const label = (m.title ?? '').trim() || 'Untitled note'
       out.push({ id: m.id, label })
     }
     return out.slice(0, 64)
@@ -544,9 +552,8 @@ export default function App() {
       if (t) items.push({ id: `mention:ch-${ch.id}`, label: t })
     }
     for (const n of linkedNotesForBookPanel) {
-      const p = loadProject(n.id)
-      const label =
-        p?.kind === 'note' ? deriveNoteMetaTitle(p).trim() || 'Untitled note' : n.title.trim() || 'Untitled note'
+      // Use stored meta title (kept up to date on save) instead of loading the full note project while typing.
+      const label = n.title.trim() || 'Untitled note'
       items.push({ id: `mention:note:${n.id}`, label, noteProjectId: n.id })
     }
     return items
@@ -678,7 +685,7 @@ export default function App() {
     return true
   }, [])
 
-  const navigateRoute = useCallback(
+  const navigateRouteBase = useCallback(
     (next: Route) => {
       const from = routeRef.current
       if (!tryDiscardFormatDraftsIfNeeded(from, next)) return
@@ -688,6 +695,19 @@ export default function App() {
     },
     [tryDiscardFormatDraftsIfNeeded],
   )
+
+  const navigateRouteBaseRef = useRef(navigateRouteBase)
+  useLayoutEffect(() => {
+    navigateRouteBaseRef.current = navigateRouteBase
+  }, [navigateRouteBase])
+
+  const navigateRouteLicensedRef = useRef<(next: Route) => void>((next) => {
+    navigateRouteBaseRef.current(next)
+  })
+
+  const navigateRoute = useCallback((next: Route) => {
+    navigateRouteLicensedRef.current(next)
+  }, [])
 
   const navigateToCloudSignIn = useCallback(() => {
     const from = routeRef.current
@@ -706,8 +726,8 @@ export default function App() {
       }
       return
     }
-    navigateRoute(normalized)
-  }, [project.kind, project.id, route, tryDiscardFormatDraftsIfNeeded, navigateRoute])
+    navigateRouteBase(normalized)
+  }, [project.kind, project.id, route, tryDiscardFormatDraftsIfNeeded, navigateRouteBase])
 
   useLayoutEffect(() => {
     routeRef.current = route
@@ -987,8 +1007,17 @@ export default function App() {
     historyLastRecordAtRef.current = now
     if (historyTimerRef.current) window.clearTimeout(historyTimerRef.current)
     historyTimerRef.current = window.setTimeout(() => {
-      const entry = pushProjectHistorySnapshot(projectRef.current, { label })
-      if (entry) bumpHistory()
+      const run = () => {
+        const entry = pushProjectHistorySnapshot(projectRef.current, { label })
+        if (entry) bumpHistory()
+      }
+      // Keep the expensive JSON stringify + storage work off the critical typing path when possible.
+      if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+        ;(window as unknown as { requestIdleCallback: (cb: () => void, opts?: { timeout?: number }) => number })
+          .requestIdleCallback(run, { timeout: 1500 })
+      } else {
+        globalThis.setTimeout(run, 0)
+      }
     }, 2500)
   }, [bumpHistory])
 
@@ -1267,6 +1296,109 @@ export default function App() {
     }, ms)
   }, [])
 
+  const openEbookSuiteCheckout = useCallback(() => {
+    const env = getPaddleCheckoutEnv()
+    const url = appendInkwellUserToCheckoutUrl(env.ebookSuite, inkwellEntitlements.userId)
+    if (!openPaddleCheckoutUrl(url)) {
+      showToast('Add VITE_PADDLE_CHECKOUT_EBOOK_SUITE to open checkout, or use Paddle with custom_data.inkwell_user_id.')
+    }
+  }, [inkwellEntitlements.userId, showToast])
+
+  const openProCheckout = useCallback(() => {
+    const env = getPaddleCheckoutEnv()
+    const url = appendInkwellUserToCheckoutUrl(env.pro, inkwellEntitlements.userId)
+    if (!openPaddleCheckoutUrl(url)) {
+      showToast('Add VITE_PADDLE_CHECKOUT_PRO to open checkout.')
+    }
+  }, [inkwellEntitlements.userId, showToast])
+
+  const openUpgradeEbookToProCheckout = useCallback(() => {
+    const env = getPaddleCheckoutEnv()
+    const url = appendInkwellUserToCheckoutUrl(env.upgrade, inkwellEntitlements.userId)
+    if (!openPaddleCheckoutUrl(url)) {
+      showToast('Add VITE_PADDLE_CHECKOUT_UPGRADE for the $99 Ebook → Pro upgrade.')
+    }
+  }, [inkwellEntitlements.userId, showToast])
+
+  useLayoutEffect(() => {
+    navigateRouteLicensedRef.current = (next: Route) => {
+      if (!inkwellEntitlements.loading) {
+        if (next === 'format_print' && !inkwellEntitlements.gates.canUsePrintFormat) {
+          showToast('Print formatting is included with Inkwell Pro.')
+          openProCheckout()
+          return
+        }
+        if (next === 'format_ebook' && !inkwellEntitlements.gates.canUseEbookFormat) {
+          showToast('Unlock Inkwell Ebook Suite or Pro to use ebook formatting.')
+          openEbookSuiteCheckout()
+          return
+        }
+      }
+      navigateRouteBaseRef.current(next)
+    }
+  }, [
+    inkwellEntitlements.loading,
+    inkwellEntitlements.gates.canUsePrintFormat,
+    inkwellEntitlements.gates.canUseEbookFormat,
+    openEbookSuiteCheckout,
+    openProCheckout,
+    showToast,
+  ])
+
+  useEffect(() => {
+    if (inkwellEntitlements.loading) return
+    if (route === 'format_print' && !inkwellEntitlements.gates.canUsePrintFormat) {
+      showToast('Print formatting is included with Inkwell Pro.')
+      navigateRouteBase('write')
+      return
+    }
+    if (route === 'format_ebook' && !inkwellEntitlements.gates.canUseEbookFormat) {
+      showToast('Unlock Inkwell Ebook Suite or Pro to use ebook formatting.')
+      navigateRouteBase('publish')
+    }
+  }, [
+    route,
+    inkwellEntitlements.loading,
+    inkwellEntitlements.gates.canUsePrintFormat,
+    inkwellEntitlements.gates.canUseEbookFormat,
+    showToast,
+    navigateRouteBase,
+  ])
+
+  const publishAccessForUi = useMemo(
+    () => ({
+      allowEpub: inkwellEntitlements.gates.canExportEpub,
+      allowProSuite: inkwellEntitlements.gates.canUseProExports,
+      allowCloudBackup: inkwellEntitlements.gates.canUseCloudSync,
+      allowEbookFormat: inkwellEntitlements.gates.canUseEbookFormat,
+      allowPrintFormat: inkwellEntitlements.gates.canUsePrintFormat,
+      onUnlockEpub: openEbookSuiteCheckout,
+      onUnlockPro: openProCheckout,
+    }),
+    [
+      inkwellEntitlements.gates.canExportEpub,
+      inkwellEntitlements.gates.canUseProExports,
+      inkwellEntitlements.gates.canUseCloudSync,
+      inkwellEntitlements.gates.canUseEbookFormat,
+      inkwellEntitlements.gates.canUsePrintFormat,
+      openEbookSuiteCheckout,
+      openProCheckout,
+    ],
+  )
+
+  const noteExportAccessForUi = useMemo(
+    () => ({
+      allowProSuite: inkwellEntitlements.gates.canUseNoteExportSuite,
+      allowCloudBackup: inkwellEntitlements.gates.canUseCloudSync,
+      onUnlockPro: openProCheckout,
+    }),
+    [
+      inkwellEntitlements.gates.canUseNoteExportSuite,
+      inkwellEntitlements.gates.canUseCloudSync,
+      openProCheckout,
+    ],
+  )
+
   const updateCurrentContent = useCallback(
     (json: JSONContent) => {
       if (currentId === null) return
@@ -1414,6 +1546,11 @@ export default function App() {
   }, [])
 
   const exportPdfKdp = async () => {
+    if (!inkwellEntitlements.loading && !inkwellEntitlements.gates.canUseProExports) {
+      showToast('PDF export is included with Inkwell Pro.')
+      openProCheckout()
+      return
+    }
     try {
       const bytes = await buildKdpPdf(project)
       const docTitle = project.book.title.trim() || chapters[0]?.title || 'manuscript'
@@ -1432,6 +1569,11 @@ export default function App() {
   }
 
   const exportEpub = async () => {
+    if (!inkwellEntitlements.loading && !inkwellEntitlements.gates.canExportEpub) {
+      showToast('EPUB export unlocks with Inkwell Ebook Suite or Pro.')
+      openEbookSuiteCheckout()
+      return
+    }
     try {
       const bytes = await buildEpub(project)
       const buf = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
@@ -1449,6 +1591,11 @@ export default function App() {
   }
 
   const exportTxt = useCallback(() => {
+    if (!inkwellEntitlements.loading && !inkwellEntitlements.gates.canUseProExports) {
+      showToast('Plain text export is included with Inkwell Pro.')
+      openProCheckout()
+      return
+    }
     try {
       const text = buildPlaintextExport(project)
       const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
@@ -1462,9 +1609,21 @@ export default function App() {
     } catch {
       showToast('Text export failed')
     }
-  }, [project, chapters, showToast])
+  }, [
+    project,
+    chapters,
+    showToast,
+    inkwellEntitlements.loading,
+    inkwellEntitlements.gates.canUseProExports,
+    openProCheckout,
+  ])
 
   const exportBookArchive = useCallback(async () => {
+    if (!inkwellEntitlements.loading && !inkwellEntitlements.gates.canUseProExports) {
+      showToast('Book backups are included with Inkwell Pro.')
+      openProCheckout()
+      return
+    }
     try {
       const blob = await exportProjectZip(project)
       const url = URL.createObjectURL(blob)
@@ -1477,9 +1636,14 @@ export default function App() {
     } catch {
       showToast('Backup export failed')
     }
-  }, [project, showToast])
+  }, [project, showToast, inkwellEntitlements.loading, inkwellEntitlements.gates.canUseProExports, openProCheckout])
 
   const exportFullLibrary = useCallback(async () => {
+    if (!inkwellEntitlements.loading && !inkwellEntitlements.gates.canUseProExports) {
+      showToast('Full library export is included with Inkwell Pro.')
+      openProCheckout()
+      return
+    }
     try {
       const blob = await exportLibraryZip()
       const url = URL.createObjectURL(blob)
@@ -1492,7 +1656,7 @@ export default function App() {
     } catch {
       showToast('Library export failed')
     }
-  }, [showToast])
+  }, [showToast, inkwellEntitlements.loading, inkwellEntitlements.gates.canUseProExports, openProCheckout])
 
   const closePublishExportMenu = useCallback(() => {
     const el = publishExportMenuRef.current
@@ -1501,6 +1665,11 @@ export default function App() {
 
   const uploadLibraryCloudBackup = useCallback(async () => {
     if (!isCloudBackupConfigured()) return
+    if (!inkwellEntitlements.loading && !inkwellEntitlements.gates.canUseCloudSync) {
+      showToast('Cloud backup upload requires Inkwell Ebook Suite or Pro.')
+      openProCheckout()
+      return
+    }
     setCloudBackupBusy(true)
     try {
       const r = await uploadFullLibraryCloudBackup()
@@ -1508,7 +1677,12 @@ export default function App() {
     } finally {
       setCloudBackupBusy(false)
     }
-  }, [showToast])
+  }, [
+    showToast,
+    inkwellEntitlements.loading,
+    inkwellEntitlements.gates.canUseCloudSync,
+    openProCheckout,
+  ])
 
   const importArchiveFile = useCallback(
     async (file: File): Promise<ImportArchiveResult | null> => {
@@ -1671,6 +1845,11 @@ export default function App() {
   const noteWebDoc = useMemo(() => chapters[0]?.content ?? null, [chapters])
 
   const copyFormattedHtmlForWeb = useCallback(async () => {
+    if (!inkwellEntitlements.loading && !inkwellEntitlements.gates.canUseNoteExportSuite) {
+      showToast('Note web exports are included with Inkwell Pro.')
+      openProCheckout()
+      return
+    }
     const doc = noteWebDoc
     if (!doc || doc.type !== 'doc') {
       showToast('Nothing to copy')
@@ -1693,9 +1872,21 @@ export default function App() {
     } catch {
       showToast('Copy failed')
     }
-  }, [noteWebDoc, project, showToast])
+  }, [
+    noteWebDoc,
+    project,
+    showToast,
+    inkwellEntitlements.loading,
+    inkwellEntitlements.gates.canUseNoteExportSuite,
+    openProCheckout,
+  ])
 
   const copyMarkdownForWeb = useCallback(async () => {
+    if (!inkwellEntitlements.loading && !inkwellEntitlements.gates.canUseNoteExportSuite) {
+      showToast('Note web exports are included with Inkwell Pro.')
+      openProCheckout()
+      return
+    }
     const doc = noteWebDoc
     if (!doc || doc.type !== 'doc') {
       showToast('Nothing to copy')
@@ -1708,9 +1899,20 @@ export default function App() {
     } catch {
       showToast('Copy failed')
     }
-  }, [noteWebDoc, showToast])
+  }, [
+    noteWebDoc,
+    showToast,
+    inkwellEntitlements.loading,
+    inkwellEntitlements.gates.canUseNoteExportSuite,
+    openProCheckout,
+  ])
 
   const downloadNoteWebHtml = useCallback(() => {
+    if (!inkwellEntitlements.loading && !inkwellEntitlements.gates.canUseNoteExportSuite) {
+      showToast('Note web exports are included with Inkwell Pro.')
+      openProCheckout()
+      return
+    }
     const doc = noteWebDoc
     if (!doc || doc.type !== 'doc') {
       showToast('Nothing to export')
@@ -1729,7 +1931,15 @@ export default function App() {
     } catch {
       showToast('HTML export failed')
     }
-  }, [noteWebDoc, project.book.title, chapters, showToast])
+  }, [
+    noteWebDoc,
+    project.book.title,
+    chapters,
+    showToast,
+    inkwellEntitlements.loading,
+    inkwellEntitlements.gates.canUseNoteExportSuite,
+    openProCheckout,
+  ])
 
   const applyGlobalReplace = useCallback(
     (next: Manuscript[]) => {
@@ -1838,13 +2048,24 @@ export default function App() {
 
   const importDocx = useCallback(
     async (file: File) => {
+      if (!inkwellEntitlements.loading && !inkwellEntitlements.gates.canUseProExports) {
+        showToast('DOCX import is included with Inkwell Pro.')
+        openProCheckout()
+        return
+      }
       await importDocxIntoProject(
         file,
         projectRef.current,
         'Importing a DOCX will replace the current book chapters. Continue?',
       )
     },
-    [importDocxIntoProject],
+    [
+      importDocxIntoProject,
+      inkwellEntitlements.loading,
+      inkwellEntitlements.gates.canUseProExports,
+      openProCheckout,
+      showToast,
+    ],
   )
 
   const restoreHistory = useCallback(
@@ -2462,14 +2683,22 @@ export default function App() {
     mergeChapterWithNext,
   ])
 
-  const supabasePublicConfig = useMemo(() => getInkwellSupabasePublicConfig(), [])
   const librarySyncOptions = useMemo(
     () => ({
       supabaseConfig: supabasePublicConfig,
       showToast: (m: string) => showToast(m),
       reloadApp: () => window.location.reload(),
+      canUseCloudSync:
+        Boolean(supabasePublicConfig) &&
+        !inkwellEntitlements.loading &&
+        inkwellEntitlements.gates.canUseCloudSync,
     }),
-    [supabasePublicConfig, showToast],
+    [
+      supabasePublicConfig,
+      showToast,
+      inkwellEntitlements.loading,
+      inkwellEntitlements.gates.canUseCloudSync,
+    ],
   )
   const inkwellLibrarySync = useInkwellLibrarySync(librarySyncOptions)
   const [cloudSignInBusy, setCloudSignInBusy] = useState(false)
@@ -2642,6 +2871,18 @@ export default function App() {
           onSignOutCloud={() => void inkwellLibrarySync.signOutCloudOnly()}
           onAppSignOut={onBookshelfSignOut}
           onOpenCloudSignIn={navigateToCloudSignIn}
+          licensing={
+            isInkwellCloudSyncConfigured() ?
+              {
+                loading: inkwellEntitlements.loading,
+                tier: inkwellEntitlements.gates.tier,
+                canUseCloudSync: inkwellEntitlements.gates.canUseCloudSync,
+                onUnlockEbookSuite: openEbookSuiteCheckout,
+                onGoPro: openProCheckout,
+                onUpgradeEbookToPro: openUpgradeEbookToProCheckout,
+              }
+            : undefined
+          }
         />
       ) : route === 'bookshelf' ? (
         <div className="flex min-h-0 flex-1 flex-col">
@@ -4164,6 +4405,7 @@ export default function App() {
                       isCloudBackupConfigured() ? () => void uploadLibraryCloudBackup() : undefined
                     }
                     cloudBackupBusy={cloudBackupBusy}
+                    noteExportAccess={noteExportAccessForUi}
                   />
                 </Suspense>
               ) : route === 'publish' && !isNote ? (
@@ -4187,6 +4429,7 @@ export default function App() {
                       isCloudBackupConfigured() ? () => void uploadLibraryCloudBackup() : undefined
                     }
                     cloudBackupBusy={cloudBackupBusy}
+                    publishAccess={publishAccessForUi}
                   />
                 </Suspense>
               ) : current ? (
@@ -4327,6 +4570,7 @@ export default function App() {
               isCloudBackupConfigured() ? () => void uploadLibraryCloudBackup() : undefined
             }
             cloudBackupBusy={cloudBackupBusy}
+            publishLicensing={publishAccessForUi}
           />
 
           <FindReplaceModal

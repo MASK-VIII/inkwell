@@ -13,10 +13,19 @@ export type LibrarySyncConflict = {
   serverRev: string
 }
 
+function friendlyCloudSyncError(message: string): string {
+  if (message === 'sync_not_entitled' || message === 'pro_required') {
+    return 'Inkwell Ebook Suite or Pro is required for cloud library sync.'
+  }
+  return message
+}
+
 type SyncOptions = {
   supabaseConfig: InkwellSupabasePublicConfig | null
   showToast: (message: string) => void
   reloadApp: () => void
+  /** When false, library push/pull is skipped (Inkwell Pro only). */
+  canUseCloudSync?: boolean
 }
 
 export function useInkwellLibrarySync(options: SyncOptions) {
@@ -49,12 +58,21 @@ export function useInkwellLibrarySync(options: SyncOptions) {
           const firstTry = op.attempts === 0
 
           try {
+            if (op.kind === 'pull_library' || op.kind === 'push_library') {
+              if (!optsRef.current.canUseCloudSync) {
+                if (firstTry) {
+                  optsRef.current.showToast('Cloud library sync requires Inkwell Ebook Suite or Pro.')
+                }
+                return { ok: false, error: 'sync_not_entitled' }
+              }
+            }
+
             if (op.kind === 'pull_library') {
               const cached = await readCachedLibraryHead()
               const bound = cached?.remoteRev ?? null
               const r = await pullLibraryIfNewer(cfg, { ifNewerThanRev: bound })
               if (!r.ok) {
-                if (firstTry) showToast(`Cloud pull failed: ${r.error}`)
+                if (firstTry) showToast(`Cloud pull failed: ${friendlyCloudSyncError(r.error)}`)
                 return { ok: false, error: r.error }
               }
               if (r.noop) return { ok: true }
@@ -68,7 +86,7 @@ export function useInkwellLibrarySync(options: SyncOptions) {
               if (r.ok) return { ok: true }
               if ('conflict' in r && r.conflict) return { ok: 'conflict', serverRev: r.serverRev }
               const err = 'error' in r ? r.error : 'Push failed'
-              if (firstTry) showToast(`Cloud push failed: ${err}`)
+              if (firstTry) showToast(`Cloud push failed: ${friendlyCloudSyncError(err)}`)
               return { ok: false, error: err }
             }
           } catch (e) {
@@ -143,6 +161,7 @@ export function useInkwellLibrarySync(options: SyncOptions) {
 
   const scheduleIdleFlush = useCallback(() => {
     if (!optsRef.current.supabaseConfig || !userEmail || unresolvedConflictRef.current) return
+    if (!optsRef.current.canUseCloudSync) return
     if (idleTimerRef.current != null) clearTimeout(idleTimerRef.current)
     idleTimerRef.current = setTimeout(() => {
       idleTimerRef.current = null
@@ -209,15 +228,15 @@ export function useInkwellLibrarySync(options: SyncOptions) {
 
   useEffect(() => {
     const cfg = options.supabaseConfig
-    if (!cfg || !userEmail) return
-    const key = userEmail
+    if (!cfg || !userEmail || !options.canUseCloudSync) return
+    const key = `${userEmail}\0${options.canUseCloudSync ? '1' : '0'}`
     if (initialPullKeyRef.current === key) return
     initialPullKeyRef.current = key
     void (async () => {
       await syncQueue.enqueue('pull_library')
       await flushQueue()
     })()
-  }, [options.supabaseConfig, userEmail, flushQueue, syncQueue])
+  }, [options.supabaseConfig, options.canUseCloudSync, userEmail, flushQueue, syncQueue])
 
   const syncNow = useCallback(() => {
     const { supabaseConfig, showToast } = optsRef.current
@@ -227,6 +246,10 @@ export function useInkwellLibrarySync(options: SyncOptions) {
     }
     if (!userEmail) {
       showToast('Sign in to the cloud first (open sign-in from the bookshelf banner or Account).')
+      return
+    }
+    if (!optsRef.current.canUseCloudSync) {
+      showToast('Cloud library sync requires Inkwell Ebook Suite or Pro.')
       return
     }
     if (!shouldAttemptNetworkSync()) {
@@ -249,6 +272,7 @@ export function useInkwellLibrarySync(options: SyncOptions) {
 
   const notifyLocalSaved = useCallback(() => {
     if (!optsRef.current.supabaseConfig || !userEmail || unresolvedConflictRef.current) return
+    if (!optsRef.current.canUseCloudSync) return
     void syncQueue.enqueue('push_library').then(() => void refreshQueuePending())
     scheduleIdleFlush()
   }, [userEmail, scheduleIdleFlush, syncQueue, refreshQueuePending])
@@ -261,7 +285,9 @@ export function useInkwellLibrarySync(options: SyncOptions) {
     try {
       const r = await forcePushLibraryZip(cfg)
       if (!r.ok) {
-        optsRef.current.showToast('error' in r ? r.error : 'Could not update cloud')
+        optsRef.current.showToast(
+          friendlyCloudSyncError('error' in r ? r.error : 'Could not update cloud'),
+        )
         setStatus('error')
         return
       }
@@ -284,7 +310,7 @@ export function useInkwellLibrarySync(options: SyncOptions) {
     try {
       const r = await pullLibraryIfNewer(cfg, { ifNewerThanRev: null })
       if (!r.ok) {
-        optsRef.current.showToast(r.error)
+        optsRef.current.showToast(friendlyCloudSyncError(r.error))
         setStatus('error')
         return
       }

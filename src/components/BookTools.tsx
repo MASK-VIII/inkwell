@@ -23,6 +23,7 @@ import { readInkwellPanelMotionDurationMs } from '../lib/panelMotionMs'
 import { CollapsibleSection } from './book-tools/CollapsibleSection'
 import { HistoryPanel } from './book-tools/HistoryPanel'
 import { ProgressBar } from './book-tools/ProgressBar'
+import type { PublishAccessProps } from './PublishHub'
 
 /** Book or note that owns this project’s linked notes; always listed first under “Notebook” for notes. */
 export type NotesProjectMasterRow = {
@@ -80,6 +81,8 @@ type Props = {
   /** When set (build-time URL configured), shows upload full library to cloud. */
   onCloudBackupLibrary?: () => void
   cloudBackupBusy?: boolean
+  /** Paid-tier gates for Publish + cloud backup sections (omit = all unlocked). */
+  publishLicensing?: PublishAccessProps
   /** @mentions / [[wikilink]] from other notes in this shelf cluster pointing at the open note. */
   backlinks?: BacklinkSource[]
   onOpenBacklinkSource?: (sourceProjectId: string) => void
@@ -120,9 +123,21 @@ function BookToolsInner({
   onExportTxt,
   onCloudBackupLibrary,
   cloudBackupBusy = false,
+  publishLicensing,
   backlinks = [],
   onOpenBacklinkSource,
 }: Props) {
+  const pa: PublishAccessProps =
+    publishLicensing ?? {
+      allowEpub: true,
+      allowProSuite: true,
+      allowCloudBackup: true,
+      allowEbookFormat: true,
+      allowPrintFormat: true,
+      onUnlockEpub: () => {},
+      onUnlockPro: () => {},
+    }
+
   const isNote = variant === 'note'
   const isFormat = workspaceRoute === 'format_print' || workspaceRoute === 'format_ebook'
   const [present, setPresent] = useState(open)
@@ -979,11 +994,33 @@ function BookToolsInner({
               defaultOpen
             >
               <div className="space-y-3 rounded-xl bg-parchment/60 p-4 dark:bg-panel-dark/50">
-                <button type="button" onClick={onExportPdfKdp} className="inkwell-hub-row-btn">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!pa.allowProSuite) {
+                      pa.onUnlockPro()
+                      return
+                    }
+                    onExportPdfKdp()
+                  }}
+                  className="inkwell-hub-row-btn"
+                >
                   Export PDF (KDP)
+                  {!pa.allowProSuite ? <span className="ml-1 text-[11px] opacity-80">· Pro</span> : null}
                 </button>
-                <button type="button" onClick={onExportEpub} className="inkwell-hub-row-btn">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!pa.allowEpub) {
+                      pa.onUnlockEpub()
+                      return
+                    }
+                    onExportEpub()
+                  }}
+                  className="inkwell-hub-row-btn"
+                >
                   Export EPUB
+                  {!pa.allowEpub ? <span className="ml-1 text-[11px] opacity-80">· Ebook Suite</span> : null}
                 </button>
                 <label className="block">
                   <input
@@ -994,24 +1031,61 @@ function BookToolsInner({
                       const f = e.target.files?.[0] ?? null
                       e.currentTarget.value = ''
                       if (!f) return
+                      if (!pa.allowProSuite) {
+                        pa.onUnlockPro()
+                        return
+                      }
                       onImportDocx(f)
                     }}
                   />
                   <span className="inkwell-hub-dropzone bg-white/40 dark:bg-panel-dark/40">Import DOCX…</span>
                 </label>
                 {onExportTxt ? (
-                  <button type="button" onClick={onExportTxt} className="inkwell-hub-row-btn">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!pa.allowProSuite) {
+                        pa.onUnlockPro()
+                        return
+                      }
+                      onExportTxt()
+                    }}
+                    className="inkwell-hub-row-btn"
+                  >
                     Export plain text (.txt)
+                    {!pa.allowProSuite ? <span className="ml-1 text-[11px] opacity-80">· Pro</span> : null}
                   </button>
                 ) : null}
                 {onExportProjectArchive ? (
-                  <button type="button" onClick={onExportProjectArchive} className="inkwell-hub-row-btn">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!pa.allowProSuite) {
+                        pa.onUnlockPro()
+                        return
+                      }
+                      onExportProjectArchive()
+                    }}
+                    className="inkwell-hub-row-btn"
+                  >
                     Export book backup (.inkwell.zip)
+                    {!pa.allowProSuite ? <span className="ml-1 text-[11px] opacity-80">· Pro</span> : null}
                   </button>
                 ) : null}
                 {onExportLibraryArchive ? (
-                  <button type="button" onClick={onExportLibraryArchive} className="inkwell-hub-row-btn">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!pa.allowProSuite) {
+                        pa.onUnlockPro()
+                        return
+                      }
+                      onExportLibraryArchive()
+                    }}
+                    className="inkwell-hub-row-btn"
+                  >
                     Export full library (.zip)
+                    {!pa.allowProSuite ? <span className="ml-1 text-[11px] opacity-80">· Pro</span> : null}
                   </button>
                 ) : null}
                 {onImportProjectArchive ? (
@@ -1047,11 +1121,18 @@ function BookToolsInner({
               <div className="space-y-2 rounded-xl bg-parchment/60 p-4 dark:bg-panel-dark/50">
                 <button
                   type="button"
-                  onClick={onCloudBackupLibrary}
+                  onClick={() => {
+                    if (!pa.allowCloudBackup) {
+                      pa.onUnlockPro()
+                      return
+                    }
+                    onCloudBackupLibrary()
+                  }}
                   disabled={cloudBackupBusy}
                   className="inkwell-hub-row-btn disabled:opacity-50"
                 >
                   {cloudBackupBusy ? 'Uploading…' : 'Upload full library to cloud'}
+                  {!pa.allowCloudBackup ? <span className="ml-1 text-[11px] opacity-80">· Pro</span> : null}
                 </button>
                 <p className="text-xs text-ink/60 dark:text-ink-dark/60">
                   Read-only backup to your HTTPS endpoint. See docs/CLOUD_SYNC.md for env variables and payload shape.

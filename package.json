@@ -7,9 +7,9 @@
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/generate-changelog.mjs && vite",
     "dev:desktop": "concurrently -k \"cross-env INKWELL_DESKTOP=1 vite\" \"wait-on http://localhost:5173 && cross-env INKWELL_DESKTOP=1 electron electron/main.cjs\"",
-    "build": "tsc -b && vite build",
+    "build": "node scripts/generate-changelog.mjs && tsc -b && vite build",
     "build:desktop": "npm run generate:brand-icons && tsc -b && cross-env INKWELL_DESKTOP=1 vite build && electron-builder",
     "lint": "eslint .",
     "preview": "vite preview",

@@ -5,6 +5,7 @@ import { InkwellProfileMenu, type InkwellProfileMenuProps } from './InkwellProfi
 import { InkwellWordmark } from './InkwellWordmark'
 import { useThemeShine } from './useThemeShine'
 import type { LibrarySyncStatus } from '../lib/sync/useInkwellLibrarySync'
+import type { InkwellTier } from '../lib/inkwellEntitlements'
 
 export type AccountScreenProps = {
   darkMode: boolean
@@ -21,6 +22,27 @@ export type AccountScreenProps = {
   onSignOutCloud: () => void | Promise<void>
   onAppSignOut: () => void
   onOpenCloudSignIn: () => void
+  /** When cloud sync is configured, show plan + upgrade actions. */
+  licensing?: {
+    loading: boolean
+    tier: InkwellTier
+    canUseCloudSync: boolean
+    onUnlockEbookSuite: () => void
+    onGoPro: () => void
+    onUpgradeEbookToPro: () => void
+  }
+}
+
+function tierLabel(tier: InkwellTier): string {
+  switch (tier) {
+    case 'ebook_suite':
+      return 'Ebook Suite'
+    case 'pro':
+      return 'Pro'
+    case 'free':
+    default:
+      return 'Free'
+  }
 }
 
 function syncStatusLabel(status: LibrarySyncStatus): string {
@@ -55,6 +77,7 @@ export function AccountScreen({
   onSignOutCloud,
   onAppSignOut,
   onOpenCloudSignIn,
+  licensing,
 }: AccountScreenProps) {
   const brandRef = useRef<HTMLButtonElement>(null)
   useThemeShine(brandRef)
@@ -130,11 +153,82 @@ export function AccountScreen({
           </dl>
         </section>
 
+        {cloudSyncConfigured && licensing ?
+          <section className="rounded-2xl border border-dust/80 bg-white/80 p-5 shadow-sm dark:border-border-dark dark:bg-panel-dark/70">
+            <h2 className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
+              Your plan
+            </h2>
+            <p className="mt-3 text-sm text-ink/80 dark:text-ink-dark/80">
+              {licensing.loading ?
+                'Loading license…'
+              : <>
+                  <span className="font-semibold text-ink dark:text-ink-dark">{tierLabel(licensing.tier)}</span>
+                  {licensing.tier === 'free' ?
+                    <span className="text-ink/65 dark:text-ink-dark/65">
+                      {' '}
+                      — Write and organize locally. Upgrade to export EPUB or unlock the full publishing suite.
+                    </span>
+                  : licensing.tier === 'ebook_suite' ?
+                    <span className="text-ink/65 dark:text-ink-dark/65">
+                      {' '}
+                      — EPUB export and cloud library sync included. Go Pro for print PDFs and the full export suite.
+                    </span>
+                  : (
+                    <span className="text-ink/65 dark:text-ink-dark/65">
+                      {' '}
+                      — Full export suite and cloud library sync.
+                    </span>
+                  )}
+                </>
+              }
+            </p>
+            {!licensing.loading && licensing.tier !== 'pro' ? (
+              <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                {licensing.tier === 'free' ? (
+                  <button
+                    type="button"
+                    onClick={licensing.onUnlockEbookSuite}
+                    className="inkwell-hub-secondary w-full sm:w-auto sm:min-w-[10rem]"
+                  >
+                    Unlock Ebook Suite ($49.99)
+                  </button>
+                ) : null}
+                {licensing.tier === 'ebook_suite' ? (
+                  <button
+                    type="button"
+                    onClick={licensing.onUpgradeEbookToPro}
+                    className="inkwell-hub-secondary w-full sm:w-auto sm:min-w-[10rem]"
+                  >
+                    Upgrade to Pro ($99.99)
+                  </button>
+                ) : null}
+                {licensing.tier === 'free' ? (
+                  <button
+                    type="button"
+                    onClick={licensing.onGoPro}
+                    className="inkwell-hub-primary w-full sm:w-auto sm:min-w-[10rem]"
+                  >
+                    Go Pro ($149.99)
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+          </section>
+        : null}
+
         {cloudSyncConfigured ?
           <section className="rounded-2xl border border-dust/80 bg-white/80 p-5 shadow-sm dark:border-border-dark dark:bg-panel-dark/70">
             <h2 className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
               Cloud library sync
             </h2>
+            {!licensing?.loading && licensing && !licensing.canUseCloudSync ?
+              <p className="mt-3 text-sm text-ink/70 dark:text-ink-dark/70">
+                Cloud library sync unlocks with{' '}
+                <span className="font-medium text-ink dark:text-ink-dark">Inkwell Ebook Suite</span> or{' '}
+                <span className="font-medium text-ink dark:text-ink-dark">Pro</span>. On the Free plan your library
+                stays on this device until you upgrade or use local exports.
+              </p>
+            : null}
             <dl className="mt-4 space-y-3 text-sm">
               <div>
                 <dt className="text-ink/55 dark:text-ink-dark/55">Status</dt>
@@ -175,7 +269,15 @@ export function AccountScreen({
               <button
                 type="button"
                 onClick={onSyncNow}
-                disabled={!signedIntoCloud}
+                disabled={
+                  !signedIntoCloud ||
+                  Boolean(licensing && !licensing.loading && !licensing.canUseCloudSync)
+                }
+                title={
+                  licensing && !licensing.loading && !licensing.canUseCloudSync ?
+                    'Upgrade to Ebook Suite or Pro to sync your library to the cloud.'
+                  : undefined
+                }
                 className="inkwell-hub-secondary w-full sm:w-auto sm:min-w-[10rem] disabled:pointer-events-none disabled:opacity-40"
               >
                 Sync library now

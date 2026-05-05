@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Auto-generated marketing changelog feed
+public/changelog.json
+
 # Electron-builder output (large binaries; never commit)
 release/
 release-build/
