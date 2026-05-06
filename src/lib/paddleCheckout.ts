@@ -79,10 +79,30 @@ export function appendInkwellUserToCheckoutUrl(url: string, userId: string | nul
   }
 }
 
+/**
+ * Open Paddle-hosted or transaction checkout URLs.
+ * Do not pass `noopener` via window.open's third argument — in many browsers that makes the
+ * return value null even when the tab opens, and popup blockers also return null. We clear
+ * `opener` manually when a Window is returned, and fall back to same-tab navigation so live
+ * checkout still works (including `?checkout=` deep links with no user-gesture popup).
+ */
 export function openPaddleCheckoutUrl(url: string): boolean {
   if (!url) return false
   try {
-    window.open(url, '_blank', 'noopener,noreferrer')
+    const w = window.open(url, '_blank')
+    if (w) {
+      try {
+        w.opener = null
+      } catch {
+        /* ignore */
+      }
+      return true
+    }
+  } catch {
+    /* fall through */
+  }
+  try {
+    window.location.assign(url)
     return true
   } catch {
     return false
@@ -100,24 +120,20 @@ async function getPaddleOverlayInstance(): Promise<Paddle | undefined> {
       token: o.token,
       environment: o.environment,
       version: 'v1',
-      ...(import.meta.env.DEV ?
-        {
-          debug: true,
-          eventCallback(event) {
-            const name = event?.name ?? ''
-            if (
-              name === 'checkout.error' ||
-              name === 'checkout.failed' ||
-              name === 'checkout.payment.error' ||
-              name === 'checkout.payment.failed'
-            ) {
-              const detail = 'detail' in event && typeof event.detail === 'string' ? event.detail : undefined
-              const code = 'code' in event && typeof event.code === 'string' ? event.code : undefined
-              console.warn('[inkwell] Paddle checkout event', { name, code, detail, event })
-            }
-          },
+      ...(import.meta.env.DEV ? { debug: true } : {}),
+      eventCallback(event) {
+        const name = event?.name ?? ''
+        if (
+          name === 'checkout.error' ||
+          name === 'checkout.failed' ||
+          name === 'checkout.payment.error' ||
+          name === 'checkout.payment.failed'
+        ) {
+          const detail = 'detail' in event && typeof event.detail === 'string' ? event.detail : undefined
+          const code = 'code' in event && typeof event.code === 'string' ? event.code : undefined
+          console.warn('[inkwell] Paddle checkout event', { name, code, detail, event })
         }
-      : {}),
+      },
     })
     if (paddle) cachedPaddle = paddle
     return paddle
@@ -168,6 +184,25 @@ export function tryOpenPaddleOverlayInSameTask(opts: {
 }
 
 export type PaddleCheckoutIntent = 'basic' | 'pro' | 'upgrade'
+
+/**
+ * True when checkout will use Paddle.js overlay (no hosted checkout URL, no edge transaction URL).
+ * In that case `Checkout.open` must run in the same user-activation task as the click, so the client
+ * should preload Paddle (`preloadPaddleCheckout`) before enabling the checkout button.
+ */
+export function paddleUpgradeNeedsPrimedOverlay(opts: {
+  intent: PaddleCheckoutIntent
+  edgeCheckoutEnabled: boolean
+}): boolean {
+  const env = getPaddleCheckoutEnv()
+  const hosted =
+    opts.intent === 'basic' ? env.ebookSuite
+    : opts.intent === 'pro' ? env.pro
+    : env.upgrade
+  if (Boolean(hosted?.trim())) return false
+  if (opts.edgeCheckoutEnabled) return false
+  return Boolean(getPaddleOverlayEnv().token.trim())
+}
 
 /**
  * Server-created Paddle transaction (`paddle-create-checkout` Edge Function).

@@ -136,6 +136,7 @@ import {
   invokeEdgePaddleCheckout,
   openPaddleCheckoutOverlay,
   openPaddleCheckoutUrl,
+  paddleUpgradeNeedsPrimedOverlay,
   preloadPaddleCheckout,
   tryOpenPaddleOverlayInSameTask,
 } from './lib/paddleCheckout'
@@ -439,6 +440,8 @@ export default function App() {
   const [stickyNotePopoutId, setStickyNotePopoutId] = useState<string | null>(null)
   const [toast, setToast] = useState<{ node: ReactNode; ms: number } | null>(null)
   const [upgradeOfferIntent, setUpgradeOfferIntent] = useState<UpgradeOfferIntent | null>(null)
+  /** Overlay-only checkout must not call `Checkout.open` after an `await` (loses user activation). */
+  const [upgradeOfferContinueReady, setUpgradeOfferContinueReady] = useState(true)
   const [purchaseSignInOpen, setPurchaseSignInOpen] = useState(false)
   const [darkMode, setDarkMode] = useState(readInitialDarkMode)
   /** Set in `toggleTheme`, cleared when `inkwell:theme-change` fires after `html.dark` sync (see layout effect). */
@@ -481,6 +484,32 @@ export default function App() {
   const projectRef = useRef(project)
   const supabasePublicConfig = useMemo(() => getInkwellSupabasePublicConfig(), [])
   const inkwellEntitlements = useInkwellEntitlements(supabasePublicConfig)
+
+  useEffect(() => {
+    if (upgradeOfferIntent == null) {
+      setUpgradeOfferContinueReady(true)
+      return
+    }
+    const edgeOn =
+      String(import.meta.env.VITE_PADDLE_EDGE_CHECKOUT ?? '').trim() === '1' && Boolean(supabasePublicConfig)
+    if (!paddleUpgradeNeedsPrimedOverlay({ intent: upgradeOfferIntent, edgeCheckoutEnabled: edgeOn })) {
+      setUpgradeOfferContinueReady(true)
+      return
+    }
+    setUpgradeOfferContinueReady(false)
+    let cancelled = false
+    const safety = window.setTimeout(() => {
+      if (!cancelled) setUpgradeOfferContinueReady(true)
+    }, 6000)
+    void preloadPaddleCheckout().finally(() => {
+      window.clearTimeout(safety)
+      if (!cancelled) setUpgradeOfferContinueReady(true)
+    })
+    return () => {
+      cancelled = true
+      window.clearTimeout(safety)
+    }
+  }, [upgradeOfferIntent, supabasePublicConfig])
   const historyTimerRef = useRef<number | null>(null)
   const historyLastRecordAtRef = useRef<number>(0)
   const persistIdleTimerRef = useRef<number | null>(null)
@@ -1342,7 +1371,7 @@ export default function App() {
         if (edgeCheckout) {
           const edge = await invokeEdgePaddleCheckout(getInkwellSupabaseClient(supabasePublicConfig), intent)
           if (edge.ok) {
-            window.open(edge.url, '_blank', 'noopener,noreferrer')
+            openPaddleCheckoutUrl(edge.url)
             return
           }
           let detail = edge.error
@@ -1359,6 +1388,17 @@ export default function App() {
         }
 
         if (tryOpenPaddleOverlayInSameTask({ intent, userId: uid })) return
+
+        const overlayOnlyCheckout = paddleUpgradeNeedsPrimedOverlay({
+          intent,
+          edgeCheckoutEnabled: Boolean(edgeCheckout),
+        })
+        if (overlayOnlyCheckout) {
+          showToast(
+            'Checkout could not start. Refresh the page, allow this site in your browser, and confirm Paddle client token and price IDs are set.',
+          )
+          return
+        }
 
         const r = await openPaddleCheckoutOverlay({ intent, userId: uid })
         if (r.ok) return
@@ -1400,7 +1440,6 @@ export default function App() {
 
   const handleUpgradeContinue = useCallback(
     (intent: UpgradeOfferIntent) => {
-      setUpgradeOfferIntent(null)
       if (inkwellEntitlements.loading) {
         showToast('Still loading your account…')
         return
@@ -1410,7 +1449,11 @@ export default function App() {
         return
       }
       const uid = inkwellEntitlements.userId
-      if (tryOpenPaddleOverlayInSameTask({ intent, userId: uid })) return
+      if (tryOpenPaddleOverlayInSameTask({ intent, userId: uid })) {
+        setUpgradeOfferIntent(null)
+        return
+      }
+      setUpgradeOfferIntent(null)
       void startPaddleCheckout(intent)
     },
     [inkwellEntitlements.loading, inkwellEntitlements.userId, showToast, startPaddleCheckout],
@@ -1436,22 +1479,30 @@ export default function App() {
     const nextUrl = `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash || '#account'}`
     window.history.replaceState(null, '', nextUrl)
 
-    if (intent === 'basic') void startPaddleCheckout('basic')
-    else if (intent === 'pro') void startPaddleCheckout('pro')
-    else void startPaddleCheckout('upgrade')
-  }, [route, inkwellEntitlements.loading, startPaddleCheckout])
+    const asIntent = intent as UpgradeOfferIntent
+    const edgeOn =
+      String(import.meta.env.VITE_PADDLE_EDGE_CHECKOUT ?? '').trim() === '1' && Boolean(supabasePublicConfig)
+    if (
+      paddleUpgradeNeedsPrimedOverlay({ intent: asIntent, edgeCheckoutEnabled: edgeOn }) &&
+      inkwellEntitlements.userId
+    ) {
+      setUpgradeOfferIntent(asIntent)
+    } else {
+      void startPaddleCheckout(asIntent)
+    }
+  }, [
+    route,
+    inkwellEntitlements.loading,
+    inkwellEntitlements.userId,
+    startPaddleCheckout,
+    supabasePublicConfig,
+  ])
 
   useEffect(() => {
     if (route !== 'account') return
     if (!getPaddleOverlayEnv().token) return
     void preloadPaddleCheckout()
   }, [route])
-
-  useEffect(() => {
-    if (upgradeOfferIntent == null) return
-    if (!getPaddleOverlayEnv().token) return
-    void preloadPaddleCheckout()
-  }, [upgradeOfferIntent])
 
   useLayoutEffect(() => {
     navigateRouteLicensedRef.current = (next: Route) => {
@@ -4748,6 +4799,10 @@ export default function App() {
         open={upgradeOfferIntent != null}
         intent={upgradeOfferIntent ?? 'basic'}
         onClose={() => setUpgradeOfferIntent(null)}
+        continueReady={upgradeOfferContinueReady}
+        onContinuePointerDown={() => {
+          if (getPaddleOverlayEnv().token) void preloadPaddleCheckout()
+        }}
         onContinue={() => {
           const intent = upgradeOfferIntent
           if (intent) handleUpgradeContinue(intent)

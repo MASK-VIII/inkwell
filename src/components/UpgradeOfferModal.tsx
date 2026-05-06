@@ -7,6 +7,10 @@ type Props = {
   intent: UpgradeOfferIntent
   onClose: () => void
   onContinue: () => void
+  /** Fires on primary-button pointer down so Paddle.js can preload before click (helps overlay open on live). */
+  onContinuePointerDown?: () => void
+  /** False while Paddle.js is preloading for overlay-only checkout (avoids opening after `await`, which drops user activation). */
+  continueReady?: boolean
 }
 
 function titleFor(intent: UpgradeOfferIntent): string {
@@ -33,7 +37,14 @@ function bodyFor(intent: UpgradeOfferIntent): string {
   }
 }
 
-export function UpgradeOfferModal({ open, intent, onClose, onContinue }: Props) {
+export function UpgradeOfferModal({
+  open,
+  intent,
+  onClose,
+  onContinue,
+  onContinuePointerDown,
+  continueReady = true,
+}: Props) {
   if (!open) return null
 
   return (
@@ -60,8 +71,17 @@ export function UpgradeOfferModal({ open, intent, onClose, onContinue }: Props) 
           <button type="button" onClick={onClose} className="inkwell-hub-secondary w-full sm:w-auto">
             Not now
           </button>
-          <button type="button" onClick={onContinue} className="inkwell-hub-primary w-full sm:w-auto">
-            Continue to checkout
+          <button
+            type="button"
+            disabled={!continueReady}
+            onPointerDown={(e) => {
+              if (e.button !== 0 || !continueReady) return
+              onContinuePointerDown?.()
+            }}
+            onClick={onContinue}
+            className="inkwell-hub-primary w-full sm:w-auto disabled:cursor-wait disabled:opacity-60"
+          >
+            {continueReady ? 'Continue to checkout' : 'Preparing checkout…'}
           </button>
         </div>
       </div>
