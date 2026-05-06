@@ -35,14 +35,13 @@ export type PaddleCheckoutEnv = {
 }
 
 /**
- * Use `paddle-create-checkout` when cloud auth is configured. Default **on** when unset (production
- * usually has the function deployed). Set `VITE_PADDLE_EDGE_CHECKOUT=0` to force Paddle.js overlay only
- * (e.g. local dev without the Edge Function).
+ * Server-side `paddle-create-checkout` — **opt-in** (`VITE_PADDLE_EDGE_CHECKOUT=1`) so checkout works with
+ * **Vercel-only** Paddle vars (client token + `pri_` IDs). Enable edge after Supabase secrets are set.
  */
 export function isPaddleEdgeCheckoutEnabled(supabasePublicConfigured: boolean): boolean {
   if (!supabasePublicConfigured) return false
-  const v = String(import.meta.env.VITE_PADDLE_EDGE_CHECKOUT ?? '').trim()
-  return v !== '0'
+  const v = String(import.meta.env.VITE_PADDLE_EDGE_CHECKOUT ?? '').trim().toLowerCase()
+  return v === '1' || v === 'true' || v === 'yes'
 }
 
 export function getPaddleCheckoutEnv(): PaddleCheckoutEnv {
@@ -292,7 +291,17 @@ export function humanizeEdgeCheckoutFailure(
   }
   if (topErr === 'paddle_api_error') {
     try {
-      const bits = JSON.stringify(raw?.paddle ?? raw).slice(0, 360)
+      const nested = raw?.paddle as Record<string, unknown> | undefined
+      const errObj =
+        nested && typeof nested.error === 'object' && nested.error !== null ?
+          (nested.error as Record<string, unknown>)
+        : undefined
+      const code = typeof errObj?.code === 'string' ? errObj.code : ''
+      const detailStr = typeof errObj?.detail === 'string' ? errObj.detail : ''
+      if (code === 'transaction_checkout_url_domain_is_not_approved') {
+        return `${detailStr || 'checkout.url host must be approved in Paddle'} — use https://inkwell.enterthelimelight.com/app or set secret PADDLE_CHECKOUT_PAGE_URL to an approved https URL.`
+      }
+      const bits = JSON.stringify(raw?.paddle ?? raw).slice(0, 420)
       return bits.length > 2 ? `Paddle API: ${bits}` : `Paddle API error (${String(raw?.status ?? '')}).`
     } catch {
       return 'Paddle API error from checkout server.'
@@ -300,6 +309,9 @@ export function humanizeEdgeCheckoutFailure(
   }
   if (topErr === 'unauthorized' || topErr === 'missing_authorization') {
     return 'Sign in again, then retry checkout (session could not reach checkout server).'
+  }
+  if (topErr === 'sign_in_required_refresh_cloud_sync') {
+    return 'Sign in to cloud sync again, then retry checkout.'
   }
   return `Checkout: ${topErr}`
 }
@@ -326,17 +338,30 @@ export function paddleUpgradeNeedsPrimedOverlay(opts: {
 /**
  * Server-created Paddle transaction (`paddle-create-checkout` Edge Function).
  * Deploy `paddle-create-checkout` and keep Supabase env configured. Client uses this when
- * `isPaddleEdgeCheckoutEnabled` is true (default unless `VITE_PADDLE_EDGE_CHECKOUT=0`).
+ * `isPaddleEdgeCheckoutEnabled` is true (`VITE_PADDLE_EDGE_CHECKOUT=1`).
  */
 export async function invokeEdgePaddleCheckout(
   client: SupabaseClient,
   intent: PaddleCheckoutIntent,
 ): Promise<{ ok: true; url: string } | { ok: false; error: string; paddle?: unknown }> {
+  let { data: sessionData } = await client.auth.getSession()
+  let session = sessionData.session
+  if (!session?.access_token) {
+    const { data: refreshData } = await client.auth.refreshSession()
+    session = refreshData.session ?? undefined
+  }
+  if (!session?.access_token) {
+    return { ok: false, error: 'sign_in_required_refresh_cloud_sync', paddle: undefined }
+  }
+
   const { data, error } = await client.functions.invoke<{
     url?: string
     error?: string
     detail?: string
-  }>('paddle-create-checkout', { body: { intent } })
+  }>('paddle-create-checkout', {
+    body: { intent },
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  })
 
   if (data?.url && typeof data.url === 'string') {
     return { ok: true, url: data.url }

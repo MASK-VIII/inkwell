@@ -8,17 +8,21 @@
  * Secrets (Supabase Dashboard → Edge Functions → paddle-create-checkout):
  * - PADDLE_API_KEY          — Paddle Developer Tools → Authentication → API keys (server)
  * - PADDLE_ENVIRONMENT      — optional: "sandbox" | "production" (default: production)
- * - PADDLE_CHECKOUT_PAGE_URL — page that loads Paddle.js, on an approved domain, e.g.
- *                             https://inkwell.enterthelimelight.com/app or http://localhost:5173/app
+ * - PADDLE_CHECKOUT_PAGE_URL — optional override; page that loads Paddle.js on a Paddle-approved domain.
+ *   If unset, the function uses Inkwell’s production default (`https://inkwell.enterthelimelight.com/app`).
+ *   Self-hosted forks should set this secret (or edit DEFAULT_CHECKOUT_PAGE_URL in code).
  *
  * Reuses the same price-ID lists as paddle-webhook:
  * - PADDLE_PRICE_IDS_BASIC or PADDLE_PRICE_IDS_EBOOK (basic)
  * - PADDLE_PRICE_IDS_PRO
  * - PADDLE_PRICE_IDS_UPGRADE
  *
- * Client: set VITE_PADDLE_EDGE_CHECKOUT=1 and deploy this function.
+ * Client: set VITE_PADDLE_EDGE_CHECKOUT=1 in Vercel to call this function; otherwise the app uses Paddle.js only.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
+
+/** Paddle-approved host for hosted checkout `checkout.url` when `PADDLE_CHECKOUT_PAGE_URL` is not set. */
+const DEFAULT_CHECKOUT_PAGE_URL = 'https://inkwell.enterthelimelight.com/app'
 
 function corsHeaders(): HeadersInit {
   return {
@@ -99,7 +103,14 @@ async function handlePaddleCreateCheckout(req: Request): Promise<Response> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
   const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? ''
   const paddleKey = Deno.env.get('PADDLE_API_KEY') ?? ''
-  const checkoutPageUrl = (Deno.env.get('PADDLE_CHECKOUT_PAGE_URL') ?? '').trim()
+  /** Trim — stray whitespace breaks Paddle’s approved-domain match. */
+  const checkoutPageUrlFromSecret = (Deno.env.get('PADDLE_CHECKOUT_PAGE_URL') ?? '').trim()
+  const checkoutPageUrl = checkoutPageUrlFromSecret || DEFAULT_CHECKOUT_PAGE_URL
+  if (!checkoutPageUrlFromSecret) {
+    console.warn(
+      'paddle-create-checkout: PADDLE_CHECKOUT_PAGE_URL unset; using DEFAULT_CHECKOUT_PAGE_URL for checkout.url',
+    )
+  }
 
   if (!supabaseUrl || !anonKey) {
     console.error('paddle-create-checkout: missing SUPABASE_URL or SUPABASE_ANON_KEY')
@@ -111,13 +122,6 @@ async function handlePaddleCreateCheckout(req: Request): Promise<Response> {
 
   if (!paddleKey) {
     return new Response(JSON.stringify({ error: 'missing_paddle_api_key' }), {
-      status: 500,
-      headers: { ...corsHeaders(), 'Content-Type': 'application/json' },
-    })
-  }
-
-  if (!checkoutPageUrl) {
-    return new Response(JSON.stringify({ error: 'missing_paddle_checkout_page_url' }), {
       status: 500,
       headers: { ...corsHeaders(), 'Content-Type': 'application/json' },
     })

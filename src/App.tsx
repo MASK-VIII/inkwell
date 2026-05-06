@@ -1403,18 +1403,6 @@ export default function App() {
 
         if (tryOpenPaddleOverlayInSameTask({ intent, userId: uid })) return
 
-        const overlayOnlyCheckout = paddleUpgradeNeedsPrimedOverlay({
-          intent,
-          edgeCheckoutEnabled: edgeOn,
-        })
-        if (overlayOnlyCheckout) {
-          showToast(
-            'Checkout could not start. Refresh the page, allow this site in your browser, and confirm Paddle client token and price IDs are set.',
-          )
-          if (edgeCheckoutFailure) showToast(humanizeEdgeCheckoutFailure(intent, edgeCheckoutFailure))
-          return
-        }
-
         const r = await openPaddleCheckoutOverlay({ intent, userId: uid })
         if (r.ok) return
         if (r.error === 'missing_paddle_client_token') {
