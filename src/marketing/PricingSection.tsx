@@ -20,6 +20,7 @@ type Plan = {
 const APP_UPGRADE_HREF = {
   basic: '/app?checkout=basic#account',
   pro: '/app?checkout=pro#account',
+  upgrade: '/app?checkout=upgrade#account',
 } as const
 
 const PLANS: Record<'basic' | 'pro', Plan> = {
@@ -208,7 +209,13 @@ export function PricingSection() {
           <PlanCard plan={PLANS.pro} featured />
         </div>
         <p className="mt-6 text-center text-sm leading-relaxed text-walnut/80 dark:text-ink-dark/72">
-          {pricingCopy.upgradePathLine}
+          {pricingCopy.upgradePathLine}{' '}
+          <a
+            href={APP_UPGRADE_HREF.upgrade}
+            className="font-medium text-ink underline decoration-walnut/35 underline-offset-2 hover:decoration-walnut/55 dark:text-ink-dark dark:decoration-cream/35 dark:hover:decoration-cream/55"
+          >
+            Basic → Pro checkout
+          </a>
         </p>
       </div>
     </section>

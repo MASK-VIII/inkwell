@@ -9,6 +9,9 @@ import { initializePaddle, type Paddle } from '@paddle/paddle-js'
 /** Dispatched on `window` when Paddle reports checkout failures (listen in the app shell for user-visible toasts). */
 export const INKWELL_PADDLE_CHECKOUT_UI_EVENT = 'inkwell-paddle-checkout-ui' as const
 
+/** Persist checkout intent while the user completes cloud sign-in (`?checkout=` deep links). */
+export const INKWELL_PENDING_CHECKOUT_STORAGE_KEY = 'inkwell_pending_checkout'
+
 export type InkwellPaddleCheckoutUiDetail = {
   kind: 'error'
   message: string
@@ -114,9 +117,27 @@ export function appendInkwellUserToCheckoutUrl(url: string, userId: string | nul
  * Same-tab fallback: checkout URLs often target this app origin (`/app?…`). Assigning without a
  * hash reloads the SPA with `hash === ''`, which sends returning users to the bookshelf — so when
  * the assign target is same-origin and has no fragment, carry over the current hash (e.g. `#account`).
+ *
+ * Same-origin transaction URLs (`_ptxn=`): prefer `location.assign` immediately — `window.open` is
+ * often blocked when there is no user gesture (e.g. after `await invokeEdgePaddleCheckout`).
  */
 export function openPaddleCheckoutUrl(url: string): boolean {
   if (!url) return false
+  try {
+    if (typeof window !== 'undefined') {
+      const resolved = new URL(url, window.location.href)
+      const sameOrigin = resolved.origin === window.location.origin
+      const txnCheckout = /[?&]_ptxn=/i.test(resolved.search)
+      if (sameOrigin && txnCheckout) {
+        const frag = window.location.hash
+        if (!resolved.hash && frag && frag !== '#') resolved.hash = frag
+        window.location.assign(resolved.toString())
+        return true
+      }
+    }
+  } catch {
+    /* fall through to window.open */
+  }
   try {
     const w = window.open(url, '_blank')
     if (w) {
@@ -365,10 +386,10 @@ export async function invokeEdgePaddleCheckout(
   intent: PaddleCheckoutIntent,
 ): Promise<{ ok: true; url: string } | { ok: false; error: string; paddle?: unknown }> {
   let { data: sessionData } = await client.auth.getSession()
-  let session = sessionData.session
+  let session = sessionData.session ?? null
   if (!session?.access_token) {
     const { data: refreshData } = await client.auth.refreshSession()
-    session = refreshData.session ?? undefined
+    session = refreshData.session ?? null
   }
   if (!session?.access_token) {
     return { ok: false, error: 'sign_in_required_refresh_cloud_sync', paddle: undefined }

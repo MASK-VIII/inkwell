@@ -134,6 +134,7 @@ import {
   getPaddleCheckoutEnv,
   getPaddleOverlayEnv,
   humanizeEdgeCheckoutFailure,
+  INKWELL_PENDING_CHECKOUT_STORAGE_KEY,
   INKWELL_PADDLE_CHECKOUT_UI_EVENT,
   invokeEdgePaddleCheckout,
   isPaddleEdgeCheckoutEnabled,
@@ -425,8 +426,10 @@ export default function App() {
   const ebookFormatSliceRef = useRef<EbookFormatSlice | null>(null)
   const printFormatSliceRef = useRef<PrintFormatSlice | null>(null)
   const routeRef = useRef<Route>(readInitialAppRoute())
-  /** One-shot: open Paddle from marketing `?checkout=basic|pro|upgrade` after session is ready. */
+  /** Consumed after handling marketing `?checkout=` (reset when URL carries a new `checkout` value). */
   const checkoutIntentHandledRef = useRef(false)
+  /** True while the purchase sign-in modal was opened by a checkout deep link (not in-app upgrade). */
+  const purchaseModalOpenedForDeepLinkRef = useRef(false)
   const [gettingStartedTourOpen, setGettingStartedTourOpen] = useState(false)
   const [tourPersistRemindLater, setTourPersistRemindLater] = useState(true)
   const [tourResumeStepId, setTourResumeStepId] = useState<string | null>(null)
@@ -1470,36 +1473,104 @@ export default function App() {
 
   const openUpgradeEbookToProCheckout = useCallback(() => offerUpgrade('upgrade'), [offerUpgrade])
 
+  const dismissPurchaseSignInModal = useCallback(() => {
+    setPurchaseSignInOpen(false)
+    const wasDeepLinkPrompt = purchaseModalOpenedForDeepLinkRef.current
+    purchaseModalOpenedForDeepLinkRef.current = false
+    try {
+      sessionStorage.removeItem(INKWELL_PENDING_CHECKOUT_STORAGE_KEY)
+    } catch {
+      /* ignore */
+    }
+    if (typeof window === 'undefined' || !wasDeepLinkPrompt) return
+    const p = new URLSearchParams(window.location.search)
+    if (!p.has('checkout')) {
+      checkoutIntentHandledRef.current = true
+      return
+    }
+    p.delete('checkout')
+    const qs = p.toString()
+    const path = window.location.pathname
+    const hash = window.location.hash || ''
+    window.history.replaceState(null, '', `${path}${qs ? `?${qs}` : ''}${hash}`)
+    checkoutIntentHandledRef.current = true
+  }, [])
+
   useEffect(() => {
-    if (typeof window === 'undefined' || checkoutIntentHandledRef.current) return
-    if (inkwellEntitlements.loading || route === 'signin') return
+    if (typeof window === 'undefined') return
+
+    const paramsPeek = new URLSearchParams(window.location.search)
+    const peekCheckout = paramsPeek.get('checkout')?.trim().toLowerCase()
+    const hasFreshCheckout = Boolean(peekCheckout && ['basic', 'pro', 'upgrade'].includes(peekCheckout))
+
+    if (checkoutIntentHandledRef.current && !hasFreshCheckout) return
+    if (hasFreshCheckout) checkoutIntentHandledRef.current = false
+
+    if (inkwellEntitlements.loading) return
+    if (route === 'signin') return
+
+    if (!supabasePublicConfig) {
+      if (!hasFreshCheckout) return
+      checkoutIntentHandledRef.current = true
+      const p = new URLSearchParams(window.location.search)
+      p.delete('checkout')
+      const qs = p.toString()
+      const path = window.location.pathname
+      const hash = window.location.hash || ''
+      window.history.replaceState(null, '', `${path}${qs ? `?${qs}` : ''}${hash}`)
+      showToast('Purchases require cloud sign-in, which is not configured in this build.', 5000)
+      return
+    }
 
     const params = new URLSearchParams(window.location.search)
-    const intent = params.get('checkout')?.trim().toLowerCase()
-    if (!intent || !['basic', 'pro', 'upgrade'].includes(intent)) return
+    let intentRaw = params.get('checkout')?.trim().toLowerCase()
+    if (!intentRaw || !['basic', 'pro', 'upgrade'].includes(intentRaw)) {
+      try {
+        intentRaw = sessionStorage.getItem(INKWELL_PENDING_CHECKOUT_STORAGE_KEY)?.trim().toLowerCase() ?? ''
+      } catch {
+        intentRaw = ''
+      }
+      if (!intentRaw || !['basic', 'pro', 'upgrade'].includes(intentRaw)) return
+    }
 
+    const asIntent = intentRaw as UpgradeOfferIntent
+
+    if (!inkwellEntitlements.userId) {
+      try {
+        sessionStorage.setItem(INKWELL_PENDING_CHECKOUT_STORAGE_KEY, asIntent)
+      } catch {
+        /* ignore */
+      }
+      if (!purchaseModalOpenedForDeepLinkRef.current) {
+        purchaseModalOpenedForDeepLinkRef.current = true
+        setPurchaseSignInOpen(true)
+      }
+      return
+    }
+
+    purchaseModalOpenedForDeepLinkRef.current = false
+    try {
+      sessionStorage.removeItem(INKWELL_PENDING_CHECKOUT_STORAGE_KEY)
+    } catch {
+      /* ignore */
+    }
     checkoutIntentHandledRef.current = true
+
     params.delete('checkout')
     const qs = params.toString()
-    const nextUrl = `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash || '#account'}`
-    window.history.replaceState(null, '', nextUrl)
+    const path = window.location.pathname
+    const hash = window.location.hash || ''
+    window.history.replaceState(null, '', `${path}${qs ? `?${qs}` : ''}${hash}`)
 
-    const asIntent = intent as UpgradeOfferIntent
-    const edgeOn = isPaddleEdgeCheckoutEnabled(Boolean(supabasePublicConfig))
-    if (
-      paddleUpgradeNeedsPrimedOverlay({ intent: asIntent, edgeCheckoutEnabled: edgeOn }) &&
-      inkwellEntitlements.userId
-    ) {
-      setUpgradeOfferIntent(asIntent)
-    } else {
-      void startPaddleCheckout(asIntent)
-    }
+    navigateRoute('account')
+    setUpgradeOfferIntent(asIntent)
   }, [
     route,
     inkwellEntitlements.loading,
     inkwellEntitlements.userId,
-    startPaddleCheckout,
     supabasePublicConfig,
+    navigateRoute,
+    showToast,
   ])
 
   useEffect(() => {
@@ -4814,7 +4885,7 @@ export default function App() {
       />
       <PurchaseSignInModal
         open={purchaseSignInOpen}
-        onClose={() => setPurchaseSignInOpen(false)}
+        onClose={dismissPurchaseSignInModal}
         onOpenSignIn={() => {
           setPurchaseSignInOpen(false)
           navigateToCloudSignIn()
