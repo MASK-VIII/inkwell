@@ -20,15 +20,18 @@ function readIdSet(envName: string): Set<string> {
   )
 }
 
-/** Basic tier: accept either legacy EBOOK name or BASIC (matches common Supabase secret naming). */
+/** Basic tier: sandbox names, then shared plural/singular keys. */
 function readBasicTierPriceIds(): Set<string> {
   const sandbox = new Set([
     ...readIdSet('PADDLE_SANDBOX_PRICE_IDS_EBOOK'),
     ...readIdSet('PADDLE_SANDBOX_PRICE_IDS_BASIC'),
   ])
   if (sandbox.size > 0) return sandbox
-  // Back-compat: if sandbox-specific secrets aren't set yet, fall back to shared names.
-  return new Set([...readIdSet('PADDLE_PRICE_IDS_EBOOK'), ...readIdSet('PADDLE_PRICE_IDS_BASIC')])
+  return new Set([
+    ...readIdSet('PADDLE_PRICE_IDS_EBOOK'),
+    ...readIdSet('PADDLE_PRICE_IDS_BASIC'),
+    ...readIdSet('PADDLE_PRICE_ID_BASIC'),
+  ])
 }
 
 function firstPriceIdFromPayload(data: Record<string, unknown>): string | null {
@@ -140,11 +143,16 @@ Deno.serve(async (req) => {
   const ebookIds = readBasicTierPriceIds()
   const proIds = (() => {
     const s = readIdSet('PADDLE_SANDBOX_PRICE_IDS_PRO')
-    return s.size > 0 ? s : readIdSet('PADDLE_PRICE_IDS_PRO')
+    if (s.size > 0) return s
+    return new Set([...readIdSet('PADDLE_PRICE_IDS_PRO'), ...readIdSet('PADDLE_PRICE_ID_PRO')])
   })()
   const upgradeIds = (() => {
     const s = readIdSet('PADDLE_SANDBOX_PRICE_IDS_UPGRADE')
-    return s.size > 0 ? s : readIdSet('PADDLE_PRICE_IDS_UPGRADE')
+    if (s.size > 0) return s
+    return new Set([
+      ...readIdSet('PADDLE_PRICE_IDS_UPGRADE'),
+      ...readIdSet('PADDLE_PRICE_ID_UPGRADE'),
+    ])
   })()
   const priceId = firstPriceIdFromPayload(data)
 

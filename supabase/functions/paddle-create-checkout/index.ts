@@ -13,9 +13,9 @@
  *   Self-hosted forks should set this secret (or edit DEFAULT_CHECKOUT_PAGE_URL in code).
  *
  * Reuses the same price-ID lists as paddle-webhook:
- * - PADDLE_PRICE_IDS_BASIC or PADDLE_PRICE_IDS_EBOOK (basic)
- * - PADDLE_PRICE_IDS_PRO
- * - PADDLE_PRICE_IDS_UPGRADE
+ * - PADDLE_PRICE_IDS_BASIC or PADDLE_PRICE_IDS_EBOOK (basic); singular PADDLE_PRICE_ID_* also accepted
+ * - PADDLE_PRICE_IDS_PRO (or PADDLE_PRICE_ID_PRO)
+ * - PADDLE_PRICE_IDS_UPGRADE (or PADDLE_PRICE_ID_UPGRADE)
  *
  * Client: set VITE_PADDLE_EDGE_CHECKOUT=1 in Vercel to call this function; otherwise the app uses Paddle.js only.
  */
@@ -161,9 +161,11 @@ async function handlePaddleCreateCheckout(req: Request): Promise<Response> {
   }
 
   const priceId =
-    intent === 'basic' ? firstPriceIdFromEnv(['PADDLE_PRICE_IDS_BASIC', 'PADDLE_PRICE_IDS_EBOOK'])
-    : intent === 'pro' ? firstPriceIdFromEnv(['PADDLE_PRICE_IDS_PRO'])
-    : intent === 'upgrade' ? firstPriceIdFromEnv(['PADDLE_PRICE_IDS_UPGRADE'])
+    intent === 'basic' ?
+      firstPriceIdFromEnv(['PADDLE_PRICE_IDS_BASIC', 'PADDLE_PRICE_IDS_EBOOK', 'PADDLE_PRICE_ID_BASIC'])
+    : intent === 'pro' ? firstPriceIdFromEnv(['PADDLE_PRICE_IDS_PRO', 'PADDLE_PRICE_ID_PRO'])
+    : intent === 'upgrade' ?
+      firstPriceIdFromEnv(['PADDLE_PRICE_IDS_UPGRADE', 'PADDLE_PRICE_ID_UPGRADE'])
     : null
 
   if (!priceId || !['basic', 'pro', 'upgrade'].includes(intent)) {

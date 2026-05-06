@@ -7,9 +7,9 @@
  * - SUPABASE_SERVICE_ROLE_KEY
  *
  * Optional: map price IDs to tiers (comma-separated lists, first match wins):
- * - PADDLE_PRICE_IDS_EBOOK or PADDLE_PRICE_IDS_BASIC (Basic tier → ebook_suite)
- * - PADDLE_PRICE_IDS_PRO
- * - PADDLE_PRICE_IDS_UPGRADE  (upgrade → pro)
+ * - PADDLE_PRICE_IDS_EBOOK or PADDLE_PRICE_IDS_BASIC (Basic tier → ebook_suite); optional PADDLE_PRICE_ID_BASIC
+ * - PADDLE_PRICE_IDS_PRO or PADDLE_PRICE_ID_PRO
+ * - PADDLE_PRICE_IDS_UPGRADE or PADDLE_PRICE_ID_UPGRADE (upgrade → pro)
  *
  * Checkout must send custom_data: { "inkwell_user_id": "<supabase auth user uuid>" }.
  *
@@ -206,9 +206,13 @@ function readIdSet(envName: string): Set<string> {
   )
 }
 
-/** Basic tier: accept either legacy EBOOK name or BASIC (matches common Supabase secret naming). */
+/** Basic tier: EBOOK, BASIC, or common singular typo PADDLE_PRICE_ID_BASIC. */
 function readBasicTierPriceIds(): Set<string> {
-  return new Set([...readIdSet('PADDLE_PRICE_IDS_EBOOK'), ...readIdSet('PADDLE_PRICE_IDS_BASIC')])
+  return new Set([
+    ...readIdSet('PADDLE_PRICE_IDS_EBOOK'),
+    ...readIdSet('PADDLE_PRICE_IDS_BASIC'),
+    ...readIdSet('PADDLE_PRICE_ID_BASIC'),
+  ])
 }
 
 function firstPriceIdFromPayload(data: Record<string, unknown>): string | null {
@@ -358,8 +362,11 @@ Deno.serve(async (req) => {
   const paddleCustomerId = extractPaddleCustomerId(data)
 
   const ebookIds = readBasicTierPriceIds()
-  const proIds = readIdSet('PADDLE_PRICE_IDS_PRO')
-  const upgradeIds = readIdSet('PADDLE_PRICE_IDS_UPGRADE')
+  const proIds = new Set([...readIdSet('PADDLE_PRICE_IDS_PRO'), ...readIdSet('PADDLE_PRICE_ID_PRO')])
+  const upgradeIds = new Set([
+    ...readIdSet('PADDLE_PRICE_IDS_UPGRADE'),
+    ...readIdSet('PADDLE_PRICE_ID_UPGRADE'),
+  ])
   const priceId = firstPriceIdFromPayload(data)
 
   const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } })
