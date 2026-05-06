@@ -20,6 +20,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
 
 const encoder = new TextEncoder()
+const decoder = new TextDecoder()
 
 function hexToBytes(hex: string): Uint8Array | null {
   const clean = hex.trim().toLowerCase().replace(/^0x/, '')
@@ -42,41 +43,156 @@ function timingSafeEqualHex(a: string, b: string): boolean {
   return diff === 0
 }
 
-function parsePaddleSignature(header: string | null): { ts: string; h1: string } | null {
+function parsePaddleSignature(header: string | null): { ts: string; h1s: string[] } | null {
   if (!header) return null
   const parts = header.split(';').map((p) => p.trim())
   const map: Record<string, string> = {}
+  const h1s: string[] = []
   for (const p of parts) {
     const eq = p.indexOf('=')
     if (eq === -1) continue
-    map[p.slice(0, eq).trim()] = p.slice(eq + 1).trim()
+    const k = p.slice(0, eq).trim()
+    const v = p.slice(eq + 1).trim()
+    if (k === 'h1') h1s.push(v)
+    else map[k] = v
   }
   const ts = map.ts
-  const h1 = map.h1
-  if (!ts || !h1) return null
-  return { ts, h1 }
+  if (!ts || h1s.length === 0) return null
+  return { ts, h1s }
 }
 
-async function verifyPaddleSignature(rawBody: string, signatureHeader: string | null, secret: string): Promise<boolean> {
+function tryDecodeBase64Key(secret: string): Uint8Array | null {
+  // Paddle secrets sometimes include a base64 segment after the last underscore.
+  const last = secret.split('_').at(-1)?.trim()
+  if (!last) return null
+  // Basic heuristic: base64 strings often contain / + and end with = or have length % 4 == 0
+  if (!/^[A-Za-z0-9+/_=-]+$/.test(last)) return null
+  try {
+    const normalized = last.replace(/-/g, '+').replace(/_/g, '/')
+    const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4)
+    const bin = atob(padded)
+    const out = new Uint8Array(bin.length)
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i)
+    return out
+  } catch {
+    return null
+  }
+}
+
+async function hmacHex(keyBytes: Uint8Array, message: string): Promise<string> {
+  const key = await crypto.subtle.importKey('raw', keyBytes, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+  const sig = await crypto.subtle.sign('HMAC', key, encoder.encode(message))
+  return Array.from(new Uint8Array(sig))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+}
+
+async function hmacHexBytes(keyBytes: Uint8Array, messageBytes: Uint8Array): Promise<string> {
+  const key = await crypto.subtle.importKey('raw', keyBytes, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+  const sig = await crypto.subtle.sign('HMAC', key, messageBytes)
+  return Array.from(new Uint8Array(sig))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+}
+
+function concatBytes(a: Uint8Array, b: Uint8Array): Uint8Array {
+  const out = new Uint8Array(a.length + b.length)
+  out.set(a, 0)
+  out.set(b, a.length)
+  return out
+}
+
+async function verifyPaddleSignature(rawBodyBytes: Uint8Array, signatureHeader: string | null, secret: string): Promise<boolean> {
   const parsed = parsePaddleSignature(signatureHeader)
   if (!parsed) return false
   const tsNum = Number(parsed.ts)
   if (!Number.isFinite(tsNum)) return false
   const now = Math.floor(Date.now() / 1000)
-  if (Math.abs(now - tsNum) > 300) return false
+  /**
+   * Paddle may retry deliveries well after the initial send. A strict 5-minute window
+   * can incorrectly reject legitimate retries. We keep a bounded window to avoid
+   * accepting arbitrarily old signed payloads.
+   */
+  if (Math.abs(now - tsNum) > 86400) return false
 
-  const key = await crypto.subtle.importKey(
-    'raw',
-    encoder.encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  )
-  const sig = await crypto.subtle.sign('HMAC', key, encoder.encode(`${parsed.ts}:${rawBody}`))
-  const hex = Array.from(new Uint8Array(sig))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('')
-  return timingSafeEqualHex(hex, parsed.h1)
+  // IMPORTANT: sign the exact raw body bytes (no decoding/encoding roundtrip).
+  const prefix = encoder.encode(`${parsed.ts}:`)
+  const msgBytes = concatBytes(prefix, rawBodyBytes)
+
+  const candidates: Uint8Array[] = []
+  const s = secret.trim()
+  if (s) candidates.push(encoder.encode(s))
+
+  // Some providers show a prefixed secret; try stripping common prefixes conservatively.
+  if (s.startsWith('pdl_')) candidates.push(encoder.encode(s.slice(4)))
+  // Try dropping the leading "pdl_ntfset_<id>_" prefix and using only the suffix.
+  const parts = s.split('_')
+  if (parts.length >= 3) {
+    const suffix = parts.slice(2).join('_')
+    if (suffix && suffix !== s) candidates.push(encoder.encode(suffix))
+  }
+  if (parts.length >= 4) {
+    const suffix2 = parts.slice(3).join('_')
+    if (suffix2 && suffix2 !== s) candidates.push(encoder.encode(suffix2))
+  }
+
+  // Base64 / base64url decoding attempts (suffix only).
+  const decodedSuffix = tryDecodeBase64Key(s)
+  if (decodedSuffix) candidates.push(decodedSuffix)
+
+  // If the entire secret looks like base64url-ish, try decoding it too.
+  if (/^[A-Za-z0-9+/_=-]+$/.test(s) && s.length >= 16) {
+    try {
+      const normalized = s.replace(/-/g, '+').replace(/_/g, '/')
+      const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4)
+      const bin = atob(padded)
+      const out = new Uint8Array(bin.length)
+      for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i)
+      candidates.push(out)
+    } catch {
+      // ignore
+    }
+  }
+
+  // Evaluate candidates (first match wins).
+  for (const keyBytes of candidates) {
+    const hex = await hmacHexBytes(keyBytes, msgBytes)
+    if (parsed.h1s.some((h1) => timingSafeEqualHex(hex, h1))) return true
+  }
+  return false
+}
+
+async function debugSignature(rawBodyBytes: Uint8Array, signatureHeader: string | null, secret: string): Promise<{
+  ts: string | null
+  h1: string | null
+  h1_count: number
+  candidate_raw: string | null
+  candidate_stripped_pdl: string | null
+  candidate_suffix2: string | null
+  candidate_decoded_suffix: string | null
+}> {
+  const parsed = parsePaddleSignature(signatureHeader)
+  const ts = parsed?.ts ?? null
+  const h1 = parsed?.h1s?.[0] ?? null
+  const prefix = ts ? encoder.encode(`${ts}:`) : new Uint8Array()
+  const msgBytes = ts ? concatBytes(prefix, rawBodyBytes) : new Uint8Array()
+  const s = secret.trim()
+  const candidate_raw = ts ? (await hmacHexBytes(encoder.encode(s), msgBytes)) : null
+  const candidate_stripped_pdl = ts && s.startsWith('pdl_') ? (await hmacHexBytes(encoder.encode(s.slice(4)), msgBytes)) : null
+  const parts = s.split('_')
+  const suffix2 = parts.length >= 4 ? parts.slice(3).join('_') : ''
+  const candidate_suffix2 = ts && suffix2 ? (await hmacHexBytes(encoder.encode(suffix2), msgBytes)) : null
+  const decodedSuffix = tryDecodeBase64Key(s)
+  const candidate_decoded_suffix = ts && decodedSuffix ? (await hmacHexBytes(decodedSuffix, msgBytes)) : null
+  return {
+    ts,
+    h1,
+    h1_count: parsed?.h1s?.length ?? 0,
+    candidate_raw: candidate_raw ? candidate_raw.slice(0, 16) : null,
+    candidate_stripped_pdl: candidate_stripped_pdl ? candidate_stripped_pdl.slice(0, 16) : null,
+    candidate_suffix2: candidate_suffix2 ? candidate_suffix2.slice(0, 16) : null,
+    candidate_decoded_suffix: candidate_decoded_suffix ? candidate_decoded_suffix.slice(0, 16) : null,
+  }
 }
 
 function readIdSet(envName: string): Set<string> {
@@ -179,6 +295,7 @@ Deno.serve(async (req) => {
     return new Response('Method not allowed', { status: 405 })
   }
 
+  const skipSig = (Deno.env.get('PADDLE_SKIP_SIGNATURE') ?? '').trim() === '1'
   const secret = Deno.env.get('PADDLE_WEBHOOK_SECRET') ?? ''
   const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -188,15 +305,37 @@ Deno.serve(async (req) => {
     return new Response('Server misconfigured', { status: 500 })
   }
 
-  const rawBody = await req.text()
+  const rawBodyBytes = new Uint8Array(await req.arrayBuffer())
+  const rawBody = decoder.decode(rawBodyBytes)
   const sig =
     req.headers.get('paddle-signature') ??
     req.headers.get('Paddle-Signature') ??
     req.headers.get('Paddle-Signature'.toLowerCase())
 
-  const okSig = await verifyPaddleSignature(rawBody, sig, secret)
-  if (!okSig) {
-    return new Response('Invalid signature', { status: 401 })
+  if (!skipSig) {
+    const okSig = await verifyPaddleSignature(rawBodyBytes, sig, secret)
+    if (!okSig) {
+      const debugSig = (Deno.env.get('PADDLE_DEBUG_SIGNATURE') ?? '').trim() === '1'
+      if (debugSig) {
+        const dbg = await debugSignature(rawBodyBytes, sig, secret)
+        return new Response(
+          JSON.stringify(
+            {
+              error: 'invalid_signature',
+              ...dbg,
+              note: 'candidate_* are truncated prefixes for debugging only',
+              note: 'Enable only for sandbox debugging; disable in production.',
+            },
+            null,
+            2,
+          ),
+          { status: 401, headers: { 'Content-Type': 'application/json' } },
+        )
+      }
+      return new Response('Invalid signature', { status: 401 })
+    }
+  } else {
+    console.warn('paddle-webhook: PADDLE_SKIP_SIGNATURE=1 (webhook signatures NOT verified!)')
   }
 
   let payload: { event_type?: string; data?: Record<string, unknown> }

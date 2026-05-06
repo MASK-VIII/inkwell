@@ -3,6 +3,7 @@
  * Pass `inkwell_user_id` so the webhook can map purchases to Supabase Auth users.
  */
 
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { initializePaddle, type Paddle } from '@paddle/paddle-js'
 
 function paddleEnvironmentFromToken(token: string): 'production' | 'sandbox' | null {
@@ -167,6 +168,40 @@ export function tryOpenPaddleOverlayInSameTask(opts: {
 }
 
 export type PaddleCheckoutIntent = 'basic' | 'pro' | 'upgrade'
+
+/**
+ * Server-created Paddle transaction (`paddle-create-checkout` Edge Function).
+ * Set `VITE_PADDLE_EDGE_CHECKOUT=1` after deploying the function — bypasses broken dashboard default-payment-link UI
+ * by passing `checkout.url` via Paddle's Transactions API.
+ */
+export async function invokeEdgePaddleCheckout(
+  client: SupabaseClient,
+  intent: PaddleCheckoutIntent,
+): Promise<{ ok: true; url: string } | { ok: false; error: string; paddle?: unknown }> {
+  const { data, error } = await client.functions.invoke<{
+    url?: string
+    error?: string
+    paddle?: unknown
+  }>('paddle-create-checkout', { body: { intent } })
+
+  if (data?.url && typeof data.url === 'string') {
+    return { ok: true, url: data.url }
+  }
+
+  if (error) {
+    return {
+      ok: false,
+      error: error.message || 'edge_invoke_failed',
+      paddle: data,
+    }
+  }
+
+  return {
+    ok: false,
+    error: typeof data?.error === 'string' ? data.error : 'edge_no_url',
+    paddle: data,
+  }
+}
 
 export async function openPaddleCheckoutOverlay(opts: {
   intent: PaddleCheckoutIntent

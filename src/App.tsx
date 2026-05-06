@@ -125,6 +125,7 @@ import {
   signUpWithEmailPassword,
   stripSupabaseAuthParamsFromBrowserUrl,
 } from './lib/sync/authSession'
+import { getInkwellSupabaseClient } from './lib/sync/supabaseClient'
 import { getInkwellSupabasePublicConfig, isInkwellCloudSyncConfigured } from './lib/sync/syncEnv'
 import { useInkwellLibrarySync } from './lib/sync/useInkwellLibrarySync'
 import { useInkwellEntitlements } from './hooks/useInkwellEntitlements'
@@ -132,6 +133,7 @@ import {
   appendInkwellUserToCheckoutUrl,
   getPaddleCheckoutEnv,
   getPaddleOverlayEnv,
+  invokeEdgePaddleCheckout,
   openPaddleCheckoutOverlay,
   openPaddleCheckoutUrl,
   preloadPaddleCheckout,
@@ -1335,6 +1337,27 @@ export default function App() {
           if (openPaddleCheckoutUrl(withUser)) return
         }
 
+        const edgeCheckout =
+          String(import.meta.env.VITE_PADDLE_EDGE_CHECKOUT ?? '').trim() === '1' && supabasePublicConfig
+        if (edgeCheckout) {
+          const edge = await invokeEdgePaddleCheckout(getInkwellSupabaseClient(supabasePublicConfig), intent)
+          if (edge.ok) {
+            window.open(edge.url, '_blank', 'noopener,noreferrer')
+            return
+          }
+          let detail = edge.error
+          if (edge.paddle != null) {
+            try {
+              detail = JSON.stringify(edge.paddle).slice(0, 320)
+            } catch {
+              /* ignore */
+            }
+          }
+          showToast(`Checkout: ${detail}`)
+          if (import.meta.env.DEV) console.warn('[inkwell] Paddle edge checkout failed', edge)
+          return
+        }
+
         if (tryOpenPaddleOverlayInSameTask({ intent, userId: uid })) return
 
         const r = await openPaddleCheckoutOverlay({ intent, userId: uid })
@@ -1356,7 +1379,7 @@ export default function App() {
         showToast('Checkout could not open.')
       }
     },
-    [inkwellEntitlements.loading, inkwellEntitlements.userId, showToast],
+    [inkwellEntitlements.loading, inkwellEntitlements.userId, showToast, supabasePublicConfig],
   )
 
   const offerUpgrade = useCallback(
