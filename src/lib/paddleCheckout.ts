@@ -225,6 +225,75 @@ export function tryOpenPaddleOverlayInSameTask(opts: {
 
 export type PaddleCheckoutIntent = 'basic' | 'pro' | 'upgrade'
 
+const VITE_PRICE_VAR: Record<PaddleCheckoutIntent, string> = {
+  basic: 'VITE_PADDLE_PRICE_ID_BASIC',
+  pro: 'VITE_PADDLE_PRICE_ID_PRO',
+  upgrade: 'VITE_PADDLE_PRICE_ID_UPGRADE',
+}
+
+const SUPABASE_PRICE_SECRET: Record<PaddleCheckoutIntent, string> = {
+  basic: 'PADDLE_PRICE_IDS_BASIC',
+  pro: 'PADDLE_PRICE_IDS_PRO',
+  upgrade: 'PADDLE_PRICE_IDS_UPGRADE',
+}
+
+/** Overlay / Paddle.js price id for this checkout intent (from Vite env). */
+export function paddleOverlayPriceIdForIntent(intent: PaddleCheckoutIntent): string {
+  const o = getPaddleOverlayEnv()
+  const raw =
+    intent === 'basic' ? o.priceBasic
+    : intent === 'pro' ? o.pricePro
+    : o.priceUpgrade
+  return String(raw ?? '').trim()
+}
+
+/**
+ * Non-empty when the client env price id is missing or looks like a catalog mistake (e.g. product id pro_… vs price pri_…).
+ */
+export function paddleOverlayPriceIdProblem(intent: PaddleCheckoutIntent): string | null {
+  const id = paddleOverlayPriceIdForIntent(intent)
+  if (!id) {
+    return `Set ${VITE_PRICE_VAR[intent]} in Vercel (redeploy). For server checkout, also set ${SUPABASE_PRICE_SECRET[intent]} in Supabase Edge Function secrets.`
+  }
+  const low = id.toLowerCase()
+  if (low.startsWith('pro_')) {
+    return `${VITE_PRICE_VAR[intent]} is a product id (pro_…). Use the price id (pri_…) from Paddle → Catalog → Prices.`
+  }
+  if (!low.startsWith('pri_')) {
+    return `${VITE_PRICE_VAR[intent]} must be a Paddle price id (starts with pri_).`
+  }
+  return null
+}
+
+/** User-visible explanation when paddle-create-checkout returns an error JSON body. */
+export function humanizeEdgeCheckoutFailure(
+  intent: PaddleCheckoutIntent,
+  failure: { error: string; paddle?: unknown },
+): string {
+  const raw = failure.paddle as Record<string, unknown> | undefined
+  const topErr = typeof raw?.error === 'string' ? raw.error : failure.error
+
+  if (topErr === 'invalid_intent_or_price') {
+    const label = intent === 'basic' ? 'Basic' : intent === 'pro' ? 'Pro' : 'Upgrade'
+    return `Server checkout has no ${label} price configured: add Supabase secret ${SUPABASE_PRICE_SECRET[intent]} (same pri_… as ${VITE_PRICE_VAR[intent]} in Vercel), redeploy if needed, then try again.`
+  }
+  if (topErr === 'missing_paddle_api_key' || topErr === 'missing_paddle_checkout_page_url') {
+    return `Checkout server misconfigured (${topErr}). Fix paddle-create-checkout secrets in Supabase.`
+  }
+  if (topErr === 'paddle_api_error') {
+    try {
+      const bits = JSON.stringify(raw?.paddle ?? raw).slice(0, 360)
+      return bits.length > 2 ? `Paddle API: ${bits}` : `Paddle API error (${String(raw?.status ?? '')}).`
+    } catch {
+      return 'Paddle API error from checkout server.'
+    }
+  }
+  if (topErr === 'unauthorized' || topErr === 'missing_authorization') {
+    return 'Sign in again, then retry checkout (session could not reach checkout server).'
+  }
+  return `Checkout: ${topErr}`
+}
+
 /**
  * True when checkout will use Paddle.js overlay (no hosted checkout URL, no edge transaction URL).
  * In that case `Checkout.open` must run in the same user-activation task as the click, so the client

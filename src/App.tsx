@@ -133,12 +133,14 @@ import {
   appendInkwellUserToCheckoutUrl,
   getPaddleCheckoutEnv,
   getPaddleOverlayEnv,
+  humanizeEdgeCheckoutFailure,
   INKWELL_PADDLE_CHECKOUT_UI_EVENT,
   invokeEdgePaddleCheckout,
   isPaddleEdgeCheckoutEnabled,
   type InkwellPaddleCheckoutUiDetail,
   openPaddleCheckoutOverlay,
   openPaddleCheckoutUrl,
+  paddleOverlayPriceIdProblem,
   paddleUpgradeNeedsPrimedOverlay,
   preloadPaddleCheckout,
   tryOpenPaddleOverlayInSameTask,
@@ -1379,13 +1381,24 @@ export default function App() {
         }
 
         const edgeOn = isPaddleEdgeCheckoutEnabled(Boolean(supabasePublicConfig))
+        let edgeCheckoutFailure:
+          | { ok: false; error: string; paddle?: unknown }
+          | null = null
         if (edgeOn && supabasePublicConfig) {
           const edge = await invokeEdgePaddleCheckout(getInkwellSupabaseClient(supabasePublicConfig), intent)
           if (edge.ok) {
             openPaddleCheckoutUrl(edge.url)
             return
           }
+          edgeCheckoutFailure = edge
           console.warn('[inkwell] paddle-create-checkout failed; trying Paddle.js overlay', edge.error, edge.paddle)
+        }
+
+        const overlayPriceIssue = paddleOverlayPriceIdProblem(intent)
+        if (overlayPriceIssue) {
+          showToast(overlayPriceIssue)
+          if (edgeCheckoutFailure) showToast(humanizeEdgeCheckoutFailure(intent, edgeCheckoutFailure))
+          return
         }
 
         if (tryOpenPaddleOverlayInSameTask({ intent, userId: uid })) return
@@ -1398,6 +1411,7 @@ export default function App() {
           showToast(
             'Checkout could not start. Refresh the page, allow this site in your browser, and confirm Paddle client token and price IDs are set.',
           )
+          if (edgeCheckoutFailure) showToast(humanizeEdgeCheckoutFailure(intent, edgeCheckoutFailure))
           return
         }
 
@@ -1408,11 +1422,15 @@ export default function App() {
           return
         }
         if (r.error === 'missing_price_id') {
-          showToast('Add the matching VITE_PADDLE_PRICE_ID_* value for this plan in your environment.')
+          showToast(paddleOverlayPriceIdProblem(intent) ?? 'Add the matching VITE_PADDLE_PRICE_ID_* for this plan in Vercel and redeploy.')
           return
         }
         if (r.error === 'missing_inkwell_user_id') {
           setPurchaseSignInOpen(true)
+          return
+        }
+        if (edgeCheckoutFailure) {
+          showToast(humanizeEdgeCheckoutFailure(intent, edgeCheckoutFailure))
           return
         }
         showToast('Checkout could not open. Check the browser console for details.')
