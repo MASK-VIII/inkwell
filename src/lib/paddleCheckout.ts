@@ -335,25 +335,40 @@ export async function invokeEdgePaddleCheckout(
   const { data, error } = await client.functions.invoke<{
     url?: string
     error?: string
-    paddle?: unknown
+    detail?: string
   }>('paddle-create-checkout', { body: { intent } })
 
   if (data?.url && typeof data.url === 'string') {
     return { ok: true, url: data.url }
   }
 
+  /** Edge Functions often return JSON in `data` even when `error` is set (non-2xx). */
+  const body =
+    data && typeof data === 'object' ?
+      (data as { url?: string; error?: string; detail?: string })
+    : undefined
+  const serverErr = typeof body?.error === 'string' ? body.error : undefined
+  const serverDetail = typeof body?.detail === 'string' ? body.detail : undefined
+  const synthesized =
+    serverDetail ? `${serverErr ?? 'checkout'}: ${serverDetail}`
+    : serverErr ?? undefined
+
   if (error) {
+    console.warn('[inkwell] paddle-create-checkout invoke failed', intent, {
+      clientMessage: error.message,
+      serverBody: body,
+    })
     return {
       ok: false,
-      error: error.message || 'edge_invoke_failed',
-      paddle: data,
+      error: synthesized ?? error.message ?? 'edge_invoke_failed',
+      paddle: body ?? data,
     }
   }
 
   return {
     ok: false,
-    error: typeof data?.error === 'string' ? data.error : 'edge_no_url',
-    paddle: data,
+    error: synthesized ?? 'edge_no_url',
+    paddle: body ?? data,
   }
 }
 
