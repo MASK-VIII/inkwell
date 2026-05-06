@@ -135,6 +135,7 @@ import {
   getPaddleOverlayEnv,
   INKWELL_PADDLE_CHECKOUT_UI_EVENT,
   invokeEdgePaddleCheckout,
+  isPaddleEdgeCheckoutEnabled,
   type InkwellPaddleCheckoutUiDetail,
   openPaddleCheckoutOverlay,
   openPaddleCheckoutUrl,
@@ -492,8 +493,7 @@ export default function App() {
       setUpgradeOfferContinueReady(true)
       return
     }
-    const edgeOn =
-      String(import.meta.env.VITE_PADDLE_EDGE_CHECKOUT ?? '').trim() === '1' && Boolean(supabasePublicConfig)
+    const edgeOn = isPaddleEdgeCheckoutEnabled(Boolean(supabasePublicConfig))
     if (!paddleUpgradeNeedsPrimedOverlay({ intent: upgradeOfferIntent, edgeCheckoutEnabled: edgeOn })) {
       setUpgradeOfferContinueReady(true)
       return
@@ -1378,32 +1378,21 @@ export default function App() {
           if (openPaddleCheckoutUrl(withUser)) return
         }
 
-        const edgeCheckout =
-          String(import.meta.env.VITE_PADDLE_EDGE_CHECKOUT ?? '').trim() === '1' && supabasePublicConfig
-        if (edgeCheckout) {
+        const edgeOn = isPaddleEdgeCheckoutEnabled(Boolean(supabasePublicConfig))
+        if (edgeOn && supabasePublicConfig) {
           const edge = await invokeEdgePaddleCheckout(getInkwellSupabaseClient(supabasePublicConfig), intent)
           if (edge.ok) {
             openPaddleCheckoutUrl(edge.url)
             return
           }
-          let detail = edge.error
-          if (edge.paddle != null) {
-            try {
-              detail = JSON.stringify(edge.paddle).slice(0, 320)
-            } catch {
-              /* ignore */
-            }
-          }
-          showToast(`Checkout: ${detail}`)
-          if (import.meta.env.DEV) console.warn('[inkwell] Paddle edge checkout failed', edge)
-          return
+          console.warn('[inkwell] paddle-create-checkout failed; trying Paddle.js overlay', edge.error, edge.paddle)
         }
 
         if (tryOpenPaddleOverlayInSameTask({ intent, userId: uid })) return
 
         const overlayOnlyCheckout = paddleUpgradeNeedsPrimedOverlay({
           intent,
-          edgeCheckoutEnabled: Boolean(edgeCheckout),
+          edgeCheckoutEnabled: edgeOn,
         })
         if (overlayOnlyCheckout) {
           showToast(
@@ -1460,13 +1449,10 @@ export default function App() {
         setPurchaseSignInOpen(true)
         return
       }
-      const uid = inkwellEntitlements.userId
-      // Unmount the dialog (z-[200]) before Paddle opens — otherwise the overlay can render underneath
-      // and look like “checkout does nothing”.
+      // Unmount the dialog (z-[200]) before checkout — avoids stacking issues with Paddle overlay.
       flushSync(() => {
         setUpgradeOfferIntent(null)
       })
-      if (tryOpenPaddleOverlayInSameTask({ intent, userId: uid })) return
       void startPaddleCheckout(intent)
     },
     [inkwellEntitlements.loading, inkwellEntitlements.userId, showToast, startPaddleCheckout],
@@ -1493,8 +1479,7 @@ export default function App() {
     window.history.replaceState(null, '', nextUrl)
 
     const asIntent = intent as UpgradeOfferIntent
-    const edgeOn =
-      String(import.meta.env.VITE_PADDLE_EDGE_CHECKOUT ?? '').trim() === '1' && Boolean(supabasePublicConfig)
+    const edgeOn = isPaddleEdgeCheckoutEnabled(Boolean(supabasePublicConfig))
     if (
       paddleUpgradeNeedsPrimedOverlay({ intent: asIntent, edgeCheckoutEnabled: edgeOn }) &&
       inkwellEntitlements.userId

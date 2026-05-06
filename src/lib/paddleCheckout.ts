@@ -34,6 +34,17 @@ export type PaddleCheckoutEnv = {
   upgrade: string
 }
 
+/**
+ * Use `paddle-create-checkout` when cloud auth is configured. Default **on** when unset (production
+ * usually has the function deployed). Set `VITE_PADDLE_EDGE_CHECKOUT=0` to force Paddle.js overlay only
+ * (e.g. local dev without the Edge Function).
+ */
+export function isPaddleEdgeCheckoutEnabled(supabasePublicConfigured: boolean): boolean {
+  if (!supabasePublicConfigured) return false
+  const v = String(import.meta.env.VITE_PADDLE_EDGE_CHECKOUT ?? '').trim()
+  return v !== '0'
+}
+
 export function getPaddleCheckoutEnv(): PaddleCheckoutEnv {
   return {
     ebookSuite: String(import.meta.env.VITE_PADDLE_CHECKOUT_EBOOK_SUITE ?? '').trim(),
@@ -235,8 +246,8 @@ export function paddleUpgradeNeedsPrimedOverlay(opts: {
 
 /**
  * Server-created Paddle transaction (`paddle-create-checkout` Edge Function).
- * Set `VITE_PADDLE_EDGE_CHECKOUT=1` after deploying the function — bypasses broken dashboard default-payment-link UI
- * by passing `checkout.url` via Paddle's Transactions API.
+ * Deploy `paddle-create-checkout` and keep Supabase env configured. Client uses this when
+ * `isPaddleEdgeCheckoutEnabled` is true (default unless `VITE_PADDLE_EDGE_CHECKOUT=0`).
  */
 export async function invokeEdgePaddleCheckout(
   client: SupabaseClient,
