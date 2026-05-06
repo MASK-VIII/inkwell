@@ -71,6 +71,13 @@ export function SignInScreen({ darkMode, onToggleTheme, onComplete, cloudSync, p
   useThemeShine(brandRef)
 
   const isDesktopShell = typeof window !== 'undefined' && Boolean(window.inkwellDesktop)
+
+  const goToMarketingHome = useCallback(() => {
+    if (typeof window === 'undefined' || isDesktopShell) return
+    const base = import.meta.env.BASE_URL || '/'
+    const path = base.endsWith('/') ? base.slice(0, -1) || '/' : base
+    window.location.assign(path === '/' ? '/' : `${path}/`)
+  }, [isDesktopShell])
   const desktopDownloadUrl = desktopDownloadHref()
   const showDesktopDownload = !isDesktopShell && desktopDownloadUrl != null
 
@@ -231,9 +238,9 @@ export function SignInScreen({ darkMode, onToggleTheme, onComplete, cloudSync, p
           ref={brandRef}
           type="button"
           className="inkwell-header-brand group inline-flex w-fit max-w-full min-w-0 items-center gap-2 rounded-2xl px-2 py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-walnut/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream/50 dark:focus-visible:ring-offset-panel-dark sm:gap-3"
-          aria-label="Inkwell"
-          title="Inkwell"
-          onClick={() => {}}
+          aria-label="Inkwell — back to home"
+          title="Back to home"
+          onClick={goToMarketingHome}
         >
           <InkwellEmblem darkMode={darkMode} />
           <InkwellWordmark as="span" className="min-w-0" />
