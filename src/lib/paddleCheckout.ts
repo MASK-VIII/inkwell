@@ -6,6 +6,21 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { initializePaddle, type Paddle } from '@paddle/paddle-js'
 
+/** Dispatched on `window` when Paddle reports checkout failures (listen in the app shell for user-visible toasts). */
+export const INKWELL_PADDLE_CHECKOUT_UI_EVENT = 'inkwell-paddle-checkout-ui' as const
+
+export type InkwellPaddleCheckoutUiDetail = {
+  kind: 'error'
+  message: string
+  code?: string
+  name?: string
+}
+
+function dispatchPaddleCheckoutUi(detail: InkwellPaddleCheckoutUiDetail) {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent(INKWELL_PADDLE_CHECKOUT_UI_EVENT, { detail }))
+}
+
 function paddleEnvironmentFromToken(token: string): 'production' | 'sandbox' | null {
   const t = token.trim().toLowerCase()
   if (t.startsWith('test_')) return 'sandbox'
@@ -132,6 +147,12 @@ async function getPaddleOverlayInstance(): Promise<Paddle | undefined> {
           const detail = 'detail' in event && typeof event.detail === 'string' ? event.detail : undefined
           const code = 'code' in event && typeof event.code === 'string' ? event.code : undefined
           console.warn('[inkwell] Paddle checkout event', { name, code, detail, event })
+          dispatchPaddleCheckoutUi({
+            kind: 'error',
+            message: [detail, code, name].filter(Boolean).join(' — ') || 'checkout_failed',
+            code,
+            name,
+          })
         }
       },
     })
@@ -179,6 +200,11 @@ export function tryOpenPaddleOverlayInSameTask(opts: {
     return true
   } catch (e) {
     console.error('[inkwell] Paddle.Checkout.open (sync) failed', e)
+    dispatchPaddleCheckoutUi({
+      kind: 'error',
+      message: e instanceof Error ? e.message : String(e),
+      name: 'checkout.open.exception',
+    })
     return false
   }
 }

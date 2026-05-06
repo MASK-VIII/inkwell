@@ -133,7 +133,9 @@ import {
   appendInkwellUserToCheckoutUrl,
   getPaddleCheckoutEnv,
   getPaddleOverlayEnv,
+  INKWELL_PADDLE_CHECKOUT_UI_EVENT,
   invokeEdgePaddleCheckout,
+  type InkwellPaddleCheckoutUiDetail,
   openPaddleCheckoutOverlay,
   openPaddleCheckoutUrl,
   paddleUpgradeNeedsPrimedOverlay,
@@ -1343,6 +1345,16 @@ export default function App() {
       setToast(null)
     }, ms)
   }, [])
+
+  useEffect(() => {
+    const onPaddleUi = (ev: Event) => {
+      const e = ev as CustomEvent<InkwellPaddleCheckoutUiDetail>
+      if (e.detail?.kind !== 'error') return
+      showToast(`Checkout: ${e.detail.message}`, 6000)
+    }
+    window.addEventListener(INKWELL_PADDLE_CHECKOUT_UI_EVENT, onPaddleUi)
+    return () => window.removeEventListener(INKWELL_PADDLE_CHECKOUT_UI_EVENT, onPaddleUi)
+  }, [showToast])
 
   const startPaddleCheckout = useCallback(
     async (intent: UpgradeOfferIntent) => {
