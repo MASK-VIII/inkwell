@@ -21,8 +21,9 @@ Entitlements live in `public.user_entitlements` (see migrations `20260505120000_
 Deploy `supabase/functions/paddle-webhook`:
 
 1. Set secrets: `PADDLE_WEBHOOK_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_URL`.
-2. Set optional price ID lists (comma-separated): `PADDLE_PRICE_IDS_EBOOK`, `PADDLE_PRICE_IDS_PRO`, `PADDLE_PRICE_IDS_UPGRADE`.
+2. Set optional price ID lists (comma-separated): `PADDLE_PRICE_IDS_EBOOK` **or** `PADDLE_PRICE_IDS_BASIC` (same tier), `PADDLE_PRICE_IDS_PRO`, `PADDLE_PRICE_IDS_UPGRADE`.
 3. Point Paddle’s notification destination at `https://<project-ref>.supabase.co/functions/v1/paddle-webhook`.
+4. **Notification events:** enable the transaction events you use (e.g. `transaction.completed`, `transaction.paid`, `transaction.canceled`, `transaction.payment_failed`). Paddle Billing often does **not** list `transaction.refunded`; refunds arrive as **`adjustment.created`** / **`adjustment.updated`** — enable those too so revokes work. The Edge Function revokes on **approved** refund adjustments and matches **`customer_id`** to `paddle_customer_id` when `custom_data` is missing on the adjustment payload.
 
 Checkout **must** include custom data so the webhook can set the correct user:
 
@@ -31,6 +32,24 @@ Checkout **must** include custom data so the webhook can set the correct user:
 ```
 
 Use [Paddle signature verification](https://developer.paddle.com/webhooks/signature-verification) (implemented in the Edge Function).
+
+### Production Paddle price IDs (Inkwell)
+
+Set these on the **`paddle-webhook`** Edge Function (Supabase Dashboard → **Edge Functions** → `paddle-webhook` → **Secrets**), or via CLI: `supabase secrets set NAME=value --project-ref <ref>`.
+
+| Product in Paddle | Maps to `user_entitlements.tier` | Price ID |
+|-------------------|-----------------------------------|----------|
+| Basic | `ebook_suite` | `pri_01kqxcjr8j53d242erm5esj5th` |
+| Pro | `pro` | `pri_01kqxcsxcj8nxp0rk32kywasz4` |
+| Upgrade (Basic → Pro) | `pro` | `pri_01kqxe001dyzmsghfsdv1m9ph7` |
+
+Copy-paste values for secrets:
+
+- **`PADDLE_PRICE_IDS_EBOOK`** or **`PADDLE_PRICE_IDS_BASIC`** → `pri_01kqxcjr8j53d242erm5esj5th`
+- **`PADDLE_PRICE_IDS_PRO`** → `pri_01kqxcsxcj8nxp0rk32kywasz4`
+- **`PADDLE_PRICE_IDS_UPGRADE`** → `pri_01kqxe001dyzmsghfsdv1m9ph7`
+
+If you add more prices later, use comma-separated lists in each secret (no spaces required).
 
 ## Frontend env (Vite)
 

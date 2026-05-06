@@ -1,6 +1,8 @@
 import { Moon, Sun } from 'lucide-react'
+import { useRef } from 'react'
 import { InkwellEmblem } from '../components/InkwellEmblem'
 import { InkwellWordmark } from '../components/InkwellWordmark'
+import { useThemeShine } from '../components/useThemeShine'
 
 type Props = {
   /** When true, anchor links (Features, FAQ) are shown. Hidden on legal pages. */
@@ -10,10 +12,17 @@ type Props = {
 }
 
 export function MarketingNav({ showAnchors = true, darkMode, onToggleDarkMode }: Props) {
+  const brandRef = useRef<HTMLAnchorElement>(null)
+  useThemeShine(brandRef)
+
   return (
     <header className="sticky top-0 z-30 border-b border-dust/60 bg-parchment/90 backdrop-blur-sm dark:border-border-dark/80 dark:bg-panel-dark/70">
       <nav className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-5 py-4 sm:px-8">
-        <a href="/" className="group flex items-center gap-3 outline-none">
+        <a
+          ref={brandRef}
+          href="/"
+          className="inkwell-header-brand group inline-flex w-fit max-w-full items-center gap-2 rounded-2xl px-2 py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-walnut/40 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment/90 dark:focus-visible:ring-cream/50 dark:focus-visible:ring-offset-panel-dark/90 sm:gap-3"
+        >
           <InkwellEmblem darkMode={darkMode} className="h-9 w-9" />
           <InkwellWordmark className="!text-[1.5rem] sm:!text-[1.75rem]" />
         </a>

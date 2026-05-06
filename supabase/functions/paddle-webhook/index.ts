@@ -7,11 +7,15 @@
  * - SUPABASE_SERVICE_ROLE_KEY
  *
  * Optional: map price IDs to tiers (comma-separated lists, first match wins):
- * - PADDLE_PRICE_IDS_EBOOK  (e.g. pri_abc,pri_def)
+ * - PADDLE_PRICE_IDS_EBOOK or PADDLE_PRICE_IDS_BASIC (Basic tier → ebook_suite)
  * - PADDLE_PRICE_IDS_PRO
- * - PADDLE_PRICE_IDS_UPGRADE  ($99 upgrade → grants pro)
+ * - PADDLE_PRICE_IDS_UPGRADE  (upgrade → pro)
  *
  * Checkout must send custom_data: { "inkwell_user_id": "<supabase auth user uuid>" }.
+ *
+ * Refunds: Paddle Billing often emits `adjustment.created` / `adjustment.updated` (not `transaction.refunded`).
+ * Approved refund adjustments revoke entitlements; we match `customer_id` to `paddle_customer_id` when
+ * `custom_data` is absent on the adjustment payload.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
 
@@ -86,6 +90,11 @@ function readIdSet(envName: string): Set<string> {
   )
 }
 
+/** Basic tier: accept either legacy EBOOK name or BASIC (matches common Supabase secret naming). */
+function readBasicTierPriceIds(): Set<string> {
+  return new Set([...readIdSet('PADDLE_PRICE_IDS_EBOOK'), ...readIdSet('PADDLE_PRICE_IDS_BASIC')])
+}
+
 function firstPriceIdFromPayload(data: Record<string, unknown>): string | null {
   const items = data.items as unknown[] | undefined
   const first = items?.[0] as Record<string, unknown> | undefined
@@ -109,6 +118,13 @@ function extractInkwellUserId(data: Record<string, unknown>): string | null {
   if (!cd) return null
   const v = cd.inkwell_user_id ?? cd.user_id
   if (typeof v === 'string' && v.length > 0) return v
+  return null
+}
+
+function extractPaddleCustomerId(data: Record<string, unknown>): string | null {
+  if (typeof data.customer_id === 'string' && data.customer_id.length > 0) return data.customer_id
+  const c = data.customer as { id?: string } | undefined
+  if (c && typeof c.id === 'string' && c.id.length > 0) return c.id
   return null
 }
 
@@ -138,6 +154,20 @@ function isRefundLike(eventType: string): boolean {
     eventType === 'transaction.canceled' ||
     eventType === 'transaction.payment_failed'
   )
+}
+
+/** Paddle Billing refunds usually surface as adjustments; subscribe to adjustment.* in the dashboard. */
+function isApprovedRefundAdjustment(eventType: string, data: Record<string, unknown>): boolean {
+  if (eventType !== 'adjustment.created' && eventType !== 'adjustment.updated') return false
+  const action = typeof data.action === 'string' ? data.action.toLowerCase() : ''
+  if (action !== 'refund') return false
+  const status = typeof data.status === 'string' ? data.status.toLowerCase() : ''
+  return status === 'approved'
+}
+
+function shouldRevokeEntitlement(eventType: string, data: Record<string, unknown>): boolean {
+  if (isRefundLike(eventType)) return true
+  return isApprovedRefundAdjustment(eventType, data)
 }
 
 Deno.serve(async (req) => {
@@ -185,16 +215,10 @@ Deno.serve(async (req) => {
     })
   }
 
-  const userId = extractInkwellUserId(data)
-  if (!userId) {
-    console.warn('paddle-webhook: no inkwell_user_id in custom_data')
-    return new Response(JSON.stringify({ ok: false, error: 'missing_inkwell_user_id' }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    })
-  }
+  const inkwellUserId = extractInkwellUserId(data)
+  const paddleCustomerId = extractPaddleCustomerId(data)
 
-  const ebookIds = readIdSet('PADDLE_PRICE_IDS_EBOOK')
+  const ebookIds = readBasicTierPriceIds()
   const proIds = readIdSet('PADDLE_PRICE_IDS_PRO')
   const upgradeIds = readIdSet('PADDLE_PRICE_IDS_UPGRADE')
   const priceId = firstPriceIdFromPayload(data)
@@ -202,6 +226,14 @@ Deno.serve(async (req) => {
   const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } })
 
   if (isPaidSuccess(eventType)) {
+    if (!inkwellUserId) {
+      console.warn('paddle-webhook: no inkwell_user_id in custom_data (required for paid events)')
+      return new Response(JSON.stringify({ ok: false, error: 'missing_inkwell_user_id' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
     const tier = tierForPriceId(priceId, ebookIds, proIds, upgradeIds)
     if (!tier) {
       console.warn('paddle-webhook: could not map price to tier', { eventType, priceId })
@@ -211,18 +243,13 @@ Deno.serve(async (req) => {
       })
     }
 
-    const customerId =
-      typeof (data.customer_id as string | undefined) === 'string' ?
-        (data.customer_id as string)
-      : typeof (data.customer as { id?: string } | undefined)?.id === 'string' ?
-        (data.customer as { id: string }).id
-      : null
+    const customerId = paddleCustomerId
 
     const txId = typeof data.id === 'string' ? data.id : null
 
     const { error } = await admin.from('user_entitlements').upsert(
       {
-        user_id: userId,
+        user_id: inkwellUserId,
         tier,
         source: 'paddle',
         status: 'active',
@@ -247,7 +274,31 @@ Deno.serve(async (req) => {
     })
   }
 
-  if (isRefundLike(eventType)) {
+  if (shouldRevokeEntitlement(eventType, data)) {
+    let targetUserId = inkwellUserId
+    if (!targetUserId && paddleCustomerId) {
+      const { data: row, error: qErr } = await admin
+        .from('user_entitlements')
+        .select('user_id')
+        .eq('paddle_customer_id', paddleCustomerId)
+        .maybeSingle()
+      if (qErr) {
+        console.error('paddle-webhook: lookup user for revoke failed', qErr)
+        return new Response(JSON.stringify({ ok: false, error: qErr.message }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      targetUserId = row && typeof (row as { user_id?: string }).user_id === 'string' ? (row as { user_id: string }).user_id : null
+    }
+    if (!targetUserId) {
+      console.warn('paddle-webhook: cannot resolve user for revoke', { eventType, paddleCustomerId })
+      return new Response(JSON.stringify({ ok: false, error: 'cannot_resolve_user_for_revoke' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
     const { error } = await admin
       .from('user_entitlements')
       .update({
@@ -256,7 +307,7 @@ Deno.serve(async (req) => {
         source: 'paddle',
         updated_at: new Date().toISOString(),
       })
-      .eq('user_id', userId)
+      .eq('user_id', targetUserId)
 
     if (error) {
       console.error('paddle-webhook: revoke failed', error)

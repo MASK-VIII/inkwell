@@ -68,9 +68,11 @@ body {
 }
 
 .dark .inkwell-header-brand:hover .inkwell-wordmark {
-  color: color-mix(in srgb, var(--color-ink-dark) 80%, var(--color-cream));
+  color: color-mix(in srgb, var(--color-ink-dark) 76%, var(--color-cream));
   text-shadow:
-    0 0 1.45rem color-mix(in srgb, var(--color-cream) 40%, transparent),
+    0 0 1.1rem color-mix(in srgb, var(--color-cream) 55%, transparent),
+    0 0 2.1rem color-mix(in srgb, var(--color-accent-warm) 42%, transparent),
+    0 0 3rem color-mix(in srgb, var(--color-accent-warm) 22%, transparent),
     0 0.08em 0.22em color-mix(in srgb, #000 58%, transparent);
 }
 
@@ -1309,11 +1311,23 @@ select {
   transform: translateY(-1px);
 }
 
+/* Dark bookshelf / header brand: same slow ease as light (`html:not(.dark)` block below), stronger bloom. */
+.dark .inkwell-header-brand {
+  transition:
+    box-shadow 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color var(--inkwell-theme-bridge-duration) var(--inkwell-theme-bridge-ease),
+    color var(--inkwell-theme-bridge-duration) var(--inkwell-theme-bridge-ease),
+    border-color var(--inkwell-theme-bridge-duration) var(--inkwell-theme-bridge-ease);
+}
+
 .dark .inkwell-header-brand:hover {
   box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--color-accent-warm) 38%, transparent),
-    0 9px 28px -6px color-mix(in srgb, var(--color-accent-warm) 56%, transparent),
-    0 0 40px -12px color-mix(in srgb, var(--color-accent-warm) 32%, transparent);
+    0 0 0 1px color-mix(in srgb, var(--color-accent-warm) 52%, transparent),
+    0 10px 34px -5px color-mix(in srgb, var(--color-accent-warm) 68%, transparent),
+    0 0 52px -10px color-mix(in srgb, var(--color-accent-warm) 46%, transparent),
+    0 0 80px -16px color-mix(in srgb, var(--color-cream) 26%, transparent);
+  transform: translateY(-1px);
 }
 
 .inkwell-header-brand:focus-visible {
@@ -1379,12 +1393,34 @@ html:not(.dark) .inkwell-header-brand:hover .inkwell-emblem {
     0 0 0 1px color-mix(in srgb, var(--color-walnut) 34%, transparent);
 }
 
+.dark .inkwell-header-brand .inkwell-emblem {
+  transition:
+    box-shadow 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.dark .inkwell-header-brand:hover .inkwell-emblem {
+  transform: scale(1.03);
+  box-shadow:
+    0 2px 14px -2px color-mix(in srgb, #000 50%, transparent),
+    0 14px 44px -10px color-mix(in srgb, var(--color-accent-warm) 52%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--color-cream) 42%, transparent);
+}
+
 @media (prefers-reduced-motion: reduce) {
   html:not(.dark) .inkwell-header-brand:hover {
     transform: none;
   }
 
   html:not(.dark) .inkwell-header-brand:hover .inkwell-emblem {
+    transform: none;
+  }
+
+  .dark .inkwell-header-brand:hover {
+    transform: none;
+  }
+
+  .dark .inkwell-header-brand:hover .inkwell-emblem {
     transform: none;
   }
 }
