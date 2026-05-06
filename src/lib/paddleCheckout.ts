@@ -286,8 +286,15 @@ export function humanizeEdgeCheckoutFailure(
     const label = intent === 'basic' ? 'Basic' : intent === 'pro' ? 'Pro' : 'Upgrade'
     return `Server checkout has no ${label} price configured: add Supabase secret ${SUPABASE_PRICE_SECRET[intent]} (same pri_… as ${VITE_PRICE_VAR[intent]} in Vercel), redeploy if needed, then try again.`
   }
-  if (topErr === 'missing_paddle_api_key' || topErr === 'missing_paddle_checkout_page_url') {
-    return `Checkout server misconfigured (${topErr}). Fix paddle-create-checkout secrets in Supabase.`
+  if (topErr === 'missing_paddle_api_key') {
+    return 'Checkout server is missing secret PADDLE_API_KEY (Supabase → Edge Functions → paddle-create-checkout → Secrets).'
+  }
+  if (topErr === 'missing_paddle_checkout_page_url') {
+    return (
+      'Supabase is still serving an old paddle-create-checkout that required PADDLE_CHECKOUT_PAGE_URL. ' +
+      'Redeploy the function from the current inkwell repo (`supabase functions deploy paddle-create-checkout` after `supabase link`); ' +
+      'newer code uses a built-in default checkout URL when that secret is unset.'
+    )
   }
   if (topErr === 'paddle_api_error') {
     try {
