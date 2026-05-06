@@ -6,6 +6,11 @@ import { InkwellWordmark } from './InkwellWordmark'
 import { useThemeShine } from './useThemeShine'
 import type { LibrarySyncStatus } from '../lib/sync/useInkwellLibrarySync'
 import type { InkwellTier } from '../lib/inkwellEntitlements'
+import {
+  INKWELL_DISPLAY_PRICE_BASIC,
+  INKWELL_DISPLAY_PRICE_BASIC_TO_PRO,
+  INKWELL_DISPLAY_PRICE_PRO,
+} from '../marketing/pricingCopy'
 
 export type AccountScreenProps = {
   darkMode: boolean
@@ -191,7 +196,7 @@ export function AccountScreen({
                     onClick={licensing.onUnlockEbookSuite}
                     className="inkwell-hub-secondary w-full sm:w-auto sm:min-w-[10rem]"
                   >
-                    Unlock Basic ($49.99)
+                    Unlock Basic ({INKWELL_DISPLAY_PRICE_BASIC})
                   </button>
                 ) : null}
                 {licensing.tier === 'ebook_suite' ? (
@@ -200,7 +205,7 @@ export function AccountScreen({
                     onClick={licensing.onUpgradeEbookToPro}
                     className="inkwell-hub-secondary w-full sm:w-auto sm:min-w-[10rem]"
                   >
-                    Upgrade to Pro ($99.99)
+                    Upgrade to Pro ({INKWELL_DISPLAY_PRICE_BASIC_TO_PRO})
                   </button>
                 ) : null}
                 {licensing.tier === 'free' ? (
@@ -209,7 +214,7 @@ export function AccountScreen({
                     onClick={licensing.onGoPro}
                     className="inkwell-hub-primary w-full sm:w-auto sm:min-w-[10rem]"
                   >
-                    Go Pro ($149.99)
+                    Go Pro ({INKWELL_DISPLAY_PRICE_PRO})
                   </button>
                 ) : null}
               </div>

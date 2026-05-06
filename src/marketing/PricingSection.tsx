@@ -1,3 +1,10 @@
+import {
+  INKWELL_DISPLAY_PRICE_BASIC,
+  INKWELL_DISPLAY_PRICE_PRO,
+  INKWELL_DISPLAY_PRICE_PRO_LIST,
+  pricingCopy,
+} from './pricingCopy'
+
 type Plan = {
   name: string
   price: string
@@ -18,7 +25,7 @@ const APP_UPGRADE_HREF = {
 const PLANS: Record<'basic' | 'pro', Plan> = {
   basic: {
     name: 'Basic',
-    price: '$49.99',
+    price: INKWELL_DISPLAY_PRICE_BASIC,
     badge: 'One-time',
     forWhom: 'For writers who want a cloud-backed library and an ebook finish line.',
     bullets: [
@@ -28,12 +35,12 @@ const PLANS: Record<'basic' | 'pro', Plan> = {
       'Offline-first; unlimited local storage on each device',
     ],
     cta: { label: 'Unlock Basic', href: APP_UPGRADE_HREF.basic },
-    finePrint: 'Upgrade to Pro anytime (pay the difference) to unlock the full export suite.',
+    finePrint: pricingCopy.basicFinePrint,
   },
   pro: {
     name: 'Pro',
-    price: '$99',
-    compareAtPrice: '$149',
+    price: INKWELL_DISPLAY_PRICE_PRO,
+    compareAtPrice: INKWELL_DISPLAY_PRICE_PRO_LIST,
     badge: 'Early access',
     forWhom: 'For serious indie authors finishing a book.',
     bullets: [
@@ -44,7 +51,7 @@ const PLANS: Record<'basic' | 'pro', Plan> = {
       'Priority email support',
     ],
     cta: { label: 'Go Pro', href: APP_UPGRADE_HREF.pro },
-    finePrint: 'Early-access price while Pro is being polished. Returns to $149 when Pro is fully polished.',
+    finePrint: pricingCopy.proFinePrint,
   },
 }
 
@@ -200,6 +207,9 @@ export function PricingSection() {
           <PlanCard plan={PLANS.basic} subtle />
           <PlanCard plan={PLANS.pro} featured />
         </div>
+        <p className="mt-6 text-center text-sm leading-relaxed text-walnut/80 dark:text-ink-dark/72">
+          {pricingCopy.upgradePathLine}
+        </p>
       </div>
     </section>
   )

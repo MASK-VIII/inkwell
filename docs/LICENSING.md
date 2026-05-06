@@ -57,7 +57,7 @@ Optional hosted checkout URLs (opened in a new tab):
 
 - `VITE_PADDLE_CHECKOUT_EBOOK_SUITE`
 - `VITE_PADDLE_CHECKOUT_PRO`
-- `VITE_PADDLE_CHECKOUT_UPGRADE` ($99.99 Basic → Pro)
+- `VITE_PADDLE_CHECKOUT_UPGRADE` (Basic → Pro upgrade; display copy is $50 in the app—set the matching `pri_` in Paddle)
 
 The app appends `inkwell_user_id` when the user is signed in to cloud sync.
 

@@ -1,4 +1,9 @@
 import { X } from 'lucide-react'
+import {
+  INKWELL_DISPLAY_PRICE_BASIC,
+  INKWELL_DISPLAY_PRICE_BASIC_TO_PRO,
+  INKWELL_DISPLAY_PRICE_PRO,
+} from '../marketing/pricingCopy'
 
 export type UpgradeOfferIntent = 'basic' | 'pro' | 'upgrade'
 
@@ -28,12 +33,12 @@ function titleFor(intent: UpgradeOfferIntent): string {
 function bodyFor(intent: UpgradeOfferIntent): string {
   switch (intent) {
     case 'basic':
-      return 'Basic unlocks EPUB export and cloud library sync across your devices. Continue to secure checkout when you are ready.'
+      return `Basic (${INKWELL_DISPLAY_PRICE_BASIC}) unlocks EPUB export and cloud library sync across your devices. Continue to secure checkout when you are ready.`
     case 'upgrade':
-      return 'Move from Basic to Pro at the upgrade price. Continue to checkout to complete your upgrade.'
+      return `Move from Basic to Pro for ${INKWELL_DISPLAY_PRICE_BASIC_TO_PRO} (one-time upgrade). Continue to checkout to complete your upgrade.`
     case 'pro':
     default:
-      return 'Pro unlocks the full export suite (PDF, DOCX, archives, and more). Continue to secure checkout when you are ready.'
+      return `Pro (${INKWELL_DISPLAY_PRICE_PRO} early access) unlocks the full export suite (PDF, DOCX, archives, and more). Continue to secure checkout when you are ready.`
   }
 }
 
