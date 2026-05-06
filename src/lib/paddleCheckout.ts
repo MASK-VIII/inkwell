@@ -138,6 +138,9 @@ async function getPaddleOverlayInstance(): Promise<Paddle | undefined> {
       ...(import.meta.env.DEV ? { debug: true } : {}),
       eventCallback(event) {
         const name = event?.name ?? ''
+        if (name === 'checkout.loaded') {
+          console.info('[inkwell] Paddle checkout loaded')
+        }
         if (
           name === 'checkout.error' ||
           name === 'checkout.failed' ||

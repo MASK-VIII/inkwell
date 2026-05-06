@@ -1461,11 +1461,12 @@ export default function App() {
         return
       }
       const uid = inkwellEntitlements.userId
-      if (tryOpenPaddleOverlayInSameTask({ intent, userId: uid })) {
+      // Unmount the dialog (z-[200]) before Paddle opens — otherwise the overlay can render underneath
+      // and look like “checkout does nothing”.
+      flushSync(() => {
         setUpgradeOfferIntent(null)
-        return
-      }
-      setUpgradeOfferIntent(null)
+      })
+      if (tryOpenPaddleOverlayInSameTask({ intent, userId: uid })) return
       void startPaddleCheckout(intent)
     },
     [inkwellEntitlements.loading, inkwellEntitlements.userId, showToast, startPaddleCheckout],
