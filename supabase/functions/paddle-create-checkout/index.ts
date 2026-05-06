@@ -70,6 +70,21 @@ function extractCheckoutUrlLoose(body: Record<string, unknown>): string | null {
 }
 
 Deno.serve(async (req) => {
+  try {
+    return await handlePaddleCreateCheckout(req)
+  } catch (e) {
+    console.error('paddle-create-checkout: unhandled', e)
+    return new Response(
+      JSON.stringify({
+        error: 'internal_error',
+        detail: e instanceof Error ? e.message : String(e),
+      }),
+      { status: 500, headers: { ...corsHeaders(), 'Content-Type': 'application/json' } },
+    )
+  }
+})
+
+async function handlePaddleCreateCheckout(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: corsHeaders() })
   }
@@ -215,4 +230,4 @@ Deno.serve(async (req) => {
     status: 200,
     headers: { ...corsHeaders(), 'Content-Type': 'application/json' },
   })
-})
+}

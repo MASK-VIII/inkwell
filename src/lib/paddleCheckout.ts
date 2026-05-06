@@ -272,6 +272,16 @@ export function humanizeEdgeCheckoutFailure(
 ): string {
   const raw = failure.paddle as Record<string, unknown> | undefined
   const topErr = typeof raw?.error === 'string' ? raw.error : failure.error
+  const detail = typeof raw?.detail === 'string' ? raw.detail : ''
+
+  if (topErr === 'internal_error') {
+    return detail ?
+        `Checkout server error: ${detail.slice(0, 280)}`
+      : 'Checkout server failed — open Supabase → Edge Functions → paddle-create-checkout → Logs.'
+  }
+  if (topErr === 'server_misconfigured') {
+    return 'Checkout server missing Supabase env (should be automatic). Redeploy paddle-create-checkout or contact support.'
+  }
 
   if (topErr === 'invalid_intent_or_price') {
     const label = intent === 'basic' ? 'Basic' : intent === 'pro' ? 'Pro' : 'Upgrade'
