@@ -9,6 +9,12 @@ type Plan = {
   finePrint?: string
 }
 
+/** Opens `/app` Account flow and triggers Paddle checkout when `VITE_PADDLE_CHECKOUT_*` is set. */
+const APP_UPGRADE_HREF = {
+  basic: '/app?checkout=basic#account',
+  pro: '/app?checkout=pro#account',
+} as const
+
 const PLANS: Record<'basic' | 'pro', Plan> = {
   basic: {
     name: 'Basic',
@@ -21,7 +27,7 @@ const PLANS: Record<'basic' | 'pro', Plan> = {
       'EPUB export',
       'Offline-first; unlimited local storage on each device',
     ],
-    cta: { label: 'Unlock Basic', href: '/app' },
+    cta: { label: 'Unlock Basic', href: APP_UPGRADE_HREF.basic },
     finePrint: 'Upgrade to Pro anytime (pay the difference) to unlock the full export suite.',
   },
   pro: {
@@ -37,7 +43,7 @@ const PLANS: Record<'basic' | 'pro', Plan> = {
       'Lifetime updates',
       'Priority email support',
     ],
-    cta: { label: 'Go Pro', href: '/app' },
+    cta: { label: 'Go Pro', href: APP_UPGRADE_HREF.pro },
     finePrint: 'Early-access price while Pro is being polished. Returns to $149 when Pro is fully polished.',
   },
 }

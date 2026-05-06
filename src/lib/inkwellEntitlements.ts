@@ -33,7 +33,8 @@ export function computeInkwellGates(row: InkwellEntitlementRow | null): InkwellC
     canExportEpub: tier === 'ebook_suite' || tier === 'pro',
     canUseProExports: tier === 'pro',
     canUseCloudSync: tier === 'ebook_suite' || tier === 'pro',
-    canUseEbookFormat: tier === 'ebook_suite' || tier === 'pro',
+    // Formatting workspaces are available on Free; exporting stays gated by tier.
+    canUseEbookFormat: true,
     canUsePrintFormat: tier === 'pro',
     canUseNoteExportSuite: tier === 'pro',
   }
