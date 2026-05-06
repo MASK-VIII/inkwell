@@ -110,6 +110,10 @@ export function appendInkwellUserToCheckoutUrl(url: string, userId: string | nul
  * return value null even when the tab opens, and popup blockers also return null. We clear
  * `opener` manually when a Window is returned, and fall back to same-tab navigation so live
  * checkout still works (including `?checkout=` deep links with no user-gesture popup).
+ *
+ * Same-tab fallback: checkout URLs often target this app origin (`/app?…`). Assigning without a
+ * hash reloads the SPA with `hash === ''`, which sends returning users to the bookshelf — so when
+ * the assign target is same-origin and has no fragment, carry over the current hash (e.g. `#account`).
  */
 export function openPaddleCheckoutUrl(url: string): boolean {
   if (!url) return false
@@ -127,7 +131,16 @@ export function openPaddleCheckoutUrl(url: string): boolean {
     /* fall through */
   }
   try {
-    window.location.assign(url)
+    let navigateUrl = url
+    if (typeof window !== 'undefined') {
+      const resolved = new URL(url, window.location.href)
+      const frag = window.location.hash
+      if (resolved.origin === window.location.origin && !resolved.hash && frag && frag !== '#') {
+        resolved.hash = frag
+        navigateUrl = resolved.toString()
+      }
+    }
+    window.location.assign(navigateUrl)
     return true
   } catch {
     return false
