@@ -79,36 +79,6 @@ function TrustRow() {
   )
 }
 
-function FreeTierStrip() {
-  return (
-    <div className="mt-10 rounded-2xl border border-dust/70 bg-white/50 p-6 shadow-[0_1px_0_rgba(255,255,255,0.55)_inset] dark:border-border-dark dark:bg-panel-dark/55 sm:p-7">
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between lg:gap-10">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <h3 className="font-serif text-2xl text-ink dark:text-ink-dark">Free</h3>
-            <p className="font-serif text-xl text-walnut/80 dark:text-ink-dark/65">$0</p>
-            <span className="rounded-full border border-walnut/25 bg-parchment/80 px-2.5 py-0.5 text-[0.65rem] font-medium uppercase tracking-widest text-walnut/75 dark:border-border-dark dark:bg-panel-dark dark:text-ink-dark/60">
-              Local only
-            </span>
-          </div>
-          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-walnut/90 dark:text-ink-dark/85">
-            Start with the full writing experience—projects, chapters, notes, organization, and formatting previews. Your
-            library stays on this device until you choose Basic or Pro; no credit card required.
-          </p>
-        </div>
-        <div className="shrink-0 lg:pl-2">
-          <a
-            href="/app"
-            className="inline-flex w-full items-center justify-center rounded-full border border-walnut/35 bg-white/80 px-6 py-3 text-sm font-medium text-ink shadow-sm transition hover:border-walnut/55 hover:bg-white dark:border-border-dark dark:bg-panel-dark/80 dark:text-ink-dark dark:hover:border-accent-warm/45 dark:hover:bg-panel-dark sm:w-auto"
-          >
-            Start writing free
-          </a>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 function PlanCard({
   plan,
   featured = false,
@@ -199,12 +169,7 @@ export function PricingSection() {
 
         <TrustRow />
 
-        <FreeTierStrip />
-
-        <p className="mt-10 text-center text-xs font-medium uppercase tracking-[0.18em] text-walnut/70 dark:text-ink-dark/65">
-          Paid upgrades
-        </p>
-        <div className="mt-4 grid gap-6 md:grid-cols-2">
+        <div className="mt-10 grid gap-6 md:grid-cols-2">
           <PlanCard plan={PLANS.basic} subtle />
           <PlanCard plan={PLANS.pro} featured />
         </div>

@@ -1495,3 +1495,8 @@ html:not(.dark) .inkwell-header-brand:hover .inkwell-emblem {
     display: none;
   }
 }
+
+/* Landing page: sticky MarketingNav (~72px + breathing room) — hash links scroll targets below the header */
+main.marketing-landing > section {
+  scroll-margin-top: 5.75rem;
+}

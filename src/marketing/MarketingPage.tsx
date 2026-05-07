@@ -25,7 +25,7 @@ export function MarketingPage() {
   }, [])
 
   return (
-    <main className="min-h-screen bg-parchment text-ink antialiased dark:bg-panel-dark dark:text-ink-dark">
+    <main className="marketing-landing min-h-screen bg-parchment text-ink antialiased dark:bg-panel-dark dark:text-ink-dark">
       <MarketingNav darkMode={darkMode} onToggleDarkMode={toggle} />
       <HeroSection />
       <FeaturesSection />
