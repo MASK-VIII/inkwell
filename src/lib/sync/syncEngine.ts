@@ -103,12 +103,21 @@ export async function pullLibraryIfNewer(
   return { ok: true, imported: res.imported, remoteRev: serverRev }
 }
 
+export type PushLibraryZipOptions = {
+  /** When set, refuse upload if zip exceeds this size (tier cloud quota). */
+  maxLibraryBytes?: number
+}
+
 export type PushLibraryResult =
   | { ok: true; remoteRev: string }
   | { ok: false; error: string }
   | { ok: false; conflict: true; serverRev: string }
+  | { ok: false; error: 'cloud_quota_exceeded'; bytesUsed: number; bytesLimit: number }
 
-export async function pushLibraryZip(config: InkwellSupabasePublicConfig): Promise<PushLibraryResult> {
+export async function pushLibraryZip(
+  config: InkwellSupabasePublicConfig,
+  options?: PushLibraryZipOptions,
+): Promise<PushLibraryResult> {
   const supabase = getInkwellSupabaseClient(config)
   const { data: userData, error: userErr } = await supabase.auth.getUser()
   if (userErr || !userData.user) return { ok: false, error: 'Not signed in' }
@@ -121,6 +130,11 @@ export async function pushLibraryZip(config: InkwellSupabasePublicConfig): Promi
     beforeHead.head && beforeHead.head.storage_object_path ? String(beforeHead.head.storage_object_path) : ''
 
   const blob = await exportLibraryZip()
+  const maxBytes = options?.maxLibraryBytes
+  if (typeof maxBytes === 'number' && maxBytes > 0 && blob.size > maxBytes) {
+    return { ok: false, error: 'cloud_quota_exceeded', bytesUsed: blob.size, bytesLimit: maxBytes }
+  }
+
   const stamp = `${Date.now()}_${typeof crypto.randomUUID === 'function' ? crypto.randomUUID().slice(0, 8) : 'x'}`
   const objectPath = `${uid}/library-${stamp}.zip`
 
@@ -167,7 +181,10 @@ export async function pushLibraryZip(config: InkwellSupabasePublicConfig): Promi
   return { ok: false, error: parsed.error ?? 'Commit failed' }
 }
 
-export async function forcePushLibraryZip(config: InkwellSupabasePublicConfig): Promise<PushLibraryResult> {
+export async function forcePushLibraryZip(
+  config: InkwellSupabasePublicConfig,
+  options?: PushLibraryZipOptions,
+): Promise<PushLibraryResult> {
   const supabase = getInkwellSupabaseClient(config)
   const { data: userData, error: userErr } = await supabase.auth.getUser()
   if (userErr || !userData.user) return { ok: false, error: 'Not signed in' }
@@ -178,6 +195,11 @@ export async function forcePushLibraryZip(config: InkwellSupabasePublicConfig): 
     beforeHead.ok && beforeHead.head?.storage_object_path ? String(beforeHead.head.storage_object_path) : ''
 
   const blob = await exportLibraryZip()
+  const maxBytes = options?.maxLibraryBytes
+  if (typeof maxBytes === 'number' && maxBytes > 0 && blob.size > maxBytes) {
+    return { ok: false, error: 'cloud_quota_exceeded', bytesUsed: blob.size, bytesLimit: maxBytes }
+  }
+
   const stamp = `${Date.now()}_${typeof crypto.randomUUID === 'function' ? crypto.randomUUID().slice(0, 8) : 'x'}`
   const objectPath = `${uid}/library-force-${stamp}.zip`
 

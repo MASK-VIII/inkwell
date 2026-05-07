@@ -15,11 +15,15 @@ const FAQ: Qa[] = [
   },
   {
     q: 'What is locked on Free?',
-    a: 'EPUB export and cloud library backup. Free is local-only storage; Basic unlocks cloud sync and EPUB, and Pro unlocks the full export suite.',
+    a: 'EPUB export and cloud library backup (Basic up to 2 GB compressed backup, Pro up to 20 GB). Free is local-only storage; Basic unlocks cloud sync and EPUB, and Pro unlocks the full export suite.',
   },
   {
     q: 'What does Basic unlock?',
-    a: 'Cloud library sync and backup across your devices when you sign in, plus EPUB export—the simplest finish line if you are publishing digitally.',
+    a: 'Cloud library sync and backup across your devices when you sign in (up to 2 GB compressed backup), plus EPUB export—the simplest finish line if you are publishing digitally. Like Pro, it is a one-time purchase and includes lifetime app updates.',
+  },
+  {
+    q: 'Do Basic and Pro get the same app updates?',
+    a: 'Yes. Both paid tiers include lifetime updates—bug fixes, improvements, and new features ship to Basic and Pro the same way. Pro only changes which export and formatting capabilities are unlocked, not how often the app is updated.',
   },
   {
     q: 'Why are exports paid?',
@@ -27,7 +31,7 @@ const FAQ: Qa[] = [
   },
   {
     q: 'Where is my work stored?',
-    a: 'On Free, your library lives only on your device. Basic and Pro can optionally keep an encrypted cloud backup that travels across devices when you sign in.',
+    a: 'On Free, your library lives only on your device. Basic and Pro can optionally keep an encrypted cloud backup that travels across devices when you sign in, subject to per-tier backup size limits (2 GB Basic, 20 GB Pro, measured as compressed backup size).',
   },
   {
     q: 'Do I need an internet connection?',

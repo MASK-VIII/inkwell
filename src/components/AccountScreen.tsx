@@ -7,11 +7,21 @@ import { useThemeShine } from './useThemeShine'
 import type { LibrarySyncStatus } from '../lib/sync/useInkwellLibrarySync'
 import type { InkwellTier } from '../lib/inkwellEntitlements'
 import type { InkwellEntitlementStatus } from '../hooks/useInkwellEntitlements'
+import { CLOUD_LIMIT_BASIC_DISPLAY, CLOUD_LIMIT_PRO_DISPLAY, formatCloudBytes } from '../lib/cloudQuota'
 import {
   INKWELL_DISPLAY_PRICE_BASIC,
   INKWELL_DISPLAY_PRICE_BASIC_TO_PRO,
   INKWELL_DISPLAY_PRICE_PRO,
 } from '../marketing/pricingCopy'
+
+export type CloudBackupMeterProps = {
+  loading: boolean
+  /** Compressed library zip size (matches cloud quota). */
+  zipBytes: number | null
+  limitBytes: number
+  estimateImageBytes: number
+  estimateManuscriptBytes: number
+}
 
 export type AccountScreenProps = {
   darkMode: boolean
@@ -49,6 +59,8 @@ export type AccountScreenProps = {
     onOpenLibrary: () => void
     onDismiss: () => void
   }
+  /** Basic/Pro: shows backup zip size vs tier limit. */
+  cloudBackupMeter?: CloudBackupMeterProps | null
 }
 
 function tierLabel(tier: InkwellTier): string {
@@ -95,12 +107,12 @@ function purchaseCelebrationCopy(tier: InkwellTier, loading: boolean) {
   if (tier === 'basic') {
     return {
       title: 'You unlocked Inkwell Basic',
-      body: 'Cloud library sync and EPUB export are live on this account. Welcome aboard.',
+      body: `Cloud library sync (${CLOUD_LIMIT_BASIC_DISPLAY} compressed backup) and EPUB export are live on this account. Welcome aboard.`,
     }
   }
   return {
     title: 'You unlocked Inkwell Pro',
-    body: 'The full export suite, advanced formatting, and lifetime updates are live on this account. Welcome aboard.',
+    body: `The full export suite, advanced formatting, and cloud backup up to ${CLOUD_LIMIT_PRO_DISPLAY} are live on this account—the same lifetime updates as Basic. Welcome aboard.`,
   }
 }
 
@@ -121,6 +133,7 @@ export function AccountScreen({
   onOpenCloudSignIn,
   licensing,
   purchaseConfirmation,
+  cloudBackupMeter,
 }: AccountScreenProps) {
   const brandRef = useRef<HTMLButtonElement>(null)
   useThemeShine(brandRef)
@@ -271,12 +284,13 @@ export function AccountScreen({
                   : licensing.tier === 'basic' ?
                     <span className="text-ink/65 dark:text-ink-dark/65">
                       {' '}
-                      — Cloud library sync and EPUB export included. Go Pro for print PDFs and the full export suite.
+                      — Cloud backup up to {CLOUD_LIMIT_BASIC_DISPLAY} and EPUB export included. Go Pro for print PDFs,
+                      higher backup space ({CLOUD_LIMIT_PRO_DISPLAY}), and the full export suite.
                     </span>
                   : (
                     <span className="text-ink/65 dark:text-ink-dark/65">
                       {' '}
-                      — Full export suite and cloud library sync.
+                      — Full export suite and cloud backup up to {CLOUD_LIMIT_PRO_DISPLAY}.
                     </span>
                   )}
                 </>
@@ -350,6 +364,62 @@ export function AccountScreen({
                 <span className="font-medium text-ink dark:text-ink-dark">Pro</span>. On the Free plan your library is
                 local-only on this device until you upgrade or use local exports.
               </p>
+            : null}
+            {licensing?.canUseCloudSync && cloudBackupMeter ?
+              <div
+                className={[
+                  'mt-4 rounded-xl border px-3 py-3',
+                  !cloudBackupMeter.loading &&
+                    cloudBackupMeter.zipBytes != null &&
+                    cloudBackupMeter.zipBytes / cloudBackupMeter.limitBytes >= 0.9 ?
+                    'border-amber-500/60 bg-amber-50/80 dark:border-amber-600/45 dark:bg-amber-950/35'
+                  : 'border-dust/70 bg-white/55 dark:border-border-dark dark:bg-panel-dark/55',
+                ].join(' ')}
+              >
+                <h3 className="text-[11px] font-semibold uppercase tracking-widest text-walnut/85 dark:text-accent-warm/90">
+                  Cloud backup size
+                </h3>
+                {cloudBackupMeter.loading ?
+                  <p className="mt-2 text-sm text-ink/70 dark:text-ink-dark/70">Measuring backup…</p>
+                : cloudBackupMeter.zipBytes != null ?
+                  <>
+                    <div className="mt-2 flex items-baseline justify-between gap-2 text-sm">
+                      <span className="font-medium text-ink dark:text-ink-dark">
+                        {formatCloudBytes(cloudBackupMeter.zipBytes)} /{' '}
+                        {formatCloudBytes(cloudBackupMeter.limitBytes)}
+                      </span>
+                      <span className="text-xs text-ink/55 dark:text-ink-dark/55">Compressed backup</span>
+                    </div>
+                    <div
+                      className="mt-2 h-2 overflow-hidden rounded-full bg-dust/50 dark:bg-border-dark/80"
+                      role="progressbar"
+                      aria-valuenow={Math.round(
+                        Math.min(100, (cloudBackupMeter.zipBytes / cloudBackupMeter.limitBytes) * 100),
+                      )}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-label="Cloud backup usage"
+                    >
+                      <div
+                        className="h-full rounded-full bg-walnut/70 transition-[width] dark:bg-accent-warm/80"
+                        style={{
+                          width: `${Math.min(100, (cloudBackupMeter.zipBytes / cloudBackupMeter.limitBytes) * 100)}%`,
+                        }}
+                      />
+                    </div>
+                    <p className="mt-2 text-xs leading-relaxed text-ink/60 dark:text-ink-dark/60">
+                      Approx. in your library before compression: images ~{' '}
+                      {formatCloudBytes(cloudBackupMeter.estimateImageBytes)}, manuscripts &amp; metadata ~{' '}
+                      {formatCloudBytes(cloudBackupMeter.estimateManuscriptBytes)}. Totals are estimates; the bar uses
+                      your real backup file size.
+                    </p>
+                  </>
+                : (
+                  <p className="mt-2 text-sm text-ink/70 dark:text-ink-dark/70">
+                    Could not measure backup size. Try again after syncing.
+                  </p>
+                )}
+              </div>
             : null}
             <dl className="mt-4 space-y-3 text-sm">
               <div>

@@ -6,7 +6,7 @@ export function CtaSection() {
           Ready to write?
         </h2>
         <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-walnut/85 dark:text-ink-dark/80">
-          Start a manuscript in under a minute—locally on your device, no sign-up required, full writing workspace on Free. Upgrade when you want cloud backup, EPUB, or the full export suite.
+          Draft, format, publish—start a manuscript in under a minute, locally on your device, no sign-up required. Upgrade when you want cloud backup and EPUB (Basic) or the full export suite (Pro); both paid tiers include lifetime updates.
         </p>
         <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
           <a

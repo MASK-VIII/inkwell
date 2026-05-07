@@ -1,4 +1,6 @@
 import {
+  CLOUD_LIMIT_BASIC_DISPLAY,
+  CLOUD_LIMIT_PRO_DISPLAY,
   INKWELL_DISPLAY_PRICE_BASIC,
   INKWELL_DISPLAY_PRICE_PRO,
   INKWELL_DISPLAY_PRICE_PRO_LIST,
@@ -31,8 +33,9 @@ const PLANS: Record<'basic' | 'pro', Plan> = {
     forWhom: 'For your first finish line—or any book you want backed up in the cloud with an ebook export.',
     bullets: [
       'Full writing workspace—the same chapter-first app you can start free on',
-      'Cloud library sync & backup across your devices',
+      `Cloud library sync & backup across your devices (up to ${CLOUD_LIMIT_BASIC_DISPLAY} compressed backup)`,
       'EPUB export',
+      'Lifetime app updates—included with your one-time purchase',
       'Offline-first; unlimited local storage on each device',
     ],
     cta: { label: 'Unlock Basic', href: APP_UPGRADE_HREF.basic },
@@ -45,10 +48,9 @@ const PLANS: Record<'basic' | 'pro', Plan> = {
     badge: 'Early access',
     forWhom: 'For authors who want every export format, advanced layout control, and a toolchain that keeps up with a serious publishing workflow.',
     bullets: [
-      'Everything in Basic',
+      `Everything in Basic, including higher backup space (up to ${CLOUD_LIMIT_PRO_DISPLAY})`,
       'Full export suite (PDF / DOCX / Markdown / plain text)',
       'Advanced formatting + presets',
-      'Lifetime updates',
       'Priority email support',
     ],
     cta: { label: 'Go Pro', href: APP_UPGRADE_HREF.pro },
@@ -65,7 +67,7 @@ function TrustRow() {
   ]
 
   return (
-    <div className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       {items.map((it) => (
         <div
           key={it.label}
@@ -91,7 +93,7 @@ function PlanCard({
   return (
     <div
       className={[
-        'relative rounded-2xl border p-7 shadow-[0_1px_0_rgba(255,255,255,0.55)_inset] transition',
+        'relative rounded-2xl border p-6 shadow-[0_1px_0_rgba(255,255,255,0.55)_inset] transition',
         subtle ?
           'border-dust/60 bg-white/35 hover:border-dust/90 hover:bg-white/45 dark:border-border-dark/70 dark:bg-panel-dark/45 dark:hover:bg-panel-dark/55'
         : 'border-dust/70 bg-parchment/70 hover:border-walnut/40 hover:bg-parchment dark:border-border-dark dark:bg-panel-dark/60 dark:hover:border-accent-warm/40 dark:hover:bg-panel-dark/75',
@@ -127,7 +129,7 @@ function PlanCard({
         </div>
       </div>
 
-      <ul className="mt-6 space-y-2 text-sm text-walnut/90 dark:text-ink-dark/82">
+      <ul className="mt-5 space-y-2 text-sm text-walnut/90 dark:text-ink-dark/82">
         {plan.bullets.map((b) => (
           <li key={b} className="flex gap-2">
             <span className="mt-[0.35rem] h-1.5 w-1.5 shrink-0 rounded-full bg-walnut/45 dark:bg-cream/35" aria-hidden />
@@ -136,7 +138,7 @@ function PlanCard({
         ))}
       </ul>
 
-      {plan.finePrint && <p className="mt-5 text-xs text-walnut/70 dark:text-ink-dark/60">{plan.finePrint}</p>}
+      {plan.finePrint && <p className="mt-4 text-xs text-walnut/70 dark:text-ink-dark/60">{plan.finePrint}</p>}
 
       <div className="mt-7">
         <a
@@ -153,25 +155,26 @@ function PlanCard({
 export function PricingSection() {
   return (
     <section id="pricing" className="bg-parchment dark:bg-panel-dark">
-      <div className="mx-auto max-w-6xl px-5 py-24 sm:px-8">
-        <div className="mb-12 max-w-2xl">
+      <div className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-22">
+        <div className="mb-8 max-w-2xl">
           <p className="text-xs font-medium uppercase tracking-[0.18em] text-walnut/75 dark:text-ink-dark/60">
             Pricing
           </p>
           <h2 className="mt-3 font-serif text-3xl leading-[1.15] text-ink sm:text-4xl dark:text-ink-dark">
-            Start free. Grow into the tier that matches your finish line.
+            Start free. Upgrade when you’re ready.
           </h2>
           <p className="mt-4 text-base leading-relaxed text-walnut/85 dark:text-ink-dark/80">
-            The full writing workspace stays free and local-first—you can install or open the app and write with no sign-up. Add Basic when you want sync and EPUB; step up to Pro when you need the full export suite and advanced formatting for print or submissions.
+            The full writing workspace stays free and local-first—you can install or open the app and write with no sign-up. Add Basic when you want sync and EPUB ({CLOUD_LIMIT_BASIC_DISPLAY} cloud backup); step up to Pro when you need the full export suite, advanced formatting for print or submissions, and {CLOUD_LIMIT_PRO_DISPLAY} backup. Basic and Pro are one-time purchases and both include lifetime app updates as Inkwell grows.
           </p>
+        </div>
+
+        <div className="mt-6 grid gap-6 md:grid-cols-2">
+          <PlanCard plan={PLANS.basic} subtle />
+          <PlanCard plan={PLANS.pro} featured />
         </div>
 
         <TrustRow />
 
-        <div className="mt-10 grid gap-6 md:grid-cols-2">
-          <PlanCard plan={PLANS.basic} subtle />
-          <PlanCard plan={PLANS.pro} featured />
-        </div>
         <p className="mt-6 text-center text-sm leading-relaxed text-walnut/80 dark:text-ink-dark/72">
           {pricingCopy.upgradePathLine}{' '}
           <a

@@ -1,6 +1,6 @@
 import { MarketingScreenshot } from './MarketingScreenshot'
 
-export function HeroSection() {
+export function HeroSection({ darkMode = false }: { darkMode?: boolean }) {
   return (
     <section className="relative overflow-hidden">
       <div
@@ -16,7 +16,7 @@ export function HeroSection() {
             Draft. Format. Publish.
           </h1>
           <p className="max-w-xl text-lg leading-relaxed text-walnut/90 dark:text-ink-dark/82">
-            Chapters, drafts, revisions, and notes stay together in a calm, type-led workspace that is easy to pick up when you are starting out, and deep enough for authors who already live in manuscripts. Start writing locally for free with no sign-up—open the app and go.
+            Draft in a calm, type-led workspace; refine layout when you are ready; export when the manuscript is finished—the same arc whether it is your first book or your fifth. Chapters, revisions, and notes stay together all the way through. Start writing locally for free with no sign-up—open the app and go.
           </p>
           <div className="flex flex-wrap items-center gap-4 pt-2">
             <a
@@ -33,16 +33,17 @@ export function HeroSection() {
             </a>
           </div>
           <p className="text-xs text-walnut/65 dark:text-ink-dark/68">
-            Free forever on your device—no credit card, no account required to begin. Basic adds cloud backup and EPUB; Pro adds the full export suite for print and submissions (sign in when you upgrade).
+            Free is local-only. Basic adds cloud backup + EPUB. Pro adds full exports. Paid tiers include lifetime updates.
           </p>
         </div>
 
         <div className="lg:pl-4">
           <MarketingScreenshot
-            src="/marketing/hero.png"
-            alt="The Inkwell editor with a chapter open"
+            src={darkMode ? '/marketing/chapter-in-progress-dark.png' : '/marketing/chapter-in-progress-light.png'}
+            alt="Inkwell editor with chapter list and an open chapter in the manuscript"
             caption={'Inkwell \u2014 a chapter in progress'}
-            aspectRatio="4 / 3"
+            aspectRatio="3 / 2"
+            objectPosition="50% 12%"
           />
         </div>
       </div>

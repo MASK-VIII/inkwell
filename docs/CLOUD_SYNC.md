@@ -39,7 +39,7 @@ Apply the SQL in **`supabase/migrations/20260503120000_inkwell_library_sync.sql`
 | Piece | Purpose |
 |-------|---------|
 | Table **`library_heads`** | `user_id`, `remote_rev`, `storage_object_path`, `updated_at` with RLS (row owner = `auth.uid()`). |
-| Bucket **`libraries`** | Private object storage; object keys must start with `{auth.uid()}/`. |
+| Bucket **`libraries`** | Private object storage; object keys must start with `{auth.uid()}/`. Per-object size limit is raised by **`20260507180000_raise_libraries_bucket_limit.sql`** (25 GiB ceiling); tier quotas (Basic 2 GiB / Pro 20 GiB compressed backup) are enforced in the client via `src/lib/cloudQuota.ts` + `pushLibraryZip` options. |
 | RPC **`inkwell_commit_library_push`** | Optimistic concurrency: bump rev only when `p_base_rev` matches. |
 | RPC **`inkwell_force_commit_library_push`** | “Keep this device” — always advance rev and set path. |
 

@@ -25,7 +25,7 @@ const FEATURES: Feature[] = [
       'Scratch notes, linked notes, and a series bible that live alongside the manuscript. Keep research, continuity, and draft decisions close to the chapter that needs them.',
   },
   {
-    title: 'Draft \u2192 publication, in one app',
+    title: 'Draft, format, publish\u2014in one app',
     body:
       'Write, format for print or ebook, preview the interior, and export clean DOCX, PDF, or EPUB when the manuscript is ready. Your work stays yours, and it leaves with you.',
   },
@@ -38,10 +38,10 @@ export function FeaturesSection() {
         <div className="mb-12 max-w-2xl">
           <p className="text-xs font-medium uppercase tracking-[0.18em] text-walnut/75 dark:text-ink-dark/60">Features</p>
           <h2 className="mt-3 font-serif text-3xl leading-[1.15] text-ink sm:text-4xl dark:text-ink-dark">
-            Room to grow from chapter one to “the end.”
+            For the first-time author and the pro.
           </h2>
           <p className="mt-4 text-base leading-relaxed text-walnut/85 dark:text-ink-dark/80">
-            Whether you are drafting your first manuscript or your next release, Inkwell stays manuscript-first through the months when ideas become books. Try it locally on the Free tier with no sign-up—everything below works without an account until you choose paid exports or cloud backup.
+            Whether you are drafting your first manuscript or your next release, Inkwell keeps the same draft—format—publish rhythm through the months when ideas become books. Try it locally on the Free tier with no sign-up—everything below works without an account until you choose paid exports or cloud backup.
           </p>
         </div>
 

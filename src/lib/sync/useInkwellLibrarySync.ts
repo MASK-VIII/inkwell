@@ -3,6 +3,7 @@ import { createPersistentTwoWaySyncQueue, type SyncFlushContext } from '../cloud
 import { getSessionSnapshot, signOutInkwellCloud, subscribeAuthSession, updatePassword } from './authSession'
 import { readCachedLibraryHead } from './libraryHeadCache'
 import { exportLibraryZip } from '../projectArchive'
+import { formatCloudBytes } from '../cloudQuota'
 import { clearCachedLibraryHead, fetchRemoteLibraryHead, forcePushLibraryZip, pullLibraryIfNewer, pushLibraryZip } from './syncEngine'
 import { getInkwellSupabaseClient } from './supabaseClient'
 import type { InkwellSupabasePublicConfig } from './syncEnv'
@@ -17,7 +18,16 @@ function friendlyCloudSyncError(message: string): string {
   if (message === 'sync_not_entitled' || message === 'pro_required') {
     return 'Inkwell Basic or Pro is required for cloud library sync.'
   }
+  if (message === 'cloud_quota_exceeded') {
+    return (
+      'Cloud backup limit reached. Your library still works locally. Remove large images or upgrade to raise the limit, then sync again.'
+    )
+  }
   return message
+}
+
+function cloudQuotaExceededToast(bytesUsed: number, bytesLimit: number): string {
+  return `Cloud backup limit reached (${formatCloudBytes(bytesUsed)} / ${formatCloudBytes(bytesLimit)}). Local writing is unchanged. Remove images or upgrade, then sync again.`
 }
 
 type SyncOptions = {
@@ -26,6 +36,8 @@ type SyncOptions = {
   reloadApp: () => void
   /** When false, library push/pull is skipped (Inkwell Pro only). */
   canUseCloudSync?: boolean
+  /** Basic / Pro zip cap; set whenever `canUseCloudSync` is true. */
+  cloudLibraryQuotaBytes?: number | null
 }
 
 export function useInkwellLibrarySync(options: SyncOptions) {
@@ -82,12 +94,25 @@ export function useInkwellLibrarySync(options: SyncOptions) {
             }
 
             if (op.kind === 'push_library') {
-              const r = await pushLibraryZip(cfg)
+              const quota = optsRef.current.cloudLibraryQuotaBytes
+              const pushOpts =
+                typeof quota === 'number' && quota > 0 ? { maxLibraryBytes: quota } : undefined
+              const r = await pushLibraryZip(cfg, pushOpts)
               if (r.ok) return { ok: true }
               if ('conflict' in r && r.conflict) return { ok: 'conflict', serverRev: r.serverRev }
+              if (
+                !r.ok &&
+                'error' in r &&
+                r.error === 'cloud_quota_exceeded' &&
+                'bytesUsed' in r &&
+                'bytesLimit' in r
+              ) {
+                if (firstTry) showToast(cloudQuotaExceededToast(r.bytesUsed, r.bytesLimit))
+                return { ok: false, error: 'cloud_quota_exceeded' }
+              }
               const err = 'error' in r ? r.error : 'Push failed'
-              if (firstTry) showToast(`Cloud push failed: ${friendlyCloudSyncError(err)}`)
-              return { ok: false, error: err }
+              if (firstTry) showToast(`Cloud push failed: ${friendlyCloudSyncError(typeof err === 'string' ? err : 'Push failed')}`)
+              return { ok: false, error: typeof err === 'string' ? err : 'Push failed' }
             }
           } catch (e) {
             const msg = e instanceof Error ? e.message : 'Sync failed'
@@ -283,11 +308,23 @@ export function useInkwellLibrarySync(options: SyncOptions) {
     setStatus('syncing')
     setStatusDetail('Uploading…')
     try {
-      const r = await forcePushLibraryZip(cfg)
+      const quota = optsRef.current.cloudLibraryQuotaBytes
+      const pushOpts =
+        typeof quota === 'number' && quota > 0 ? { maxLibraryBytes: quota } : undefined
+      const r = await forcePushLibraryZip(cfg, pushOpts)
       if (!r.ok) {
-        optsRef.current.showToast(
-          friendlyCloudSyncError('error' in r ? r.error : 'Could not update cloud'),
-        )
+        if (
+          'error' in r &&
+          r.error === 'cloud_quota_exceeded' &&
+          'bytesUsed' in r &&
+          'bytesLimit' in r
+        ) {
+          optsRef.current.showToast(cloudQuotaExceededToast(r.bytesUsed, r.bytesLimit))
+        } else {
+          optsRef.current.showToast(
+            friendlyCloudSyncError('error' in r ? String(r.error) : 'Could not update cloud'),
+          )
+        }
         setStatus('error')
         return
       }

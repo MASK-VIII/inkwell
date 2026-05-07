@@ -5,7 +5,7 @@ type Step = {
 
 const STEPS: Step[] = [
   {
-    title: 'Write',
+    title: 'Draft',
     body:
       'Create a book, sketch an outline, add chapters as you go. Notes and a series bible live alongside the manuscript so context is always one click away.',
   },
@@ -28,10 +28,10 @@ export function HowItWorksSection() {
         <div className="mb-12 max-w-2xl">
           <p className="text-xs font-medium uppercase tracking-[0.18em] text-walnut/75 dark:text-ink-dark/60">How it works</p>
           <h2 className="mt-3 font-serif text-3xl leading-[1.15] text-ink sm:text-4xl dark:text-ink-dark">
-            Three quiet phases.
+            With you every step of the way.
           </h2>
           <p className="mt-4 text-base leading-relaxed text-walnut/85 dark:text-ink-dark/80">
-            One steady rhythm from blank page to the file you hand off—whether that is your debut or your latest series installment.
+            One steady rhythm from blank page to the file you hand off—debut or backlist.
           </p>
         </div>
 

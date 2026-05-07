@@ -160,6 +160,14 @@ export function TermsPage() {
         the cloud sync service. We reserve the right to suspend accounts that do.
       </p>
 
+      <h2>Cloud storage</h2>
+      <p>
+        Paid tiers that include cloud library backup are subject to per-tier limits on the size of your compressed
+        library backup (currently 2 GB on Basic and 20 GB on Pro). Local writing on your device is not capped by these
+        limits. If you exceed your tier limit, cloud sync uploads may pause until you free space or upgrade; we may
+        adjust limits or fair-use policies with notice as the product matures.
+      </p>
+
       <h2>Contact</h2>
       <p>
         Questions about these terms can go to{' '}

@@ -54,7 +54,7 @@ import { SyncStatusStrip } from './components/SyncStatusStrip'
 import { ShelfLinkedNotesList } from './components/ShelfLinkedNotesList'
 import { StickyNotePopout } from './components/book-tools/StickyNotePopout'
 import { ManuscriptEditor } from './components/ManuscriptEditor'
-import { ManuscriptRow } from './components/ManuscriptRow'
+import { ChaptersScrollableList } from './components/ChaptersScrollableList'
 import { FormatPreviewModeBar } from './components/FormatPreviewModeBar'
 import { devMarkChaptersToggleEnd, devMarkChaptersToggleStart } from './lib/dev/chaptersOverlayPerf'
 import {
@@ -132,6 +132,7 @@ import {
 } from './lib/sync/authSession'
 import { getInkwellSupabaseClient } from './lib/sync/supabaseClient'
 import { getInkwellSupabasePublicConfig, isInkwellCloudSyncConfigured } from './lib/sync/syncEnv'
+import { cloudLibraryQuotaBytes } from './lib/inkwellEntitlements'
 import { useInkwellLibrarySync } from './lib/sync/useInkwellLibrarySync'
 import { useInkwellEntitlements } from './hooks/useInkwellEntitlements'
 import {
@@ -157,6 +158,7 @@ import {
   importInkwellArchive,
   type ImportArchiveResult,
 } from './lib/projectArchive'
+import { estimateLibraryFootprint } from './lib/libraryFootprint'
 import { mergeDocContents, splitDocAtTopLevelIndex } from './lib/chapterSplit'
 import type { NotesTourStepId } from './lib/notesTutorialSteps'
 import type { TourStepId } from './lib/tutorialSteps'
@@ -495,6 +497,9 @@ export default function App() {
     }
   })
   const [chaptersPanelMotionLive, setChaptersPanelMotionLive] = useState(false)
+  /** Survives Write `leftOverlay` remounts so chapter list scroll isn’t lost on selection. */
+  const writeChaptersListScrollTopRef = useRef(0)
+  const workspaceChaptersListScrollTopRef = useRef(0)
   const [formatThemeAsideCollapsed, setFormatThemeAsideCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false
     try {
@@ -3006,21 +3011,16 @@ export default function App() {
                 <ChevronLeft className="h-4 w-4" strokeWidth={2.25} />
               </button>
             </div>
-            <div className="min-h-0 flex-1 touch-pan-y space-y-1 overflow-y-auto overscroll-y-contain px-3 py-4 sm:px-5 sm:py-5">
-              {chapters.map((ms, i) => (
-                <ManuscriptRow
-                  key={ms.id}
-                  manuscript={ms}
-                  active={ms.id === currentId}
-                  onSelectChapter={selectChapter}
-                  onDeleteChapter={deleteChapter}
-                  onDropReorder={onReorder}
-                  onSplitChapter={splitChapterAtCursor}
-                  onMergeWithNext={mergeChapterWithNext}
-                  canMergeWithNext={i < chapters.length - 1}
-                />
-              ))}
-            </div>
+            <ChaptersScrollableList
+              chapters={chapters}
+              currentId={currentId}
+              onSelectChapter={selectChapter}
+              onDeleteChapter={deleteChapter}
+              onDropReorder={onReorder}
+              onSplitChapter={splitChapterAtCursor}
+              onMergeWithNext={mergeChapterWithNext}
+              persistedScrollTopRef={writeChaptersListScrollTopRef}
+            />
             <p className="mt-auto border-t border-dust px-3 py-3 text-[11px] leading-snug text-ink/55 dark:border-border-dark dark:text-ink-dark/55 sm:px-5">
               Drag a section by its book icon. Split uses the cursor position in the open section.
             </p>
@@ -3053,18 +3053,76 @@ export default function App() {
         Boolean(supabasePublicConfig) &&
         !inkwellEntitlements.loading &&
         inkwellEntitlements.gates.canUseCloudSync,
+      cloudLibraryQuotaBytes: cloudLibraryQuotaBytes(inkwellEntitlements.gates.tier),
     }),
     [
       supabasePublicConfig,
       showToast,
       inkwellEntitlements.loading,
       inkwellEntitlements.gates.canUseCloudSync,
+      inkwellEntitlements.gates.tier,
     ],
   )
   const inkwellLibrarySync = useInkwellLibrarySync(librarySyncOptions)
+  const [accountCloudMeter, setAccountCloudMeter] = useState<{
+    loading: boolean
+    zipBytes: number | null
+    estimateImageBytes: number
+    estimateManuscriptBytes: number
+  } | null>(null)
   const [cloudSignInBusy, setCloudSignInBusy] = useState(false)
   const [passwordRecoveryBusy, setPasswordRecoveryBusy] = useState(false)
   const [syncConflictBusy, setSyncConflictBusy] = useState(false)
+
+  useEffect(() => {
+    if (route !== 'account') {
+      setAccountCloudMeter(null)
+      return
+    }
+    if (!isInkwellCloudSyncConfigured()) return
+    if (inkwellEntitlements.loading) return
+    if (!inkwellEntitlements.gates.canUseCloudSync) {
+      setAccountCloudMeter(null)
+      return
+    }
+    let cancelled = false
+    setAccountCloudMeter({
+      loading: true,
+      zipBytes: null,
+      estimateImageBytes: 0,
+      estimateManuscriptBytes: 0,
+    })
+    void (async () => {
+      try {
+        const est = estimateLibraryFootprint()
+        const blob = await exportLibraryZip()
+        if (cancelled) return
+        setAccountCloudMeter({
+          loading: false,
+          zipBytes: blob.size,
+          estimateImageBytes: est.estimatedImageBytes,
+          estimateManuscriptBytes: est.estimatedManuscriptMetadataBytes,
+        })
+      } catch {
+        if (!cancelled) {
+          setAccountCloudMeter({
+            loading: false,
+            zipBytes: null,
+            estimateImageBytes: 0,
+            estimateManuscriptBytes: 0,
+          })
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [
+    route,
+    inkwellEntitlements.loading,
+    inkwellEntitlements.gates.canUseCloudSync,
+    inkwellEntitlements.gates.tier,
+  ])
 
   useEffect(() => {
     cloudSyncNotifyRef.current = () => {
@@ -3274,6 +3332,17 @@ export default function App() {
                   navigateRoute('bookshelf')
                 },
                 onDismiss: dismissPurchaseCelebration,
+              }
+            : undefined
+          }
+          cloudBackupMeter={
+            route === 'account' &&
+            accountCloudMeter &&
+            inkwellEntitlements.gates.canUseCloudSync &&
+            cloudLibraryQuotaBytes(inkwellEntitlements.gates.tier) != null ?
+              {
+                ...accountCloudMeter,
+                limitBytes: cloudLibraryQuotaBytes(inkwellEntitlements.gates.tier)!,
               }
             : undefined
           }
@@ -4675,21 +4744,17 @@ export default function App() {
                         </button>
                       ) : null}
                     </div>
-                    <div className="min-h-0 flex-1 space-y-1 overflow-auto px-3 py-4 sm:px-5 sm:py-5">
-                      {chapters.map((ms, i) => (
-                        <ManuscriptRow
-                          key={ms.id}
-                          manuscript={ms}
-                          active={ms.id === currentId}
-                          onSelectChapter={selectChapter}
-                          onDeleteChapter={deleteChapter}
-                          onDropReorder={onReorder}
-                          onSplitChapter={splitChapterAtCursor}
-                          onMergeWithNext={mergeChapterWithNext}
-                          canMergeWithNext={i < chapters.length - 1}
-                        />
-                      ))}
-                    </div>
+                    <ChaptersScrollableList
+                      chapters={chapters}
+                      currentId={currentId}
+                      onSelectChapter={selectChapter}
+                      onDeleteChapter={deleteChapter}
+                      onDropReorder={onReorder}
+                      onSplitChapter={splitChapterAtCursor}
+                      onMergeWithNext={mergeChapterWithNext}
+                      className="min-h-0 flex-1 space-y-1 overflow-auto px-3 py-4 sm:px-5 sm:py-5"
+                      persistedScrollTopRef={workspaceChaptersListScrollTopRef}
+                    />
                     <p className="mt-auto border-t border-dust px-3 py-3 text-[11px] leading-snug text-ink/55 dark:border-border-dark dark:text-ink-dark/55 sm:px-5">
                       Drag a section by its book icon. Split uses the cursor position in the open section.
                     </p>

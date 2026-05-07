@@ -2,6 +2,8 @@ import { Globe, Lock, ShieldCheck, Sparkles } from 'lucide-react'
 import { MarketingFooter } from './MarketingFooter'
 import { MarketingNav } from './MarketingNav'
 import {
+  CLOUD_LIMIT_BASIC_DISPLAY,
+  CLOUD_LIMIT_PRO_DISPLAY,
   INKWELL_DISPLAY_PRICE_BASIC,
   INKWELL_DISPLAY_PRICE_PRO,
   INKWELL_DISPLAY_PRICE_PRO_LIST,
@@ -45,8 +47,9 @@ const TILES: BuyTile[] = [
     forWhom:
       'For your first finish line\u2014or any book you want backed up in the cloud with an ebook export.',
     bullets: [
-      'Cloud library sync & backup across your devices',
+      `Cloud library sync & backup across your devices (up to ${CLOUD_LIMIT_BASIC_DISPLAY} compressed backup)`,
       'EPUB export',
+      'Lifetime app updates—included with your one-time purchase',
       'Full chapter-first writing workspace',
       'Offline-first; unlimited local storage on each device',
     ],
@@ -62,10 +65,9 @@ const TILES: BuyTile[] = [
     forWhom:
       'For authors who want every export format, advanced layout control, and a toolchain that keeps up with a serious publishing workflow.',
     bullets: [
-      'Everything in Basic',
+      `Everything in Basic, including higher backup space (up to ${CLOUD_LIMIT_PRO_DISPLAY})`,
       'Full export suite (PDF / DOCX / Markdown / plain text)',
       'Advanced formatting + presets',
-      'Lifetime updates',
       'Priority email support',
     ],
     cta: { label: `Get Pro (${INKWELL_DISPLAY_PRICE_PRO})`, href: BUY_HREF.pro },
@@ -167,7 +169,7 @@ const REASSURANCE_ITEMS: ReassuranceItem[] = [
   {
     icon: Globe,
     title: 'All prices in USD',
-    body: 'One-time purchases. Pro includes lifetime updates.',
+    body: `One-time purchases on Basic and Pro both include lifetime app updates. Cloud backup is capped per tier (${CLOUD_LIMIT_BASIC_DISPLAY} Basic, ${CLOUD_LIMIT_PRO_DISPLAY} Pro).`,
   },
   {
     icon: Sparkles,
@@ -226,7 +228,7 @@ export function BuyPage() {
     title: 'Buy Inkwell \u2014 Basic or Pro',
     canonicalPath: '/buy',
     ogDescription:
-      'Buy Inkwell: choose Basic for cloud sync and EPUB, or Pro for the full export suite. One-time purchases, lifetime updates on Pro.',
+      `Buy Inkwell: choose Basic for cloud sync (${CLOUD_LIMIT_BASIC_DISPLAY} backup) and EPUB, or Pro for the full export suite and ${CLOUD_LIMIT_PRO_DISPLAY} backup. One-time purchases include lifetime app updates on both tiers.`,
   })
 
   return (

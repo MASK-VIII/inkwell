@@ -12,7 +12,7 @@ import { useMarketingDarkMode } from './useMarketingDarkMode'
 
 /**
  * Public marketing landing for inkwell.enterthelimelight.com.
- * Light-mode only by design. Renders in place of the app at `/`.
+ * Renders in place of the app at `/`.
  */
 export function MarketingPage() {
   const { darkMode, toggle } = useMarketingDarkMode()
@@ -27,10 +27,10 @@ export function MarketingPage() {
   return (
     <main className="marketing-landing min-h-screen bg-parchment text-ink antialiased dark:bg-panel-dark dark:text-ink-dark">
       <MarketingNav darkMode={darkMode} onToggleDarkMode={toggle} />
-      <HeroSection />
+      <HeroSection darkMode={darkMode} />
       <FeaturesSection />
       <HowItWorksSection />
-      <ScreenshotsSection />
+      <ScreenshotsSection darkMode={darkMode} />
       <PricingSection />
       <FaqSection />
       <CtaSection />
