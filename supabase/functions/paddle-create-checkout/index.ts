@@ -24,9 +24,24 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
 /** Paddle-approved host for hosted checkout `checkout.url` when `PADDLE_CHECKOUT_PAGE_URL` is not set. */
 const DEFAULT_CHECKOUT_PAGE_URL = 'https://inkwell.enterthelimelight.com/app'
 
-function corsHeaders(): HeadersInit {
+function isAllowedOrigin(origin: string | null): origin is string {
+  if (!origin) return false
+  const o = origin.trim()
+  if (!o) return false
+  // Web production + local dev + Electron desktop shell origin.
+  return (
+    o === 'https://inkwell.enterthelimelight.com' ||
+    o === 'http://localhost:5173' ||
+    o === 'http://127.0.0.1:5173' ||
+    o === 'inkwell://app'
+  )
+}
+
+function corsHeaders(origin: string | null): HeadersInit {
+  const allowOrigin = isAllowedOrigin(origin) ? origin!.trim() : 'null'
   return {
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': allowOrigin,
+    Vary: 'Origin',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   }
 }
@@ -83,20 +98,21 @@ Deno.serve(async (req) => {
         error: 'internal_error',
         detail: e instanceof Error ? e.message : String(e),
       }),
-      { status: 500, headers: { ...corsHeaders(), 'Content-Type': 'application/json' } },
+      { status: 500, headers: { ...corsHeaders(req.headers.get('Origin')), 'Content-Type': 'application/json' } },
     )
   }
 })
 
 async function handlePaddleCreateCheckout(req: Request): Promise<Response> {
+  const origin = req.headers.get('Origin')
   if (req.method === 'OPTIONS') {
-    return new Response(null, { status: 204, headers: corsHeaders() })
+    return new Response(null, { status: 204, headers: corsHeaders(origin) })
   }
 
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'method_not_allowed' }), {
       status: 405,
-      headers: { ...corsHeaders(), 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders(origin), 'Content-Type': 'application/json' },
     })
   }
 
@@ -116,14 +132,14 @@ async function handlePaddleCreateCheckout(req: Request): Promise<Response> {
     console.error('paddle-create-checkout: missing SUPABASE_URL or SUPABASE_ANON_KEY')
     return new Response(JSON.stringify({ error: 'server_misconfigured' }), {
       status: 500,
-      headers: { ...corsHeaders(), 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders(origin), 'Content-Type': 'application/json' },
     })
   }
 
   if (!paddleKey) {
     return new Response(JSON.stringify({ error: 'missing_paddle_api_key' }), {
       status: 500,
-      headers: { ...corsHeaders(), 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders(origin), 'Content-Type': 'application/json' },
     })
   }
 
@@ -131,7 +147,7 @@ async function handlePaddleCreateCheckout(req: Request): Promise<Response> {
   if (!authHeader?.startsWith('Bearer ')) {
     return new Response(JSON.stringify({ error: 'missing_authorization' }), {
       status: 401,
-      headers: { ...corsHeaders(), 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders(origin), 'Content-Type': 'application/json' },
     })
   }
 
@@ -145,7 +161,7 @@ async function handlePaddleCreateCheckout(req: Request): Promise<Response> {
   if (userErr || !user?.id) {
     return new Response(JSON.stringify({ error: 'unauthorized' }), {
       status: 401,
-      headers: { ...corsHeaders(), 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders(origin), 'Content-Type': 'application/json' },
     })
   }
 
@@ -156,7 +172,7 @@ async function handlePaddleCreateCheckout(req: Request): Promise<Response> {
   } catch {
     return new Response(JSON.stringify({ error: 'invalid_json' }), {
       status: 400,
-      headers: { ...corsHeaders(), 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders(origin), 'Content-Type': 'application/json' },
     })
   }
 
@@ -171,7 +187,7 @@ async function handlePaddleCreateCheckout(req: Request): Promise<Response> {
   if (!priceId || !['basic', 'pro', 'upgrade'].includes(intent)) {
     return new Response(JSON.stringify({ error: 'invalid_intent_or_price', intent }), {
       status: 400,
-      headers: { ...corsHeaders(), 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders(origin), 'Content-Type': 'application/json' },
     })
   }
 
@@ -199,7 +215,7 @@ async function handlePaddleCreateCheckout(req: Request): Promise<Response> {
     console.error('paddle-create-checkout: fetch failed', e)
     return new Response(JSON.stringify({ error: 'paddle_network_error' }), {
       status: 502,
-      headers: { ...corsHeaders(), 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders(origin), 'Content-Type': 'application/json' },
     })
   }
 
@@ -211,7 +227,7 @@ async function handlePaddleCreateCheckout(req: Request): Promise<Response> {
     console.error('paddle-create-checkout: non-json response', paddleRes.status, rawText.slice(0, 500))
     return new Response(JSON.stringify({ error: 'paddle_invalid_response', status: paddleRes.status }), {
       status: 502,
-      headers: { ...corsHeaders(), 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders(origin), 'Content-Type': 'application/json' },
     })
   }
 
@@ -219,7 +235,7 @@ async function handlePaddleCreateCheckout(req: Request): Promise<Response> {
     console.warn('paddle-create-checkout: paddle error', paddleRes.status, json)
     return new Response(JSON.stringify({ error: 'paddle_api_error', status: paddleRes.status, paddle: json }), {
       status: 400,
-      headers: { ...corsHeaders(), 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders(origin), 'Content-Type': 'application/json' },
     })
   }
 
@@ -228,12 +244,12 @@ async function handlePaddleCreateCheckout(req: Request): Promise<Response> {
     console.error('paddle-create-checkout: no checkout.url in response', json)
     return new Response(JSON.stringify({ error: 'missing_checkout_url', paddle: json }), {
       status: 502,
-      headers: { ...corsHeaders(), 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders(origin), 'Content-Type': 'application/json' },
     })
   }
 
   return new Response(JSON.stringify({ url }), {
     status: 200,
-    headers: { ...corsHeaders(), 'Content-Type': 'application/json' },
+    headers: { ...corsHeaders(origin), 'Content-Type': 'application/json' },
   })
 }

@@ -79,14 +79,6 @@ function tryDecodeBase64Key(secret: string): Uint8Array | null {
   }
 }
 
-async function hmacHex(keyBytes: Uint8Array, message: string): Promise<string> {
-  const key = await crypto.subtle.importKey('raw', keyBytes, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
-  const sig = await crypto.subtle.sign('HMAC', key, encoder.encode(message))
-  return Array.from(new Uint8Array(sig))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('')
-}
-
 async function hmacHexBytes(keyBytes: Uint8Array, messageBytes: Uint8Array): Promise<string> {
   const key = await crypto.subtle.importKey('raw', keyBytes, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
   const sig = await crypto.subtle.sign('HMAC', key, messageBytes)
@@ -299,6 +291,9 @@ Deno.serve(async (req) => {
     return new Response('Method not allowed', { status: 405 })
   }
 
+  const paddleEnv = (Deno.env.get('PADDLE_ENVIRONMENT') ?? '').trim().toLowerCase()
+  const isProduction = paddleEnv === 'production' || paddleEnv === 'prod'
+
   const skipSig = (Deno.env.get('PADDLE_SKIP_SIGNATURE') ?? '').trim() === '1'
   const secret = Deno.env.get('PADDLE_WEBHOOK_SECRET') ?? ''
   const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
@@ -306,6 +301,11 @@ Deno.serve(async (req) => {
 
   if (!secret || !supabaseUrl || !serviceKey) {
     console.error('paddle-webhook: missing env (PADDLE_WEBHOOK_SECRET, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)')
+    return new Response('Server misconfigured', { status: 500 })
+  }
+
+  if (skipSig && isProduction) {
+    console.error('paddle-webhook: PADDLE_SKIP_SIGNATURE=1 is not allowed in production')
     return new Response('Server misconfigured', { status: 500 })
   }
 
@@ -320,7 +320,7 @@ Deno.serve(async (req) => {
     const okSig = await verifyPaddleSignature(rawBodyBytes, sig, secret)
     if (!okSig) {
       const debugSig = (Deno.env.get('PADDLE_DEBUG_SIGNATURE') ?? '').trim() === '1'
-      if (debugSig) {
+      if (debugSig && !isProduction) {
         const dbg = await debugSignature(rawBodyBytes, sig, secret)
         return new Response(
           JSON.stringify(

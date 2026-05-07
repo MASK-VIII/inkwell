@@ -9,6 +9,13 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
 
+function isSandboxMode(): boolean {
+  const env = (Deno.env.get('PADDLE_ENVIRONMENT') ?? '').trim().toLowerCase()
+  if (env === 'sandbox' || env === 'test') return true
+  // If unset, treat as misconfigured: this function is intentionally unsafe.
+  return false
+}
+
 function readIdSet(envName: string): Set<string> {
   const raw = (Deno.env.get(envName) ?? '').trim()
   if (!raw) return new Set()
@@ -112,6 +119,11 @@ function shouldRevokeEntitlement(eventType: string, data: Record<string, unknown
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204 })
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 })
+
+  if (!isSandboxMode()) {
+    console.error('paddle-webhook-sandbox: refusing to run without PADDLE_ENVIRONMENT=sandbox')
+    return new Response('Server misconfigured', { status: 500 })
+  }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''

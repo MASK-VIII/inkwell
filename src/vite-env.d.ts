@@ -5,6 +5,8 @@ interface ImportMetaEnv {
   readonly VITE_INKWELL_CLOUD_BACKUP_URL?: string
   /** Optional Bearer token sent as Authorization (private / self-hosted receivers only). */
   readonly VITE_INKWELL_CLOUD_BACKUP_KEY?: string
+  /** Explicit opt-in for the legacy unauthenticated backup POST flow (disabled in production by default). */
+  readonly VITE_ENABLE_LEGACY_BACKUP?: string
   /** When truthy, enables Supabase-backed library sync (requires URL + anon key). */
   readonly VITE_INKWELL_CLOUD_SYNC?: string
   /** HTTPS URL to the Windows desktop installer (e.g. GitHub Release asset). Shown on the sign-in screen in web builds when set. */
