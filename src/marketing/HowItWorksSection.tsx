@@ -41,7 +41,7 @@ export function HowItWorksSection() {
               key={step.title}
               className="relative rounded-2xl border border-dust/70 bg-white/60 p-7 dark:border-border-dark dark:bg-panel-dark/60"
             >
-              <p className="font-serif text-5xl leading-none text-walnut/30 dark:text-cream/18">
+              <p className="font-serif text-5xl leading-none tabular-nums text-walnut/45 dark:text-accent-warm/65">
                 {String(i + 1).padStart(2, '0')}
               </p>
               <h3 className="mt-4 font-serif text-xl leading-snug text-ink dark:text-ink-dark">{step.title}</h3>

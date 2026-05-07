@@ -5,29 +5,29 @@ type Feature = {
 
 const FEATURES: Feature[] = [
   {
-    title: 'A manuscript-first workspace',
+    title: 'Structure that grows with the book',
     body:
-      'Books, chapters, scenes, and notes that travel together—simple enough on day one, flexible enough when your process gets opinionated.',
+      'Organize by title, chapter, and scene—add depth when you need it, not before.',
   },
   {
-    title: 'Highly customizable, drag-and-drop first',
+    title: 'Reorder by dragging',
     body:
-      'Reorder chapters, move notes, and shape your workspace with simple, tactile drag-and-drop. Inkwell stays flexible as the manuscript evolves.',
+      'Move chapters and notes on the shelf when the outline shifts—fewer loose files and side documents.',
   },
   {
-    title: 'A pleasant place to write',
+    title: 'Made for long sessions',
     body:
-      'Typography-led and distraction-light, with a page that feels calm at hour one and hour four. Light mode, dark mode, and everything in between.',
+      'Clear type and a quiet page. Switch light or dark when the room—or your eyes—changes.',
   },
   {
-    title: 'Robust notes that belong to the book',
+    title: 'Notes tied to the book',
     body:
-      'Scratch notes, linked notes, and a series bible that live alongside the manuscript. Keep research, continuity, and draft decisions close to the chapter that needs them.',
+      'Scratch pads, linked notes, and a series bible next to your chapters—catch continuity without jumping elsewhere.',
   },
   {
     title: 'Draft, format, publish\u2014in one app',
     body:
-      'Write, format for print or ebook, preview the interior, and export clean DOCX, PDF, or EPUB when the manuscript is ready. Your work stays yours, and it leaves with you.',
+      'Preview print and ebook layouts, then export DOCX, PDF, or EPUB when you are ready. Files download to you.',
   },
 ]
 
