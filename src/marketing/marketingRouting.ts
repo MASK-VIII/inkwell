@@ -9,7 +9,7 @@
  * On the production Inkwell subdomain, unknown paths resolve to the same SPA bundle;
  * send those to `/` so visitors always see the landing page unless they are on
  * `/app`, `/pricing`, `/buy`, `/legal/{privacy,terms,refund}`, the legacy
- * `/privacy`, `/terms`, `/refund` aliases, or `/changelog`.
+ * `/privacy`, `/terms`, `/refund` aliases, or `/changelog` (Roadmap page).
  */
 
 export type MarketingView =

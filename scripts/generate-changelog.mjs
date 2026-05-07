@@ -9,8 +9,15 @@ import { dirname, join } from 'node:path'
  *   - `changelog: ` (recommended)
  *   - `fix: ` / `feat: ` (optional convenience)
  *
- * Example commit message:
- *   changelog: add pricing section to marketing page
+ * Write subjects for people using Inkwell—not for developers scanning git:
+ * - Say what they will notice (benefit or outcome), in plain words.
+ * - Avoid file paths, component names, libraries, ticket IDs, and abbreviations (API, PR, RLS, JWT).
+ * - Prefer short everyday words over jargon (“Sign in from your profile” beats “Expose onGoToSignIn on InkwellProfileMenu”).
+ *
+ * Examples:
+ *   changelog: Clearer pricing on the website
+ *   changelog: Sign-in option in the profile menu when working offline
+ *   fix: Export dialog no longer hangs on long books
  */
 
 const OUT_PATH = join(process.cwd(), 'public', 'changelog.json')
@@ -26,6 +33,8 @@ function safeRun(cmd) {
     return ''
   }
 }
+
+const MAX_ITEMS = 4
 
 const raw = safeRun(
   [
@@ -55,6 +64,7 @@ const items = lines
     return { kind, date, title, hash: hash.slice(0, 7) }
   })
   .filter(Boolean)
+  .slice(0, MAX_ITEMS)
 
 mkdirSync(dirname(OUT_PATH), { recursive: true })
 writeFileSync(

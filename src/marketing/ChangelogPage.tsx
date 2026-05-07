@@ -8,7 +8,7 @@ export function ChangelogPage() {
   const { darkMode, toggle } = useMarketingDarkMode()
 
   useEffect(() => {
-    document.title = 'Changelog \u2014 Inkwell'
+    document.title = 'Roadmap \u2014 Inkwell'
     return () => {
       document.title = 'Inkwell'
     }

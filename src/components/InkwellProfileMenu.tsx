@@ -8,6 +8,8 @@ export type InkwellProfileMenuProps = {
   onSignOutCloud: () => void | Promise<void>
   onAppSignOut: () => void
   showLibraryHubLink: boolean
+  /** Cloud sign-in screen; show when sync is configured and there is no cloud session. */
+  onGoToSignIn?: () => void
   /** When set, opens the Account screen (#account). */
   onGoToAccount?: () => void
   onGoToLibraryHub: () => void
@@ -24,6 +26,7 @@ export function InkwellProfileMenu({
   onSignOutCloud,
   onAppSignOut,
   showLibraryHubLink,
+  onGoToSignIn,
   onGoToAccount,
   onGoToLibraryHub,
   menuAlign = 'right',
@@ -104,6 +107,19 @@ export function InkwellProfileMenu({
           </div>
           <div className="border-t border-dust/80 dark:border-border-dark" />
           <div className="px-1 py-1">
+            {!userEmail && onGoToSignIn ?
+              <button
+                type="button"
+                role="menuitem"
+                className={`${itemClass} font-medium`}
+                onClick={() => {
+                  close()
+                  onGoToSignIn()
+                }}
+              >
+                Sign in
+              </button>
+            : null}
             {showLibraryHubLink ?
               <>
                 {onGoToAccount ?

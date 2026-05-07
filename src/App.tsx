@@ -1129,6 +1129,11 @@ export default function App() {
     return saved
   }, [clearPersistIdleTimer])
 
+  const profileMenuGoToCloudSignIn = useCallback(() => {
+    syncPersistedState()
+    navigateToCloudSignIn()
+  }, [syncPersistedState, navigateToCloudSignIn])
+
   const tourGoBookshelf = useCallback(() => {
     syncPersistedState()
     navigateRoute('bookshelf')
@@ -3284,6 +3289,8 @@ export default function App() {
           profileMenu={{
             userEmail: inkwellLibrarySync.userEmail,
             cloudSyncConfigured: isInkwellCloudSyncConfigured(),
+            onGoToSignIn:
+              isInkwellCloudSyncConfigured() && !inkwellLibrarySync.userEmail ? profileMenuGoToCloudSignIn : undefined,
             onSyncNow: () => {
               if (requireEntitlement('basic')) inkwellLibrarySync.syncNow()
             },
@@ -3621,6 +3628,11 @@ export default function App() {
                   <InkwellProfileMenu
                     userEmail={inkwellLibrarySync.userEmail}
                     cloudSyncConfigured={isInkwellCloudSyncConfigured()}
+                    onGoToSignIn={
+                      isInkwellCloudSyncConfigured() && !inkwellLibrarySync.userEmail ?
+                        profileMenuGoToCloudSignIn
+                      : undefined
+                    }
                     onSyncNow={() => {
                       if (requireEntitlement('basic')) inkwellLibrarySync.syncNow()
                     }}
@@ -4666,6 +4678,11 @@ export default function App() {
                 <InkwellProfileMenu
                   userEmail={inkwellLibrarySync.userEmail}
                   cloudSyncConfigured={isInkwellCloudSyncConfigured()}
+                  onGoToSignIn={
+                    isInkwellCloudSyncConfigured() && !inkwellLibrarySync.userEmail ?
+                      profileMenuGoToCloudSignIn
+                    : undefined
+                  }
                   onSyncNow={() => {
                     if (requireEntitlement('basic')) inkwellLibrarySync.syncNow()
                   }}

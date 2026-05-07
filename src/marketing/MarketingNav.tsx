@@ -59,7 +59,7 @@ export function MarketingNav({ showAnchors = true, darkMode, onToggleDarkMode }:
                   className="rounded-sm transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-walnut/35 dark:hover:text-cream dark:focus-visible:ring-cream/40"
                   href="/changelog"
                 >
-                  Changelog
+                  Roadmap
                 </a>
               </li>
               <li>
