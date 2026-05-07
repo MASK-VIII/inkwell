@@ -15,9 +15,15 @@ export type WriterPresetId = 'author'
 export type InkwellBootstrap = {
   version: 1
   writerPreset?: WriterPresetId
-  /** Sign-in gate completed (field name kept for v1 localStorage compatibility). */
+  /**
+   * First-run “welcome” / gate completion (name kept for v1 localStorage).
+   * Anonymous free use does not require completing the gate; see `shouldShowSignIn`.
+   */
   welcomeDone: boolean
-  /** When true, skip auto-completing the gate from an existing library (user chose Sign out). */
+  /**
+   * When true (e.g. after app Sign out), show the sign-in gate again on next load.
+   * New installs leave this unset so `/app` opens the workspace without forcing `#signin`.
+   */
   preferSignInGate?: boolean
   /** Last tutorial content version the user completed or skipped. */
   tutorialVersion: number
@@ -101,7 +107,7 @@ function saveBootstrap(state: InkwellBootstrap): void {
 
 /**
  * Read persisted bootstrap; if the user already had projects or legacy keys, migrate so
- * `welcomeDone` is set and they never see the first-run sign-in gate.
+ * `welcomeDone` is set. That avoids treating existing libraries as “stuck” on the gate.
  */
 export function readBootstrap(): InkwellBootstrap {
   if (typeof window === 'undefined')
@@ -131,8 +137,9 @@ export function readBootstrap(): InkwellBootstrap {
   return state
 }
 
+/** True only when the user explicitly returned to the gate (e.g. Sign out), not for every new profile. */
 export function shouldShowSignIn(bootstrap: InkwellBootstrap): boolean {
-  return !bootstrap.welcomeDone
+  return !bootstrap.welcomeDone && bootstrap.preferSignInGate === true
 }
 
 export function shouldShowTutorial(bootstrap: InkwellBootstrap): boolean {

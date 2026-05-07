@@ -7,7 +7,7 @@ const FEATURES: Feature[] = [
   {
     title: 'A manuscript-first workspace',
     body:
-      'Books, chapters, scenes, and notes that travel together. Build a shelf that matches how you think, not how a template expects you to.',
+      'Books, chapters, scenes, and notes that travel together—simple enough on day one, flexible enough when your process gets opinionated.',
   },
   {
     title: 'Highly customizable, drag-and-drop first',
@@ -38,10 +38,10 @@ export function FeaturesSection() {
         <div className="mb-12 max-w-2xl">
           <p className="text-xs font-medium uppercase tracking-[0.18em] text-walnut/75 dark:text-ink-dark/60">Features</p>
           <h2 className="mt-3 font-serif text-3xl leading-[1.15] text-ink sm:text-4xl dark:text-ink-dark">
-            Built for the part of writing that takes the longest.
+            Room to grow from chapter one to “the end.”
           </h2>
           <p className="mt-4 text-base leading-relaxed text-walnut/85 dark:text-ink-dark/80">
-            Most writing apps are tuned for short notes. Inkwell is tuned for the months between an idea and a finished manuscript.
+            Whether you are drafting your first manuscript or your next release, Inkwell stays manuscript-first through the months when ideas become books. Try it locally on the Free tier with no sign-up—everything below works without an account until you choose paid exports or cloud backup.
           </p>
         </div>
 

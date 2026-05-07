@@ -1,8 +1,10 @@
+import { BuyPage } from './BuyPage'
+import { ChangelogPage } from './ChangelogPage'
 import { classifyMarketingPath } from './marketingRouting'
 import { MarketingPage } from './MarketingPage'
 import { NotFoundPage } from './NotFoundPage'
+import { PricingPage } from './PricingPage'
 import { PrivacyPage, RefundPage, TermsPage } from './LegalPage'
-import { ChangelogPage } from './ChangelogPage'
 
 /**
  * Top-level routing for the marketing surface (everything that is not `/app/*`).
@@ -14,6 +16,10 @@ export function MarketingApp() {
   switch (view) {
     case 'landing':
       return <MarketingPage />
+    case 'pricing':
+      return <PricingPage />
+    case 'buy':
+      return <BuyPage />
     case 'privacy':
       return <PrivacyPage />
     case 'terms':

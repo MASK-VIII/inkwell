@@ -1,4 +1,4 @@
-import { Download, Moon, Sun } from 'lucide-react'
+import { Download, Moon, ShoppingBag, Sun } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
 import { InkwellEmblem } from './InkwellEmblem'
 import { InkwellProfileMenu, type InkwellProfileMenuProps } from './InkwellProfileMenu'
@@ -33,12 +33,23 @@ type Props = {
   /** When set, optional Supabase email/password sign-in + continue offline. */
   cloudSync?: SignInCloudSyncProps
   profileMenu?: InkwellProfileMenuProps
+  /**
+   * Initial auth tab when the user has not interacted yet. Defaults to 'signin'.
+   * Set to 'signup' on Buy Now / pending-checkout entry so first-time buyers land on Create account.
+   */
+  initialMode?: 'signin' | 'signup'
+  /**
+   * When set, a small trust-pill is rendered above the auth tabs to remind the user what they
+   * are about to buy (e.g. `Buying Inkwell Basic — $49 USD`). Computed by App.tsx from the
+   * fresh `?checkout=` query.
+   */
+  pendingPurchaseLabel?: string
 }
 
 type AuthMode = 'signin' | 'signup' | 'forgot'
 
 /** Last email used on this device when “Remember username” was enabled (sign-in only). */
-const REMEMBERED_SIGNIN_EMAIL_KEY = 'inkwell-signin-remembered-email'
+export const REMEMBERED_SIGNIN_EMAIL_KEY = 'inkwell-signin-remembered-email'
 
 const inputClassName =
   'w-full rounded-xl border border-dust/90 bg-white px-3.5 py-2.5 text-sm text-ink shadow-sm outline-none transition-shadow focus-visible:border-walnut focus-visible:ring-2 focus-visible:ring-walnut/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-border-dark dark:bg-panel-dark dark:text-ink-dark dark:shadow-inner dark:focus-visible:border-accent-warm dark:focus-visible:ring-cream/50 dark:focus-visible:ring-offset-panel-dark'
@@ -52,7 +63,15 @@ function desktopDownloadHref(): string | null {
   return t.length ? t : null
 }
 
-export function SignInScreen({ darkMode, onToggleTheme, onComplete, cloudSync, profileMenu }: Props) {
+export function SignInScreen({
+  darkMode,
+  onToggleTheme,
+  onComplete,
+  cloudSync,
+  profileMenu,
+  initialMode,
+  pendingPurchaseLabel,
+}: Props) {
   const [email, setEmail] = useState(() => {
     if (typeof window === 'undefined') return ''
     return localStorage.getItem(REMEMBERED_SIGNIN_EMAIL_KEY) ?? ''
@@ -66,7 +85,7 @@ export function SignInScreen({ darkMode, onToggleTheme, onComplete, cloudSync, p
   const [passwordConfirm, setPasswordConfirm] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
   const [authNotice, setAuthNotice] = useState<string | null>(null)
-  const [mode, setMode] = useState<AuthMode>('signin')
+  const [mode, setMode] = useState<AuthMode>(initialMode ?? 'signin')
   const brandRef = useRef<HTMLButtonElement>(null)
   useThemeShine(brandRef)
 
@@ -266,6 +285,14 @@ export function SignInScreen({ darkMode, onToggleTheme, onComplete, cloudSync, p
               {heroTitle}
             </h1>
             {heroSubtitleEl}
+            {pendingPurchaseLabel && !recoveryActive ?
+              <div className="mt-5 flex justify-center">
+                <span className="inline-flex items-center gap-2 rounded-full border border-walnut/25 bg-walnut/10 px-3.5 py-1.5 text-xs font-medium text-ink shadow-sm dark:border-accent-warm/35 dark:bg-accent-warm/15 dark:text-ink-dark">
+                  <ShoppingBag className="h-3.5 w-3.5" aria-hidden />
+                  {pendingPurchaseLabel}
+                </span>
+              </div>
+            : null}
           </div>
 
           {showDesktopDownload && desktopDownloadUrl ? (

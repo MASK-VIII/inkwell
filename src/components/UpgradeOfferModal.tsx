@@ -1,11 +1,7 @@
 import { X } from 'lucide-react'
-import {
-  INKWELL_DISPLAY_PRICE_BASIC,
-  INKWELL_DISPLAY_PRICE_BASIC_TO_PRO,
-  INKWELL_DISPLAY_PRICE_PRO,
-} from '../marketing/pricingCopy'
+import { type UpgradeOfferIntent, upgradeOfferBodyFor, upgradeOfferTitleFor } from './upgradeOfferCopy'
 
-export type UpgradeOfferIntent = 'basic' | 'pro' | 'upgrade'
+export type { UpgradeOfferIntent } from './upgradeOfferCopy'
 
 type Props = {
   open: boolean
@@ -16,30 +12,6 @@ type Props = {
   onContinuePointerDown?: () => void
   /** False while Paddle.js is preloading for overlay-only checkout (avoids opening after `await`, which drops user activation). */
   continueReady?: boolean
-}
-
-function titleFor(intent: UpgradeOfferIntent): string {
-  switch (intent) {
-    case 'basic':
-      return 'Upgrade to Basic'
-    case 'upgrade':
-      return 'Upgrade to Pro'
-    case 'pro':
-    default:
-      return 'Upgrade to Pro'
-  }
-}
-
-function bodyFor(intent: UpgradeOfferIntent): string {
-  switch (intent) {
-    case 'basic':
-      return `Basic (${INKWELL_DISPLAY_PRICE_BASIC}) unlocks EPUB export and cloud library sync across your devices. Continue to secure checkout when you are ready.`
-    case 'upgrade':
-      return `Move from Basic to Pro for ${INKWELL_DISPLAY_PRICE_BASIC_TO_PRO} (one-time upgrade). Continue to checkout to complete your upgrade.`
-    case 'pro':
-    default:
-      return `Pro (${INKWELL_DISPLAY_PRICE_PRO} early access) unlocks the full export suite (PDF, DOCX, archives, and more). Continue to secure checkout when you are ready.`
-  }
 }
 
 export function UpgradeOfferModal({
@@ -69,9 +41,9 @@ export function UpgradeOfferModal({
           <X className="h-5 w-5" />
         </button>
         <h2 id="upgrade-offer-title" className="pr-10 font-serif text-xl font-semibold text-ink dark:text-ink-dark">
-          {titleFor(intent)}
+          {upgradeOfferTitleFor(intent)}
         </h2>
-        <p className="mt-3 text-sm leading-relaxed text-ink/80 dark:text-ink-dark/80">{bodyFor(intent)}</p>
+        <p className="mt-3 text-sm leading-relaxed text-ink/80 dark:text-ink-dark/80">{upgradeOfferBodyFor(intent)}</p>
         <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
           <button type="button" onClick={onClose} className="inkwell-hub-secondary w-full sm:w-auto">
             Not now

@@ -34,6 +34,7 @@ function closeMdMarks(marks: { type: string; attrs?: Record<string, unknown> }[]
 }
 
 function renderInlineMd(node: JSONContent, _footDefs: FootAccum): string {
+  void _footDefs
   if (node.type === 'text') {
     const t = escPipe(node.text ?? '')
     const open = openMdMarks(node.marks as { type: string }[] | undefined)

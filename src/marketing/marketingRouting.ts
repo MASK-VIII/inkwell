@@ -8,10 +8,19 @@
  *
  * On the production Inkwell subdomain, unknown paths resolve to the same SPA bundle;
  * send those to `/` so visitors always see the landing page unless they are on
- * `/app`, `/privacy`, `/terms`, `/refund`, or `/changelog`.
+ * `/app`, `/pricing`, `/buy`, `/legal/{privacy,terms,refund}`, the legacy
+ * `/privacy`, `/terms`, `/refund` aliases, or `/changelog`.
  */
 
-export type MarketingView = 'landing' | 'privacy' | 'terms' | 'refund' | 'changelog' | 'not_found'
+export type MarketingView =
+  | 'landing'
+  | 'pricing'
+  | 'buy'
+  | 'privacy'
+  | 'terms'
+  | 'refund'
+  | 'changelog'
+  | 'not_found'
 
 /** Canonical hostname for the public marketing + web app deployment. */
 export const INKWELL_MARKETING_HOST = 'inkwell.enterthelimelight.com'
@@ -38,9 +47,12 @@ export function pathIsApp(pathname: string): boolean {
 export function classifyMarketingPath(pathname: string): MarketingView {
   const normalized = pathname.replace(/\/+$/, '') || '/'
   if (normalized === '' || normalized === '/') return 'landing'
-  if (normalized === '/privacy') return 'privacy'
-  if (normalized === '/terms') return 'terms'
-  if (normalized === '/refund') return 'refund'
+  if (normalized === '/pricing') return 'pricing'
+  if (normalized === '/buy') return 'buy'
+  // Canonical legal paths under `/legal/*` plus back-compat aliases at the root.
+  if (normalized === '/legal/privacy' || normalized === '/privacy') return 'privacy'
+  if (normalized === '/legal/terms' || normalized === '/terms') return 'terms'
+  if (normalized === '/legal/refund' || normalized === '/refund') return 'refund'
   if (normalized === '/changelog') return 'changelog'
   return 'not_found'
 }

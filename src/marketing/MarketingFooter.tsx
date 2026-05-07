@@ -7,7 +7,7 @@ export function MarketingFooter() {
           <div>
             <p className="font-serif text-lg text-ink dark:text-ink-dark">Inkwell</p>
             <p className="mt-2 text-sm leading-relaxed text-walnut/80 dark:text-ink-dark/80">
-              A workspace built for the long form. Beta.
+              Chapter-first writing for new authors and seasoned novelists. Beta.
             </p>
           </div>
 
@@ -43,9 +43,9 @@ export function MarketingFooter() {
               <li>
                 <a
                   className="rounded-sm transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-walnut/35 dark:hover:text-cream dark:focus-visible:ring-cream/40"
-                  href="/app"
+                  href="/app#bookshelf"
                 >
-                  Open the app
+                  Start free (no signup)
                 </a>
               </li>
             </ul>
@@ -116,7 +116,7 @@ export function MarketingFooter() {
 
         <div className="mt-12 flex flex-col gap-2 border-t border-dust/60 pt-6 text-xs text-walnut/70 sm:flex-row sm:items-center sm:justify-between dark:border-border-dark/80 dark:text-ink-dark/70">
           <p>&copy; {year} Inkwell. Part of enterthelimelight.com.</p>
-          <p>Made for writers, slowly and on purpose.</p>
+          <p>Made for the whole arc of a book—not just the opening line.</p>
         </div>
       </div>
     </footer>

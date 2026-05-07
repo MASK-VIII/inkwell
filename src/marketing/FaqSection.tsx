@@ -5,8 +5,13 @@ type Qa = {
 
 const FAQ: Qa[] = [
   {
+    q: 'Is Inkwell only for beginners?',
+    a:
+      'No. Free gives everyone the same chapter-first workspace—ideal when you are starting out—while Basic and Pro add cloud backup and publishing exports for authors deep in revisions or shipping multiple books. Everything stays offline-capable on every tier.',
+  },
+  {
     q: 'What do I get for free?',
-    a: 'The full writing experience: projects, chapters, notes, organization, and formatting previews. Your library stays on this device only—no cloud backup. You can use Inkwell indefinitely on the Free plan.',
+    a: 'The full writing experience: projects, chapters, notes, organization, and formatting previews. Your library stays on this device only—no cloud backup. You do not need an account to start; sign in later if you upgrade to Basic or Pro. You can use Inkwell indefinitely on the Free plan.',
   },
   {
     q: 'What is locked on Free?',

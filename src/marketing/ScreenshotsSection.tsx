@@ -39,7 +39,7 @@ export function ScreenshotsSection() {
             The interface, on purpose.
           </h2>
           <p className="mt-4 text-base leading-relaxed text-walnut/85 dark:text-ink-dark/80">
-            Type-driven, parchment-warm, dark-mode-friendly. Inkwell looks like a place you would want to spend an afternoon.
+            A gentle surface for getting started, with bookshelf, editor, tools, and formatting underneath when you are ready to push a manuscript harder.
           </p>
         </div>
 

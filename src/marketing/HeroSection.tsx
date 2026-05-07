@@ -13,14 +13,14 @@ export function HeroSection() {
             Inkwell &nbsp;&middot;&nbsp; in beta
           </p>
           <h1 className="font-serif text-4xl leading-[1.05] text-ink sm:text-5xl lg:text-6xl dark:text-ink-dark">
-            A workspace built for the long form.
+            Draft. Format. Publish.
           </h1>
           <p className="max-w-xl text-lg leading-relaxed text-walnut/90 dark:text-ink-dark/82">
-            Inkwell is where your novel lives. Chapters, drafts, revisions, and the small editorial decisions that turn a manuscript into a book, all kept together in a quiet, type-driven workspace.
+            Chapters, drafts, revisions, and notes stay together in a calm, type-led workspace that is easy to pick up when you are starting out, and deep enough for authors who already live in manuscripts. Start writing locally for free with no sign-up—open the app and go.
           </p>
           <div className="flex flex-wrap items-center gap-4 pt-2">
             <a
-              href="/app"
+              href="/app#bookshelf"
               className="inline-flex items-center justify-center rounded-full bg-ink px-7 py-3 text-base font-medium text-parchment shadow-sm transition hover:bg-walnut focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-walnut dark:bg-accent-warm dark:text-panel-dark dark:hover:bg-cream"
             >
               Start writing free
@@ -33,7 +33,7 @@ export function HeroSection() {
             </a>
           </div>
           <p className="text-xs text-walnut/65 dark:text-ink-dark/68">
-            Free forever. No credit card. Local-only library on Free; Basic adds cloud backup and EPUB when you upgrade.
+            Free forever on your device—no credit card, no account required to begin. Basic adds cloud backup and EPUB; Pro adds the full export suite for print and submissions (sign in when you upgrade).
           </p>
         </div>
 

@@ -3,10 +3,11 @@
  * @see docs/LICENSING.md
  */
 
-export type InkwellTier = 'free' | 'ebook_suite' | 'pro'
+export type InkwellTier = 'free' | 'basic' | 'pro'
+export type InkwellEntitlementSourceTier = InkwellTier | 'ebook_suite'
 
 export type InkwellEntitlementRow = {
-  tier: InkwellTier
+  tier: InkwellEntitlementSourceTier
   status: string
 }
 
@@ -21,18 +22,21 @@ export type InkwellCapabilityGates = {
   canUseNoteExportSuite: boolean
 }
 
+export function normalizeInkwellTier(tier: unknown): InkwellTier {
+  if (tier === 'ebook_suite' || tier === 'basic') return 'basic'
+  if (tier === 'pro') return 'pro'
+  return 'free'
+}
+
 export function computeInkwellGates(row: InkwellEntitlementRow | null): InkwellCapabilityGates {
   const active = row == null || row.status === 'active'
-  const tier: InkwellTier =
-    !active || row == null ? 'free'
-    : row.tier === 'ebook_suite' || row.tier === 'pro' ? row.tier
-    : 'free'
+  const tier: InkwellTier = !active || row == null ? 'free' : normalizeInkwellTier(row.tier)
 
   return {
     tier,
-    canExportEpub: tier === 'ebook_suite' || tier === 'pro',
+    canExportEpub: tier === 'basic' || tier === 'pro',
     canUseProExports: tier === 'pro',
-    canUseCloudSync: tier === 'ebook_suite' || tier === 'pro',
+    canUseCloudSync: tier === 'basic' || tier === 'pro',
     // Formatting workspaces are available on Free; exporting stays gated by tier.
     canUseEbookFormat: true,
     canUsePrintFormat: tier === 'pro',

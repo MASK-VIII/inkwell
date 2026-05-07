@@ -117,11 +117,13 @@ export function PrintReview({
   )
 
   useEffect(() => {
-    setLocalChapterId(null)
+    queueMicrotask(() => setLocalChapterId(null))
   }, [scrollToChapterId])
 
   const activeChapterId = localChapterId ?? scrollToChapterId ?? chapters[0]?.id ?? null
-  activeChapterIdRef.current = activeChapterId
+  useEffect(() => {
+    activeChapterIdRef.current = activeChapterId
+  }, [activeChapterId])
 
   const meta = useMemo(
     () => ({ bookTitle: book.title, authorName: book.authorName }),
@@ -146,7 +148,9 @@ export function PrintReview({
   )
 
   const layoutBasisKeyRef = useRef(layoutBasisKey)
-  layoutBasisKeyRef.current = layoutBasisKey
+  useEffect(() => {
+    layoutBasisKeyRef.current = layoutBasisKey
+  }, [layoutBasisKey])
 
   const [appliedFullLayoutBasisKey, setAppliedFullLayoutBasisKey] = useState<string | null>(null)
   const [applyingFullLayout, setApplyingFullLayout] = useState(false)
@@ -476,7 +480,7 @@ export function PrintReview({
   useEffect(() => {
     const len = activePages?.length ?? 0
     if (len === 0) return
-    setPageIndexInChapter((i) => Math.min(i, len - 1))
+    queueMicrotask(() => setPageIndexInChapter((i) => Math.min(i, len - 1)))
   }, [activeChapterId, activePages?.length])
 
   const safePageIndex = Math.min(

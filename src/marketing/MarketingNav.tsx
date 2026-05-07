@@ -49,7 +49,7 @@ export function MarketingNav({ showAnchors = true, darkMode, onToggleDarkMode }:
               <li>
                 <a
                   className="rounded-sm transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-walnut/35 dark:hover:text-cream dark:focus-visible:ring-cream/40"
-                  href="#pricing"
+                  href="/pricing"
                 >
                   Pricing
                 </a>
@@ -72,20 +72,34 @@ export function MarketingNav({ showAnchors = true, darkMode, onToggleDarkMode }:
               </li>
             </ul>
           )}
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <a
+              href="/app#bookshelf"
+              className="inline-flex items-center justify-center rounded-full px-4 py-2 text-sm font-medium text-ink underline decoration-walnut/35 underline-offset-[0.22em] transition hover:text-walnut hover:decoration-walnut/55 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-walnut dark:text-ink-dark dark:decoration-cream/40 dark:hover:text-cream dark:hover:decoration-cream/60 dark:focus-visible:outline-cream/50"
+            >
+              Start free
+            </a>
+            <a
+              href="/app#signin"
+              className="inline-flex items-center justify-center rounded-full border border-walnut/30 px-4 py-2 text-sm font-medium text-ink transition hover:border-walnut/55 hover:bg-white/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-walnut dark:border-border-dark dark:text-ink-dark dark:hover:border-accent-warm/45 dark:hover:bg-panel-dark/60 dark:focus-visible:outline-cream/50"
+            >
+              Log in
+            </a>
+            <a
+              href="/buy"
+              className="inline-flex items-center justify-center rounded-full bg-ink px-4 py-2 text-sm font-medium text-parchment shadow-sm transition hover:bg-walnut focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-walnut dark:bg-accent-warm dark:text-panel-dark dark:hover:bg-cream"
+            >
+              Buy now
+            </a>
+          </div>
           <button
             type="button"
             onClick={onToggleDarkMode}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-dust/70 bg-white/50 text-ink shadow-sm transition hover:bg-white/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-walnut dark:border-border-dark dark:bg-panel-dark/60 dark:text-ink-dark dark:hover:bg-panel-dark/80"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-dust/70 bg-white/50 text-ink shadow-sm transition hover:bg-white/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-walnut dark:border-border-dark dark:bg-panel-dark/60 dark:text-ink-dark dark:hover:bg-panel-dark/80"
             aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
           >
             {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </button>
-          <a
-            href="/app"
-            className="inline-flex items-center justify-center rounded-full bg-ink px-5 py-2 text-sm font-medium text-parchment shadow-sm transition hover:bg-walnut focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-walnut dark:bg-accent-warm dark:text-panel-dark dark:hover:bg-cream"
-          >
-            Open Inkwell
-          </a>
         </div>
       </nav>
     </header>

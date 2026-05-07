@@ -18,7 +18,7 @@ export function MarketingPage() {
   const { darkMode, toggle } = useMarketingDarkMode()
 
   useEffect(() => {
-    document.title = 'Inkwell \u2014 A workspace built for the long form'
+    document.title = 'Inkwell \u2014 Draft. Format. Publish.'
     return () => {
       document.title = 'Inkwell'
     }

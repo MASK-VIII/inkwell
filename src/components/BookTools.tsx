@@ -153,8 +153,10 @@ function BookToolsInner({
   const [draftGoals, setDraftGoals] = useState(goals)
   const draftBookRef = useRef(book)
   const draftGoalsRef = useRef(goals)
-  draftBookRef.current = draftBook
-  draftGoalsRef.current = draftGoals
+  useEffect(() => {
+    draftBookRef.current = draftBook
+    draftGoalsRef.current = draftGoals
+  }, [draftBook, draftGoals])
   const bookPersistTimerRef = useRef<number | undefined>(undefined)
   const goalsPersistTimerRef = useRef<number | undefined>(undefined)
   const prevDrawerOpenRef = useRef(false)
@@ -225,7 +227,7 @@ function BookToolsInner({
 
   useEffect(() => {
     if (phase === 'entering' || phase === 'closing') {
-      setDrawerPanelMotionLive(true)
+      queueMicrotask(() => setDrawerPanelMotionLive(true))
     }
   }, [phase])
 

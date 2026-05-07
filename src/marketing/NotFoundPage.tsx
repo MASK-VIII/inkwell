@@ -33,7 +33,7 @@ export function NotFoundPage() {
               Back to the homepage
             </a>
             <a
-              href="/app"
+              href="/app#bookshelf"
               className="inline-flex items-center justify-center rounded-full border border-walnut/30 px-6 py-3 text-sm font-medium text-ink transition hover:border-walnut/60 dark:border-border-dark dark:text-ink-dark dark:hover:border-accent-warm/45"
             >
               Open Inkwell

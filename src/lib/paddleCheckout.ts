@@ -371,7 +371,7 @@ export function paddleUpgradeNeedsPrimedOverlay(opts: {
     opts.intent === 'basic' ? env.ebookSuite
     : opts.intent === 'pro' ? env.pro
     : env.upgrade
-  if (Boolean(hosted?.trim())) return false
+  if (hosted?.trim()) return false
   if (opts.edgeCheckoutEnabled) return false
   return Boolean(getPaddleOverlayEnv().token.trim())
 }
@@ -385,7 +385,7 @@ export async function invokeEdgePaddleCheckout(
   client: SupabaseClient,
   intent: PaddleCheckoutIntent,
 ): Promise<{ ok: true; url: string } | { ok: false; error: string; paddle?: unknown }> {
-  let { data: sessionData } = await client.auth.getSession()
+  const { data: sessionData } = await client.auth.getSession()
   let session = sessionData.session ?? null
   if (!session?.access_token) {
     const { data: refreshData } = await client.auth.refreshSession()

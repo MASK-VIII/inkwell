@@ -280,7 +280,7 @@ export function NotesTour({
 
   useLayoutEffect(() => {
     if (!open) return
-    updateLayout()
+    queueMicrotask(() => updateLayout())
   }, [open, stepIndex, step.target, routeBucket, bookToolsOpen, newProjectMenuOpen, updateLayout])
 
   useEffect(() => {

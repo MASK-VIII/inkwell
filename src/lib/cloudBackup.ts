@@ -8,7 +8,16 @@ export type CloudBackupConfig = {
   apiKey?: string
 }
 
+function isLegacyCloudBackupExplicitlyEnabled(): boolean {
+  const raw = (import.meta.env.VITE_ENABLE_LEGACY_BACKUP ?? '').trim().toLowerCase()
+  return raw === '1' || raw === 'true' || raw === 'yes'
+}
+
 export function getCloudBackupConfig(): CloudBackupConfig | null {
+  // Legacy backup POST uses a shared secret that cannot be protected in public web bundles.
+  // Keep the capability for private/internal builds only.
+  if (import.meta.env.PROD && !isLegacyCloudBackupExplicitlyEnabled()) return null
+
   const url = (import.meta.env.VITE_INKWELL_CLOUD_BACKUP_URL ?? '').trim()
   if (!url) return null
   const key = (import.meta.env.VITE_INKWELL_CLOUD_BACKUP_KEY ?? '').trim()

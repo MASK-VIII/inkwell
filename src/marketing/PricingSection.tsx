@@ -16,11 +16,11 @@ type Plan = {
   finePrint?: string
 }
 
-/** Opens `/app` Account flow and triggers Paddle checkout when `VITE_PADDLE_CHECKOUT_*` is set. */
+/** Opens the sign-in screen with the chosen checkout intent attached; post-auth flow opens `UpgradeOfferModal`. */
 const APP_UPGRADE_HREF = {
-  basic: '/app?checkout=basic#account',
-  pro: '/app?checkout=pro#account',
-  upgrade: '/app?checkout=upgrade#account',
+  basic: '/app?checkout=basic#signin',
+  pro: '/app?checkout=pro#signin',
+  upgrade: '/app?checkout=upgrade#signin',
 } as const
 
 const PLANS: Record<'basic' | 'pro', Plan> = {
@@ -28,7 +28,7 @@ const PLANS: Record<'basic' | 'pro', Plan> = {
     name: 'Basic',
     price: INKWELL_DISPLAY_PRICE_BASIC,
     badge: 'One-time',
-    forWhom: 'For writers who want a cloud-backed library and an ebook finish line.',
+    forWhom: 'For your first finish line—or any book you want backed up in the cloud with an ebook export.',
     bullets: [
       'Full writing workspace—the same chapter-first app you can start free on',
       'Cloud library sync & backup across your devices',
@@ -43,7 +43,7 @@ const PLANS: Record<'basic' | 'pro', Plan> = {
     price: INKWELL_DISPLAY_PRICE_PRO,
     compareAtPrice: INKWELL_DISPLAY_PRICE_PRO_LIST,
     badge: 'Early access',
-    forWhom: 'For serious indie authors finishing a book.',
+    forWhom: 'For authors who want every export format, advanced layout control, and a toolchain that keeps up with a serious publishing workflow.',
     bullets: [
       'Everything in Basic',
       'Full export suite (PDF / DOCX / Markdown / plain text)',
@@ -58,7 +58,7 @@ const PLANS: Record<'basic' | 'pro', Plan> = {
 
 function TrustRow() {
   const items = [
-    { label: 'Free forever', detail: 'Write without a timer' },
+    { label: 'Free forever', detail: 'Local writing, no signup' },
     { label: 'No credit card', detail: 'Start instantly' },
     { label: 'One-time purchases', detail: 'Own your tools' },
     { label: 'Unlimited local storage', detail: 'On your device' },
@@ -159,11 +159,10 @@ export function PricingSection() {
             Pricing
           </p>
           <h2 className="mt-3 font-serif text-3xl leading-[1.15] text-ink sm:text-4xl dark:text-ink-dark">
-            Start free. Upgrade when you are ready to publish.
+            Start free. Grow into the tier that matches your finish line.
           </h2>
           <p className="mt-4 text-base leading-relaxed text-walnut/85 dark:text-ink-dark/80">
-            The workspace is free and local-first. Basic adds cloud backup and EPUB; Pro unlocks every export format—pick
-            the finish line that fits.
+            The full writing workspace stays free and local-first—you can install or open the app and write with no sign-up. Add Basic when you want sync and EPUB; step up to Pro when you need the full export suite and advanced formatting for print or submissions.
           </p>
         </div>
 

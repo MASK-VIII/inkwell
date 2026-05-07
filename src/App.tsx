@@ -40,9 +40,14 @@ import { GettingStartedTour, type TourRouteBucket } from './components/GettingSt
 import { NotesTour } from './components/NotesTour'
 import { AccountScreen } from './components/AccountScreen'
 import { InkwellProfileMenu } from './components/InkwellProfileMenu'
-import { PurchaseSignInModal } from './components/PurchaseSignInModal'
-import { SignInScreen } from './components/SignInScreen'
+import { REMEMBERED_SIGNIN_EMAIL_KEY, SignInScreen } from './components/SignInScreen'
 import { UpgradeOfferModal, type UpgradeOfferIntent } from './components/UpgradeOfferModal'
+import {
+  INKWELL_DISPLAY_PRICE_BASIC,
+  INKWELL_DISPLAY_PRICE_BASIC_TO_PRO,
+  INKWELL_DISPLAY_PRICE_PRO,
+} from './marketing/pricingCopy'
+import { PaidFeatureGateModal, type PaidFeatureGateModalState } from './components/PaidFeatureGateModal'
 import { useThemeShine } from './components/useThemeShine'
 import { SyncConflictModal } from './components/SyncConflictModal'
 import { SyncStatusStrip } from './components/SyncStatusStrip'
@@ -213,6 +218,71 @@ type Route =
   | 'publish'
   | 'note_export'
 
+type PaidFeatureTier = PaidFeatureGateModalState['requiredTier']
+
+const PAID_TIER_RANK: Record<'free' | PaidFeatureTier, number> = {
+  free: 0,
+  basic: 1,
+  pro: 2,
+}
+
+function readCheckoutIntentFromBrowser(): UpgradeOfferIntent | null {
+  if (typeof window === 'undefined') return null
+  const q = new URLSearchParams(window.location.search).get('checkout')?.trim().toLowerCase()
+  if (q && ['basic', 'pro', 'upgrade'].includes(q)) return q as UpgradeOfferIntent
+  try {
+    const s = sessionStorage.getItem(INKWELL_PENDING_CHECKOUT_STORAGE_KEY)?.trim().toLowerCase() ?? ''
+    if (s && ['basic', 'pro', 'upgrade'].includes(s)) return s as UpgradeOfferIntent
+  } catch {
+    /* ignore */
+  }
+  return null
+}
+
+function hasPendingPurchaseIntentInBrowser(): boolean {
+  return readCheckoutIntentFromBrowser() != null
+}
+
+/** True only when the *URL* carries a fresh `?checkout=` query; ignores stale sessionStorage. */
+function hasFreshCheckoutQueryInBrowser(): boolean {
+  if (typeof window === 'undefined') return false
+  const q = new URLSearchParams(window.location.search).get('checkout')?.trim().toLowerCase()
+  return Boolean(q && ['basic', 'pro', 'upgrade'].includes(q))
+}
+
+/**
+ * Per-tab flag that survives page refreshes so a Paddle redirect celebration persists if the user
+ * accidentally hits Refresh while reading it. Cleared when the user dismisses the celebration or
+ * navigates to the library.
+ */
+const INKWELL_PADDLE_RETURN_FLAG = 'inkwell_paddle_return_seen'
+
+/** True when Paddle has redirected the user back to `/app` with a `_ptxn=…` transaction marker. */
+function hasPaddleReturnInBrowser(): boolean {
+  if (typeof window === 'undefined') return false
+  return new URLSearchParams(window.location.search).has('_ptxn')
+}
+
+/** True when this tab already saw a Paddle return earlier and the user has not dismissed the celebration. */
+function hasStashedPaddleReturnInBrowser(): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    return sessionStorage.getItem(INKWELL_PADDLE_RETURN_FLAG) === '1'
+  } catch {
+    return false
+  }
+}
+
+/** Trust-pill label for the SignInScreen ("Buying Inkwell Basic — $49 USD"). Null when no fresh URL intent. */
+function pendingPurchaseLabelFromUrl(): string | undefined {
+  if (typeof window === 'undefined') return undefined
+  const q = new URLSearchParams(window.location.search).get('checkout')?.trim().toLowerCase()
+  if (q === 'basic') return `Buying Inkwell Basic \u2014 ${INKWELL_DISPLAY_PRICE_BASIC} USD`
+  if (q === 'pro') return `Buying Inkwell Pro \u2014 ${INKWELL_DISPLAY_PRICE_PRO} USD`
+  if (q === 'upgrade') return `Upgrading Basic to Pro \u2014 ${INKWELL_DISPLAY_PRICE_BASIC_TO_PRO} USD`
+  return undefined
+}
+
 type EbookFormatSlice = {
   ebook: EbookTheme
   lastEbookInteriorPresetId?: string
@@ -251,6 +321,9 @@ function readRouteFromHash(): Route {
   if (hash === 'signin' || hash === 'welcome' || hash === 'cloud-signin') return 'signin'
   if (hash === 'account') return 'account'
   if (hash === 'bookshelf') return 'bookshelf'
+  // Legacy `#checkout` deep links from the previous dedicated checkout page now resolve to `#signin`
+  // so a stashed `?checkout=` intent flows through the standard SignInScreen path.
+  if (hash === 'checkout') return 'signin'
   if (hash === 'format/print' || hash === 'review/print') return 'format_print'
   if (hash === 'format/ebook' || hash === 'review/ebook') return 'format_ebook'
   if (hash === 'publish') return 'publish'
@@ -336,6 +409,15 @@ function readInitialAppRoute(): Route {
       replaceStatePreservePathAndSearch('#signin')
     }
     return 'signin'
+  }
+  // Paddle hosted-checkout redirects land on `/app?_ptxn=…` (or back inside the same tab after a
+  // refresh, via the per-tab stash flag). Force the celebration onto the Account screen instead of
+  // dropping the buyer on the bookshelf with no acknowledgement.
+  if (hasPaddleReturnInBrowser() || hasStashedPaddleReturnInBrowser()) {
+    if (window.location.hash !== '#account') {
+      replaceStatePreservePathAndSearch('#account')
+    }
+    return 'account'
   }
   if (
     window.location.hash === '#welcome' ||
@@ -428,8 +510,6 @@ export default function App() {
   const routeRef = useRef<Route>(readInitialAppRoute())
   /** Consumed after handling marketing `?checkout=` (reset when URL carries a new `checkout` value). */
   const checkoutIntentHandledRef = useRef(false)
-  /** True while the purchase sign-in modal was opened by a checkout deep link (not in-app upgrade). */
-  const purchaseModalOpenedForDeepLinkRef = useRef(false)
   const [gettingStartedTourOpen, setGettingStartedTourOpen] = useState(false)
   const [tourPersistRemindLater, setTourPersistRemindLater] = useState(true)
   const [tourResumeStepId, setTourResumeStepId] = useState<string | null>(null)
@@ -448,15 +528,19 @@ export default function App() {
   const [stickyNotePopoutId, setStickyNotePopoutId] = useState<string | null>(null)
   const [toast, setToast] = useState<{ node: ReactNode; ms: number } | null>(null)
   const [upgradeOfferIntent, setUpgradeOfferIntent] = useState<UpgradeOfferIntent | null>(null)
+  const [purchaseCelebrationActive, setPurchaseCelebrationActive] = useState(
+    () => hasPaddleReturnInBrowser() || hasStashedPaddleReturnInBrowser(),
+  )
+  const [paidFeatureGate, setPaidFeatureGate] = useState<PaidFeatureGateModalState | null>(null)
   /** Overlay-only checkout must not call `Checkout.open` after an `await` (loses user activation). */
   const [upgradeOfferContinueReady, setUpgradeOfferContinueReady] = useState(true)
-  const [purchaseSignInOpen, setPurchaseSignInOpen] = useState(false)
   const [darkMode, setDarkMode] = useState(readInitialDarkMode)
   /** Set in `toggleTheme`, cleared when `inkwell:theme-change` fires after `html.dark` sync (see layout effect). */
   const pendingInkwellThemeShineRef = useRef(false)
   const bookshelfBrandRef = useRef<HTMLButtonElement | null>(null)
   const writeHeaderBrandRef = useRef<HTMLAnchorElement | null>(null)
   const publishExportMenuRef = useRef<HTMLDetailsElement>(null)
+  const offlinePaidNoticeShownRef = useRef(false)
   useThemeShine(bookshelfBrandRef)
   useThemeShine(writeHeaderBrandRef)
   const lastDeletedRef = useRef<DeletedSnapshot | null>(null)
@@ -495,22 +579,22 @@ export default function App() {
 
   useEffect(() => {
     if (upgradeOfferIntent == null) {
-      setUpgradeOfferContinueReady(true)
+      queueMicrotask(() => setUpgradeOfferContinueReady(true))
       return
     }
     const edgeOn = isPaddleEdgeCheckoutEnabled(Boolean(supabasePublicConfig))
     if (!paddleUpgradeNeedsPrimedOverlay({ intent: upgradeOfferIntent, edgeCheckoutEnabled: edgeOn })) {
-      setUpgradeOfferContinueReady(true)
+      queueMicrotask(() => setUpgradeOfferContinueReady(true))
       return
     }
-    setUpgradeOfferContinueReady(false)
+    queueMicrotask(() => setUpgradeOfferContinueReady(false))
     let cancelled = false
     const safety = window.setTimeout(() => {
-      if (!cancelled) setUpgradeOfferContinueReady(true)
+      if (!cancelled) queueMicrotask(() => setUpgradeOfferContinueReady(true))
     }, 6000)
     void preloadPaddleCheckout().finally(() => {
       window.clearTimeout(safety)
-      if (!cancelled) setUpgradeOfferContinueReady(true)
+      if (!cancelled) queueMicrotask(() => setUpgradeOfferContinueReady(true))
     })
     return () => {
       cancelled = true
@@ -764,6 +848,29 @@ export default function App() {
     navigateRouteLicensedRef.current(next)
   }, [])
 
+  const navigateToSignInForCheckout = useCallback(
+    (intent: UpgradeOfferIntent | null) => {
+      if (typeof window === 'undefined') return
+      const path = window.location.pathname
+      const params = new URLSearchParams(window.location.search)
+      if (intent) {
+        try {
+          sessionStorage.setItem(INKWELL_PENDING_CHECKOUT_STORAGE_KEY, intent)
+        } catch {
+          /* ignore */
+        }
+        params.set('checkout', intent)
+      } else {
+        params.delete('checkout')
+      }
+      const qs = params.toString()
+      window.history.replaceState(null, '', `${path}${qs ? `?${qs}` : ''}#signin`)
+      navigateRoute('signin')
+      if (getPaddleOverlayEnv().token) void preloadPaddleCheckout()
+    },
+    [navigateRoute],
+  )
+
   const navigateToCloudSignIn = useCallback(() => {
     const from = routeRef.current
     if (!tryDiscardFormatDraftsIfNeeded(from, 'signin')) return
@@ -773,15 +880,22 @@ export default function App() {
   }, [tryDiscardFormatDraftsIfNeeded])
 
   useLayoutEffect(() => {
-    const normalized = normalizeRouteForProject(route, project)
-    if (normalized === route) return
-    if (!tryDiscardFormatDraftsIfNeeded(route, normalized)) {
-      if (typeof window !== 'undefined' && window.location.hash !== routeToHash(route)) {
-        window.history.replaceState(null, '', routeToHash(route))
+    let cancelled = false
+    queueMicrotask(() => {
+      if (cancelled) return
+      const normalized = normalizeRouteForProject(route, project)
+      if (normalized === route) return
+      if (!tryDiscardFormatDraftsIfNeeded(route, normalized)) {
+        if (typeof window !== 'undefined' && window.location.hash !== routeToHash(route)) {
+          window.history.replaceState(null, '', routeToHash(route))
+        }
+        return
       }
-      return
+      navigateRouteBase(normalized)
+    })
+    return () => {
+      cancelled = true
     }
-    navigateRouteBase(normalized)
   }, [project.kind, project.id, route, tryDiscardFormatDraftsIfNeeded, navigateRouteBase])
 
   useLayoutEffect(() => {
@@ -858,15 +972,17 @@ export default function App() {
   useEffect(() => {
     if (!notesTourOpen || route !== 'bookshelf') return
     if (notesTourStepId !== 'notes-shelf-create-note') return
-    setShelfHelpMenuOpen(false)
-    setShelfAccountMenuOpen(false)
-    setNewProjectMenuOpen(true)
+    queueMicrotask(() => {
+      setShelfHelpMenuOpen(false)
+      setShelfAccountMenuOpen(false)
+      setNewProjectMenuOpen(true)
+    })
   }, [notesTourOpen, route, notesTourStepId])
 
   useEffect(() => {
     if (!notesTourOpen || route !== 'write') return
     if (notesTourStepId !== 'notes-write-tools' && notesTourStepId !== 'notes-write-linked-panel') return
-    setBookToolsOpen(true)
+    queueMicrotask(() => setBookToolsOpen(true))
   }, [notesTourOpen, route, notesTourStepId])
 
   const handleTourClose = useCallback((reason: 'complete' | 'remind') => {
@@ -971,7 +1087,7 @@ export default function App() {
 
   useEffect(() => {
     if (route !== 'bookshelf') {
-      if (openNoteMenuId) setOpenNoteMenuId(null)
+      if (openNoteMenuId) queueMicrotask(() => setOpenNoteMenuId(null))
       return
     }
     if (!openNoteMenuId) return
@@ -1144,12 +1260,12 @@ export default function App() {
   useEffect(() => {
     if (!stickyNotePopoutId) return
     if (project.kind !== 'book' && project.kind !== 'note') {
-      setStickyNotePopoutId(null)
+      queueMicrotask(() => setStickyNotePopoutId(null))
       return
     }
     const linked = listLinkedNotesForBook(project.id)
     if (!linked.some((n) => n.id === stickyNotePopoutId)) {
-      setStickyNotePopoutId(null)
+      queueMicrotask(() => setStickyNotePopoutId(null))
     }
   }, [project.kind, project.id, stickyNotePopoutId])
 
@@ -1368,7 +1484,7 @@ export default function App() {
         return
       }
       if (!inkwellEntitlements.userId) {
-        setPurchaseSignInOpen(true)
+        navigateToSignInForCheckout(intent)
         return
       }
       const uid = inkwellEntitlements.userId
@@ -1417,7 +1533,8 @@ export default function App() {
           return
         }
         if (r.error === 'missing_inkwell_user_id') {
-          setPurchaseSignInOpen(true)
+          showToast('Sign in to continue checkout.')
+          navigateToSignInForCheckout(intent)
           return
         }
         if (edgeCheckoutFailure) {
@@ -1429,7 +1546,13 @@ export default function App() {
         showToast('Checkout could not open.')
       }
     },
-    [inkwellEntitlements.loading, inkwellEntitlements.userId, showToast, supabasePublicConfig],
+    [
+      inkwellEntitlements.loading,
+      inkwellEntitlements.userId,
+      showToast,
+      supabasePublicConfig,
+      navigateToSignInForCheckout,
+    ],
   )
 
   const offerUpgrade = useCallback(
@@ -1439,13 +1562,13 @@ export default function App() {
         return
       }
       if (!inkwellEntitlements.userId) {
-        setPurchaseSignInOpen(true)
+        navigateToSignInForCheckout(intent)
         return
       }
       if (getPaddleOverlayEnv().token) void preloadPaddleCheckout()
       setUpgradeOfferIntent(intent)
     },
-    [inkwellEntitlements.loading, inkwellEntitlements.userId, showToast],
+    [inkwellEntitlements.loading, inkwellEntitlements.userId, showToast, navigateToSignInForCheckout],
   )
 
   const handleUpgradeContinue = useCallback(
@@ -1455,7 +1578,7 @@ export default function App() {
         return
       }
       if (!inkwellEntitlements.userId) {
-        setPurchaseSignInOpen(true)
+        navigateToSignInForCheckout(intent)
         return
       }
       // Unmount the dialog (z-[200]) before checkout — avoids stacking issues with Paddle overlay.
@@ -1464,7 +1587,7 @@ export default function App() {
       })
       void startPaddleCheckout(intent)
     },
-    [inkwellEntitlements.loading, inkwellEntitlements.userId, showToast, startPaddleCheckout],
+    [inkwellEntitlements.loading, inkwellEntitlements.userId, showToast, startPaddleCheckout, navigateToSignInForCheckout],
   )
 
   const openEbookSuiteCheckout = useCallback(() => offerUpgrade('basic'), [offerUpgrade])
@@ -1473,28 +1596,24 @@ export default function App() {
 
   const openUpgradeEbookToProCheckout = useCallback(() => offerUpgrade('upgrade'), [offerUpgrade])
 
-  const dismissPurchaseSignInModal = useCallback(() => {
-    setPurchaseSignInOpen(false)
-    const wasDeepLinkPrompt = purchaseModalOpenedForDeepLinkRef.current
-    purchaseModalOpenedForDeepLinkRef.current = false
-    try {
-      sessionStorage.removeItem(INKWELL_PENDING_CHECKOUT_STORAGE_KEY)
-    } catch {
-      /* ignore */
-    }
-    if (typeof window === 'undefined' || !wasDeepLinkPrompt) return
-    const p = new URLSearchParams(window.location.search)
-    if (!p.has('checkout')) {
-      checkoutIntentHandledRef.current = true
-      return
-    }
-    p.delete('checkout')
-    const qs = p.toString()
-    const path = window.location.pathname
-    const hash = window.location.hash || ''
-    window.history.replaceState(null, '', `${path}${qs ? `?${qs}` : ''}${hash}`)
-    checkoutIntentHandledRef.current = true
-  }, [])
+  const requireEntitlement = useCallback(
+    (requiredTier: PaidFeatureTier): boolean => {
+      if (inkwellEntitlements.loading || inkwellEntitlements.status === 'loading') {
+        setPaidFeatureGate({ requiredTier })
+        return false
+      }
+      if (PAID_TIER_RANK[inkwellEntitlements.tier] >= PAID_TIER_RANK[requiredTier]) {
+        if (inkwellEntitlements.status === 'offline_cached' && !offlinePaidNoticeShownRef.current) {
+          offlinePaidNoticeShownRef.current = true
+          setPaidFeatureGate({ requiredTier, mode: 'offline_cached' })
+        }
+        return true
+      }
+      setPaidFeatureGate({ requiredTier })
+      return false
+    },
+    [inkwellEntitlements.loading, inkwellEntitlements.status, inkwellEntitlements.tier],
+  )
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -1506,8 +1625,18 @@ export default function App() {
     if (checkoutIntentHandledRef.current && !hasFreshCheckout) return
     if (hasFreshCheckout) checkoutIntentHandledRef.current = false
 
+    // User explicitly opened Login with no fresh URL intent. Clear stale sessionStorage so subsequent sign-in
+    // goes to bookshelf rather than auto-redirecting to checkout.
+    if (route === 'signin' && !hasFreshCheckout) {
+      try {
+        sessionStorage.removeItem(INKWELL_PENDING_CHECKOUT_STORAGE_KEY)
+      } catch {
+        /* ignore */
+      }
+      return
+    }
+
     if (inkwellEntitlements.loading) return
-    if (route === 'signin') return
 
     if (!supabasePublicConfig) {
       if (!hasFreshCheckout) return
@@ -1518,7 +1647,7 @@ export default function App() {
       const path = window.location.pathname
       const hash = window.location.hash || ''
       window.history.replaceState(null, '', `${path}${qs ? `?${qs}` : ''}${hash}`)
-      showToast('Purchases require cloud sign-in, which is not configured in this build.', 5000)
+      queueMicrotask(() => showToast('Purchases require cloud sign-in, which is not configured in this build.', 5000))
       return
     }
 
@@ -1536,19 +1665,26 @@ export default function App() {
     const asIntent = intentRaw as UpgradeOfferIntent
 
     if (!inkwellEntitlements.userId) {
+      // Guest with a pending checkout: route to SignInScreen with the intent stashed so post-auth opens
+      // UpgradeOfferModal on #account.
       try {
         sessionStorage.setItem(INKWELL_PENDING_CHECKOUT_STORAGE_KEY, asIntent)
       } catch {
         /* ignore */
       }
-      if (!purchaseModalOpenedForDeepLinkRef.current) {
-        purchaseModalOpenedForDeepLinkRef.current = true
-        setPurchaseSignInOpen(true)
-      }
+      const path = window.location.pathname
+      const p = new URLSearchParams(window.location.search)
+      p.set('checkout', asIntent)
+      const qs = p.toString()
+      window.history.replaceState(null, '', `${path}?${qs}#signin`)
+      if (route !== 'signin') navigateRoute('signin')
       return
     }
 
-    purchaseModalOpenedForDeepLinkRef.current = false
+    // Signed-in user with a pending checkout (typically the post-auth path).
+    // Fresh URL intent (Buy Now / marketing entry) skips the UpgradeOfferModal confirmation and opens
+    // Paddle directly — sign-in already proves intent. SessionStorage-only intent (in-app refresh of
+    // an in-app upgrade flow) still goes through the modal so the user has a review-before-pay step.
     try {
       sessionStorage.removeItem(INKWELL_PENDING_CHECKOUT_STORAGE_KEY)
     } catch {
@@ -1563,7 +1699,13 @@ export default function App() {
     window.history.replaceState(null, '', `${path}${qs ? `?${qs}` : ''}${hash}`)
 
     navigateRoute('account')
-    setUpgradeOfferIntent(asIntent)
+    if (hasFreshCheckout) {
+      queueMicrotask(() => {
+        void startPaddleCheckout(asIntent)
+      })
+    } else {
+      queueMicrotask(() => setUpgradeOfferIntent(asIntent))
+    }
   }, [
     route,
     inkwellEntitlements.loading,
@@ -1571,6 +1713,7 @@ export default function App() {
     supabasePublicConfig,
     navigateRoute,
     showToast,
+    startPaddleCheckout,
   ])
 
   useEffect(() => {
@@ -1579,31 +1722,55 @@ export default function App() {
     void preloadPaddleCheckout()
   }, [route])
 
+  // Paddle return: stash the per-tab flag so a refresh keeps the celebration, then strip the
+  // `_ptxn=` query so the URL reads cleanly. Effect runs once on mount. The state initializer
+  // already mirrors `hasPaddleReturnInBrowser()`, so no setState is required here.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!hasPaddleReturnInBrowser()) return
+    try {
+      sessionStorage.setItem(INKWELL_PADDLE_RETURN_FLAG, '1')
+    } catch {
+      /* ignore */
+    }
+    const params = new URLSearchParams(window.location.search)
+    params.delete('_ptxn')
+    const qs = params.toString()
+    const path = window.location.pathname
+    const hash = window.location.hash || ''
+    window.history.replaceState(null, '', `${path}${qs ? `?${qs}` : ''}${hash}`)
+  }, [])
+
+  const dismissPurchaseCelebration = useCallback(() => {
+    setPurchaseCelebrationActive(false)
+    try {
+      sessionStorage.removeItem(INKWELL_PADDLE_RETURN_FLAG)
+    } catch {
+      /* ignore */
+    }
+  }, [])
+
   useLayoutEffect(() => {
     navigateRouteLicensedRef.current = (next: Route) => {
-      if (!inkwellEntitlements.loading) {
-        if (next === 'format_print' && !inkwellEntitlements.gates.canUsePrintFormat) {
-          showToast('Print formatting is included with Inkwell Pro.')
-          openProCheckout()
-          return
-        }
+      if (next === 'format_print' && !requireEntitlement('pro')) {
+        return
       }
       navigateRouteBaseRef.current(next)
     }
-  }, [inkwellEntitlements.loading, inkwellEntitlements.gates.canUsePrintFormat, openProCheckout, showToast])
+  }, [requireEntitlement])
 
   useEffect(() => {
     if (inkwellEntitlements.loading) return
-    if (route === 'format_print' && !inkwellEntitlements.gates.canUsePrintFormat) {
-      showToast('Print formatting is included with Inkwell Pro.')
-      navigateRouteBase('write')
+    if (route === 'format_print' && PAID_TIER_RANK[inkwellEntitlements.tier] < PAID_TIER_RANK.pro) {
+      queueMicrotask(() => {
+        navigateRouteBase('write')
+      })
       return
     }
   }, [
     route,
     inkwellEntitlements.loading,
-    inkwellEntitlements.gates.canUsePrintFormat,
-    showToast,
+    inkwellEntitlements.tier,
     navigateRouteBase,
   ])
 
@@ -1614,8 +1781,12 @@ export default function App() {
       allowCloudBackup: inkwellEntitlements.gates.canUseCloudSync,
       allowEbookFormat: inkwellEntitlements.gates.canUseEbookFormat,
       allowPrintFormat: inkwellEntitlements.gates.canUsePrintFormat,
-      onUnlockEpub: openEbookSuiteCheckout,
-      onUnlockPro: openProCheckout,
+      onUnlockEpub: () => {
+        void requireEntitlement('basic')
+      },
+      onUnlockPro: () => {
+        void requireEntitlement('pro')
+      },
     }),
     [
       inkwellEntitlements.gates.canExportEpub,
@@ -1623,8 +1794,7 @@ export default function App() {
       inkwellEntitlements.gates.canUseCloudSync,
       inkwellEntitlements.gates.canUseEbookFormat,
       inkwellEntitlements.gates.canUsePrintFormat,
-      openEbookSuiteCheckout,
-      openProCheckout,
+      requireEntitlement,
     ],
   )
 
@@ -1632,12 +1802,14 @@ export default function App() {
     () => ({
       allowProSuite: inkwellEntitlements.gates.canUseNoteExportSuite,
       allowCloudBackup: inkwellEntitlements.gates.canUseCloudSync,
-      onUnlockPro: openProCheckout,
+      onUnlockPro: () => {
+        void requireEntitlement('pro')
+      },
     }),
     [
       inkwellEntitlements.gates.canUseNoteExportSuite,
       inkwellEntitlements.gates.canUseCloudSync,
-      openProCheckout,
+      requireEntitlement,
     ],
   )
 
@@ -1788,11 +1960,7 @@ export default function App() {
   }, [])
 
   const exportPdfKdp = async () => {
-    if (!inkwellEntitlements.loading && !inkwellEntitlements.gates.canUseProExports) {
-      showToast('PDF export is included with Inkwell Pro.')
-      openProCheckout()
-      return
-    }
+    if (!requireEntitlement('pro')) return
     try {
       const bytes = await buildKdpPdf(project)
       const docTitle = project.book.title.trim() || chapters[0]?.title || 'manuscript'
@@ -1811,11 +1979,7 @@ export default function App() {
   }
 
   const exportEpub = async () => {
-    if (!inkwellEntitlements.loading && !inkwellEntitlements.gates.canExportEpub) {
-      showToast('EPUB export unlocks with Inkwell Basic or Pro.')
-      openEbookSuiteCheckout()
-      return
-    }
+    if (!requireEntitlement('basic')) return
     try {
       const bytes = await buildEpub(project)
       const buf = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
@@ -1833,11 +1997,7 @@ export default function App() {
   }
 
   const exportTxt = useCallback(() => {
-    if (!inkwellEntitlements.loading && !inkwellEntitlements.gates.canUseProExports) {
-      showToast('Plain text export is included with Inkwell Pro.')
-      openProCheckout()
-      return
-    }
+    if (!requireEntitlement('pro')) return
     try {
       const text = buildPlaintextExport(project)
       const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
@@ -1855,17 +2015,11 @@ export default function App() {
     project,
     chapters,
     showToast,
-    inkwellEntitlements.loading,
-    inkwellEntitlements.gates.canUseProExports,
-    openProCheckout,
+    requireEntitlement,
   ])
 
   const exportBookArchive = useCallback(async () => {
-    if (!inkwellEntitlements.loading && !inkwellEntitlements.gates.canUseProExports) {
-      showToast('Book backups are included with Inkwell Pro.')
-      openProCheckout()
-      return
-    }
+    if (!requireEntitlement('pro')) return
     try {
       const blob = await exportProjectZip(project)
       const url = URL.createObjectURL(blob)
@@ -1878,14 +2032,10 @@ export default function App() {
     } catch {
       showToast('Backup export failed')
     }
-  }, [project, showToast, inkwellEntitlements.loading, inkwellEntitlements.gates.canUseProExports, openProCheckout])
+  }, [project, showToast, requireEntitlement])
 
   const exportFullLibrary = useCallback(async () => {
-    if (!inkwellEntitlements.loading && !inkwellEntitlements.gates.canUseProExports) {
-      showToast('Full library export is included with Inkwell Pro.')
-      openProCheckout()
-      return
-    }
+    if (!requireEntitlement('pro')) return
     try {
       const blob = await exportLibraryZip()
       const url = URL.createObjectURL(blob)
@@ -1898,7 +2048,7 @@ export default function App() {
     } catch {
       showToast('Library export failed')
     }
-  }, [showToast, inkwellEntitlements.loading, inkwellEntitlements.gates.canUseProExports, openProCheckout])
+  }, [showToast, requireEntitlement])
 
   const closePublishExportMenu = useCallback(() => {
     const el = publishExportMenuRef.current
@@ -1907,11 +2057,7 @@ export default function App() {
 
   const uploadLibraryCloudBackup = useCallback(async () => {
     if (!isCloudBackupConfigured()) return
-    if (!inkwellEntitlements.loading && !inkwellEntitlements.gates.canUseCloudSync) {
-      showToast('Cloud backup upload requires Inkwell Basic or Pro.')
-      openProCheckout()
-      return
-    }
+    if (!requireEntitlement('basic')) return
     setCloudBackupBusy(true)
     try {
       const r = await uploadFullLibraryCloudBackup()
@@ -1921,9 +2067,7 @@ export default function App() {
     }
   }, [
     showToast,
-    inkwellEntitlements.loading,
-    inkwellEntitlements.gates.canUseCloudSync,
-    openProCheckout,
+    requireEntitlement,
   ])
 
   const importArchiveFile = useCallback(
@@ -2087,11 +2231,7 @@ export default function App() {
   const noteWebDoc = useMemo(() => chapters[0]?.content ?? null, [chapters])
 
   const copyFormattedHtmlForWeb = useCallback(async () => {
-    if (!inkwellEntitlements.loading && !inkwellEntitlements.gates.canUseNoteExportSuite) {
-      showToast('Note web exports are included with Inkwell Pro.')
-      openProCheckout()
-      return
-    }
+    if (!requireEntitlement('pro')) return
     const doc = noteWebDoc
     if (!doc || doc.type !== 'doc') {
       showToast('Nothing to copy')
@@ -2118,17 +2258,11 @@ export default function App() {
     noteWebDoc,
     project,
     showToast,
-    inkwellEntitlements.loading,
-    inkwellEntitlements.gates.canUseNoteExportSuite,
-    openProCheckout,
+    requireEntitlement,
   ])
 
   const copyMarkdownForWeb = useCallback(async () => {
-    if (!inkwellEntitlements.loading && !inkwellEntitlements.gates.canUseNoteExportSuite) {
-      showToast('Note web exports are included with Inkwell Pro.')
-      openProCheckout()
-      return
-    }
+    if (!requireEntitlement('pro')) return
     const doc = noteWebDoc
     if (!doc || doc.type !== 'doc') {
       showToast('Nothing to copy')
@@ -2144,17 +2278,11 @@ export default function App() {
   }, [
     noteWebDoc,
     showToast,
-    inkwellEntitlements.loading,
-    inkwellEntitlements.gates.canUseNoteExportSuite,
-    openProCheckout,
+    requireEntitlement,
   ])
 
   const downloadNoteWebHtml = useCallback(() => {
-    if (!inkwellEntitlements.loading && !inkwellEntitlements.gates.canUseNoteExportSuite) {
-      showToast('Note web exports are included with Inkwell Pro.')
-      openProCheckout()
-      return
-    }
+    if (!requireEntitlement('pro')) return
     const doc = noteWebDoc
     if (!doc || doc.type !== 'doc') {
       showToast('Nothing to export')
@@ -2178,9 +2306,7 @@ export default function App() {
     project.book.title,
     chapters,
     showToast,
-    inkwellEntitlements.loading,
-    inkwellEntitlements.gates.canUseNoteExportSuite,
-    openProCheckout,
+    requireEntitlement,
   ])
 
   const applyGlobalReplace = useCallback(
@@ -2290,11 +2416,7 @@ export default function App() {
 
   const importDocx = useCallback(
     async (file: File) => {
-      if (!inkwellEntitlements.loading && !inkwellEntitlements.gates.canUseProExports) {
-        showToast('DOCX import is included with Inkwell Pro.')
-        openProCheckout()
-        return
-      }
+      if (!requireEntitlement('pro')) return
       await importDocxIntoProject(
         file,
         projectRef.current,
@@ -2303,10 +2425,7 @@ export default function App() {
     },
     [
       importDocxIntoProject,
-      inkwellEntitlements.loading,
-      inkwellEntitlements.gates.canUseProExports,
-      openProCheckout,
-      showToast,
+      requireEntitlement,
     ],
   )
 
@@ -2954,8 +3073,12 @@ export default function App() {
   }, [supabasePublicConfig, inkwellLibrarySync.notifyLocalSaved])
 
   useEffect(() => {
-    librarySyncMenuRef.current = { syncNow: inkwellLibrarySync.syncNow }
-  }, [inkwellLibrarySync.syncNow])
+    librarySyncMenuRef.current = {
+      syncNow() {
+        if (requireEntitlement('basic')) inkwellLibrarySync.syncNow()
+      },
+    }
+  }, [inkwellLibrarySync.syncNow, requireEntitlement])
 
   useEffect(() => {
     cloudSignOutRef.current = inkwellLibrarySync.signOutCloudOnly
@@ -2970,7 +3093,7 @@ export default function App() {
         if (r.ok) {
           devClearForceSignInFlag()
           markSignInComplete()
-          navigateRoute('bookshelf')
+          navigateRoute(hasPendingPurchaseIntentInBrowser() ? 'account' : 'bookshelf')
         }
         return r
       } finally {
@@ -2990,7 +3113,7 @@ export default function App() {
         if (r.ok && !r.needsEmailConfirmation) {
           devClearForceSignInFlag()
           markSignInComplete()
-          navigateRoute('bookshelf')
+          navigateRoute(hasPendingPurchaseIntentInBrowser() ? 'account' : 'bookshelf')
         }
         return r
       } finally {
@@ -3024,7 +3147,7 @@ export default function App() {
           stripSupabaseAuthParamsFromBrowserUrl()
           devClearForceSignInFlag()
           markSignInComplete()
-          navigateRoute('bookshelf')
+          navigateRoute(hasPendingPurchaseIntentInBrowser() ? 'account' : 'bookshelf')
         }
         return r
       } finally {
@@ -3040,10 +3163,17 @@ export default function App() {
         <SignInScreen
           darkMode={darkMode}
           onToggleTheme={toggleTheme}
+          initialMode={
+            hasFreshCheckoutQueryInBrowser() &&
+            (typeof window === 'undefined' || !localStorage.getItem(REMEMBERED_SIGNIN_EMAIL_KEY)) ?
+              'signup'
+            : 'signin'
+          }
+          pendingPurchaseLabel={pendingPurchaseLabelFromUrl()}
           onComplete={() => {
             devClearForceSignInFlag()
             markSignInComplete()
-            navigateRoute('bookshelf')
+            navigateRoute(hasPendingPurchaseIntentInBrowser() ? 'account' : 'bookshelf')
           }}
           cloudSync={
             isInkwellCloudSyncConfigured() && supabasePublicConfig ?
@@ -3067,7 +3197,9 @@ export default function App() {
           profileMenu={{
             userEmail: inkwellLibrarySync.userEmail,
             cloudSyncConfigured: isInkwellCloudSyncConfigured(),
-            onSyncNow: () => inkwellLibrarySync.syncNow(),
+            onSyncNow: () => {
+              if (requireEntitlement('basic')) inkwellLibrarySync.syncNow()
+            },
             onSignOutCloud: () => void inkwellLibrarySync.signOutCloudOnly(),
             onAppSignOut: onBookshelfSignOut,
             showLibraryHubLink: !shouldShowSignIn(readBootstrap()),
@@ -3094,7 +3226,9 @@ export default function App() {
           profileMenu={{
             userEmail: inkwellLibrarySync.userEmail,
             cloudSyncConfigured: isInkwellCloudSyncConfigured(),
-            onSyncNow: () => inkwellLibrarySync.syncNow(),
+            onSyncNow: () => {
+              if (requireEntitlement('basic')) inkwellLibrarySync.syncNow()
+            },
             onSignOutCloud: () => void inkwellLibrarySync.signOutCloudOnly(),
             onAppSignOut: onBookshelfSignOut,
             showLibraryHubLink: !shouldShowSignIn(readBootstrap()),
@@ -3109,7 +3243,9 @@ export default function App() {
           syncStatusDetail={inkwellLibrarySync.statusDetail}
           queueHasWork={inkwellLibrarySync.queueHasWork}
           hasSyncConflict={Boolean(inkwellLibrarySync.conflict)}
-          onSyncNow={() => inkwellLibrarySync.syncNow()}
+          onSyncNow={() => {
+            if (requireEntitlement('basic')) inkwellLibrarySync.syncNow()
+          }}
           onSignOutCloud={() => void inkwellLibrarySync.signOutCloudOnly()}
           onAppSignOut={onBookshelfSignOut}
           onOpenCloudSignIn={navigateToCloudSignIn}
@@ -3117,11 +3253,27 @@ export default function App() {
             isInkwellCloudSyncConfigured() ?
               {
                 loading: inkwellEntitlements.loading,
-                tier: inkwellEntitlements.gates.tier,
+                tier: inkwellEntitlements.tier,
+                status: inkwellEntitlements.status,
+                lastVerifiedAt: inkwellEntitlements.lastVerifiedAt,
                 canUseCloudSync: inkwellEntitlements.gates.canUseCloudSync,
                 onUnlockEbookSuite: openEbookSuiteCheckout,
                 onGoPro: openProCheckout,
                 onUpgradeEbookToPro: openUpgradeEbookToProCheckout,
+              }
+            : undefined
+          }
+          purchaseConfirmation={
+            purchaseCelebrationActive ?
+              {
+                tier: inkwellEntitlements.tier,
+                loading: inkwellEntitlements.loading,
+                onOpenLibrary: () => {
+                  dismissPurchaseCelebration()
+                  syncPersistedState()
+                  navigateRoute('bookshelf')
+                },
+                onDismiss: dismissPurchaseCelebration,
               }
             : undefined
           }
@@ -3400,7 +3552,9 @@ export default function App() {
                   <InkwellProfileMenu
                     userEmail={inkwellLibrarySync.userEmail}
                     cloudSyncConfigured={isInkwellCloudSyncConfigured()}
-                    onSyncNow={() => inkwellLibrarySync.syncNow()}
+                    onSyncNow={() => {
+                      if (requireEntitlement('basic')) inkwellLibrarySync.syncNow()
+                    }}
                     onSignOutCloud={() => void inkwellLibrarySync.signOutCloudOnly()}
                     onAppSignOut={onBookshelfSignOut}
                     showLibraryHubLink
@@ -4443,7 +4597,9 @@ export default function App() {
                 <InkwellProfileMenu
                   userEmail={inkwellLibrarySync.userEmail}
                   cloudSyncConfigured={isInkwellCloudSyncConfigured()}
-                  onSyncNow={() => inkwellLibrarySync.syncNow()}
+                  onSyncNow={() => {
+                    if (requireEntitlement('basic')) inkwellLibrarySync.syncNow()
+                  }}
                   onSignOutCloud={() => void inkwellLibrarySync.signOutCloudOnly()}
                   onAppSignOut={onBookshelfSignOut}
                   showLibraryHubLink
@@ -4883,12 +5039,29 @@ export default function App() {
           if (intent) handleUpgradeContinue(intent)
         }}
       />
-      <PurchaseSignInModal
-        open={purchaseSignInOpen}
-        onClose={dismissPurchaseSignInModal}
-        onOpenSignIn={() => {
-          setPurchaseSignInOpen(false)
+      <PaidFeatureGateModal
+        open={paidFeatureGate != null}
+        state={paidFeatureGate}
+        entitlement={{
+          tier: inkwellEntitlements.tier,
+          status: inkwellEntitlements.status,
+          isOffline: inkwellEntitlements.isOffline,
+          userId: inkwellEntitlements.userId,
+          loading: inkwellEntitlements.loading,
+        }}
+        onClose={() => setPaidFeatureGate(null)}
+        onSignIn={() => {
+          setPaidFeatureGate(null)
           navigateToCloudSignIn()
+        }}
+        onUpgrade={() => {
+          const requestedTier = paidFeatureGate?.requiredTier ?? 'basic'
+          setPaidFeatureGate(null)
+          offerUpgrade(requestedTier)
+        }}
+        onSignOut={() => {
+          setPaidFeatureGate(null)
+          onBookshelfSignOut()
         }}
       />
       <GettingStartedTour

@@ -1,4 +1,4 @@
-import { ArrowLeft, Moon, Sun } from 'lucide-react'
+import { ArrowLeft, Moon, PartyPopper, Sun, X } from 'lucide-react'
 import { useRef } from 'react'
 import { InkwellEmblem } from './InkwellEmblem'
 import { InkwellProfileMenu, type InkwellProfileMenuProps } from './InkwellProfileMenu'
@@ -6,6 +6,7 @@ import { InkwellWordmark } from './InkwellWordmark'
 import { useThemeShine } from './useThemeShine'
 import type { LibrarySyncStatus } from '../lib/sync/useInkwellLibrarySync'
 import type { InkwellTier } from '../lib/inkwellEntitlements'
+import type { InkwellEntitlementStatus } from '../hooks/useInkwellEntitlements'
 import {
   INKWELL_DISPLAY_PRICE_BASIC,
   INKWELL_DISPLAY_PRICE_BASIC_TO_PRO,
@@ -31,16 +32,28 @@ export type AccountScreenProps = {
   licensing?: {
     loading: boolean
     tier: InkwellTier
+    status: InkwellEntitlementStatus
+    lastVerifiedAt?: string
     canUseCloudSync: boolean
     onUnlockEbookSuite: () => void
     onGoPro: () => void
     onUpgradeEbookToPro: () => void
   }
+  /**
+   * When set, shows a one-time celebration banner at the top of the Account screen after a Paddle
+   * return. Displays the unlocked tier and a CTA back to the bookshelf. The parent owns dismissal.
+   */
+  purchaseConfirmation?: {
+    tier: InkwellTier
+    loading: boolean
+    onOpenLibrary: () => void
+    onDismiss: () => void
+  }
 }
 
 function tierLabel(tier: InkwellTier): string {
   switch (tier) {
-    case 'ebook_suite':
+    case 'basic':
       return 'Basic'
     case 'pro':
       return 'Pro'
@@ -48,6 +61,11 @@ function tierLabel(tier: InkwellTier): string {
     default:
       return 'Free'
   }
+}
+
+function offlineReadyTierLabel(tier: InkwellTier): string {
+  const label = tierLabel(tier)
+  return tier === 'basic' || tier === 'pro' ? `${label} (offline-ready)` : label
 }
 
 function syncStatusLabel(status: LibrarySyncStatus): string {
@@ -67,6 +85,25 @@ function syncStatusLabel(status: LibrarySyncStatus): string {
   }
 }
 
+function purchaseCelebrationCopy(tier: InkwellTier, loading: boolean) {
+  if (loading || tier === 'free') {
+    return {
+      title: 'Confirming your purchase\u2026',
+      body: 'Paddle just sent us your payment. We are unlocking your account now \u2014 it usually takes a few seconds. Refresh if it does not update shortly.',
+    }
+  }
+  if (tier === 'basic') {
+    return {
+      title: 'You unlocked Inkwell Basic',
+      body: 'Cloud library sync and EPUB export are live on this account. Welcome aboard.',
+    }
+  }
+  return {
+    title: 'You unlocked Inkwell Pro',
+    body: 'The full export suite, advanced formatting, and lifetime updates are live on this account. Welcome aboard.',
+  }
+}
+
 export function AccountScreen({
   darkMode,
   onToggleTheme,
@@ -83,11 +120,15 @@ export function AccountScreen({
   onAppSignOut,
   onOpenCloudSignIn,
   licensing,
+  purchaseConfirmation,
 }: AccountScreenProps) {
   const brandRef = useRef<HTMLButtonElement>(null)
   useThemeShine(brandRef)
 
   const signedIntoCloud = Boolean(userEmail)
+  const headerExit = onBackToBookshelf
+  const headerExitLabel = 'Back to Bookshelf'
+  const brandTitle = 'Bookshelf'
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-parchment text-ink transition-colors dark:bg-panel-dark dark:text-ink-dark">
@@ -96,20 +137,20 @@ export function AccountScreen({
           <div className="inkwell-theme-bridge flex min-w-0 flex-1 items-center justify-start gap-2 bg-white/70 py-2 pl-3 sm:gap-3 sm:py-3 sm:pl-5 dark:bg-panel-dark/70">
             <button
               type="button"
-              onClick={onBackToBookshelf}
+              onClick={headerExit}
               className="inkwell-btn-icon shrink-0"
-              aria-label="Back to Bookshelf"
-              title="Back to Bookshelf"
+              aria-label={headerExitLabel}
+              title={headerExitLabel}
             >
               <ArrowLeft className="h-5 w-5" strokeWidth={2.25} />
             </button>
             <button
               ref={brandRef}
               type="button"
-              onClick={onBackToBookshelf}
+              onClick={headerExit}
               className="inkwell-header-brand group inline-flex w-fit max-w-full min-w-0 items-center gap-2 rounded-2xl px-2 py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-walnut/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream/50 dark:focus-visible:ring-offset-panel-dark sm:gap-3"
-              aria-label="Inkwell — Bookshelf"
-              title="Bookshelf"
+              aria-label={brandTitle}
+              title={brandTitle}
             >
               <InkwellEmblem darkMode={darkMode} />
               <InkwellWordmark className="hidden min-w-0 sm:block" />
@@ -138,6 +179,57 @@ export function AccountScreen({
       </header>
 
       <div className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-6 px-4 py-8 sm:px-6 sm:py-10">
+        {purchaseConfirmation ? (() => {
+          const copy = purchaseCelebrationCopy(purchaseConfirmation.tier, purchaseConfirmation.loading)
+          return (
+            <section
+              role="status"
+              aria-live="polite"
+              className="relative overflow-hidden rounded-2xl border border-walnut/35 bg-gradient-to-br from-parchment to-parchment/70 p-5 shadow-sm dark:border-accent-warm/45 dark:from-panel-dark dark:to-panel-dark/70"
+            >
+              <button
+                type="button"
+                onClick={purchaseConfirmation.onDismiss}
+                aria-label="Dismiss"
+                title="Dismiss"
+                className="absolute right-3 top-3 inline-flex h-7 w-7 items-center justify-center rounded-full text-walnut/70 transition hover:bg-walnut/10 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-walnut/40 dark:text-ink-dark/65 dark:hover:bg-accent-warm/15 dark:hover:text-ink-dark"
+              >
+                <X className="h-4 w-4" />
+              </button>
+              <div className="flex items-start gap-3">
+                <span
+                  aria-hidden
+                  className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-walnut/15 text-walnut dark:bg-accent-warm/20 dark:text-accent-warm"
+                >
+                  <PartyPopper className="h-5 w-5" />
+                </span>
+                <div className="min-w-0 pr-6">
+                  <h2 className="font-serif text-lg font-semibold text-ink dark:text-ink-dark">
+                    {copy.title}
+                  </h2>
+                  <p className="mt-1.5 text-sm leading-relaxed text-ink/80 dark:text-ink-dark/80">
+                    {copy.body}
+                  </p>
+                  {userEmail ?
+                    <p className="mt-2 text-xs text-ink/55 dark:text-ink-dark/55">
+                      Receipt sent to {userEmail}.
+                    </p>
+                  : null}
+                  <div className="mt-4">
+                    <button
+                      type="button"
+                      onClick={purchaseConfirmation.onOpenLibrary}
+                      className="inkwell-hub-primary inline-flex w-full items-center justify-center sm:w-auto sm:min-w-[12rem]"
+                    >
+                      Open your library
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </section>
+          )
+        })() : null}
+
         <section className="rounded-2xl border border-dust/80 bg-white/80 p-5 shadow-sm dark:border-border-dark dark:bg-panel-dark/70">
           <h2 className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
             Sign-in
@@ -165,16 +257,18 @@ export function AccountScreen({
             </h2>
             <p className="mt-3 text-sm text-ink/80 dark:text-ink-dark/80">
               {licensing.loading ?
-                'Loading license…'
+                'Checking plan…'
               : <>
-                  <span className="font-semibold text-ink dark:text-ink-dark">{tierLabel(licensing.tier)}</span>
+                  <span className="font-semibold text-ink dark:text-ink-dark">
+                    {offlineReadyTierLabel(licensing.tier)}
+                  </span>
                   {licensing.tier === 'free' ?
                     <span className="text-ink/65 dark:text-ink-dark/65">
                       {' '}
                       — Local-only storage on this device. Upgrade to Basic for cloud backup and EPUB, or Pro for the full
                       export suite.
                     </span>
-                  : licensing.tier === 'ebook_suite' ?
+                  : licensing.tier === 'basic' ?
                     <span className="text-ink/65 dark:text-ink-dark/65">
                       {' '}
                       — Cloud library sync and EPUB export included. Go Pro for print PDFs and the full export suite.
@@ -188,6 +282,19 @@ export function AccountScreen({
                 </>
               }
             </p>
+            {!licensing.loading && (licensing.tier === 'basic' || licensing.tier === 'pro') ?
+              <div className="mt-3 rounded-xl border border-dust/70 bg-white/55 px-3 py-2 text-xs leading-relaxed text-ink/65 dark:border-border-dark dark:bg-panel-dark/55 dark:text-ink-dark/65">
+                {licensing.status === 'offline_cached' ?
+                  <>
+                    <p className="font-semibold text-ink dark:text-ink-dark">You’re offline</p>
+                    <p className="mt-1">
+                      You can keep writing. Basic/Pro features are available on this device. We’ll re-check your plan
+                      next time you’re online.
+                    </p>
+                  </>
+                : <p>Verified on this device.</p>}
+              </div>
+            : null}
             {!licensing.loading && licensing.tier !== 'pro' ? (
               <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                 {licensing.tier === 'free' ? (
@@ -199,7 +306,7 @@ export function AccountScreen({
                     Unlock Basic ({INKWELL_DISPLAY_PRICE_BASIC})
                   </button>
                 ) : null}
-                {licensing.tier === 'ebook_suite' ? (
+                {licensing.tier === 'basic' ? (
                   <button
                     type="button"
                     onClick={licensing.onUpgradeEbookToPro}
@@ -221,6 +328,15 @@ export function AccountScreen({
             ) : null}
           </section>
         : null}
+
+        <section className="rounded-2xl border border-dust/80 bg-white/80 p-5 shadow-sm dark:border-border-dark dark:bg-panel-dark/70">
+          <h2 className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
+            Using Inkwell on a new device?
+          </h2>
+          <p className="mt-3 text-sm text-ink/75 dark:text-ink-dark/75">
+            Sign in to restore Basic/Pro on this device. Free libraries are stored per-device.
+          </p>
+        </section>
 
         {cloudSyncConfigured ?
           <section className="rounded-2xl border border-dust/80 bg-white/80 p-5 shadow-sm dark:border-border-dark dark:bg-panel-dark/70">
@@ -275,10 +391,7 @@ export function AccountScreen({
               <button
                 type="button"
                 onClick={onSyncNow}
-                disabled={
-                  !signedIntoCloud ||
-                  Boolean(licensing && !licensing.loading && !licensing.canUseCloudSync)
-                }
+                disabled={!signedIntoCloud}
                 title={
                   licensing && !licensing.loading && !licensing.canUseCloudSync ?
                     'Upgrade to Basic or Pro to sync your library to the cloud.'
