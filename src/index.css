@@ -909,6 +909,16 @@ select {
   margin: 0 0 1em;
 }
 
+.tiptap.ProseMirror p.inkwell-drop-cap-para::first-letter {
+  float: left;
+  font-size: 3.1em;
+  line-height: 0.85;
+  padding-right: 0.06em;
+  margin-top: 0.04em;
+  font-family: var(--font-serif);
+  font-weight: 600;
+}
+
 .tiptap.ProseMirror h1,
 .tiptap.ProseMirror h2,
 .tiptap.ProseMirror h3 {

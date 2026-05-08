@@ -4,6 +4,7 @@ import StarterKit from '@tiptap/starter-kit'
 import TextAlign from '@tiptap/extension-text-align'
 import Underline from '@tiptap/extension-underline'
 import type { MentionItem } from './mentionUi'
+import { InkwellParagraph } from './extensions/InkwellParagraph'
 import { PageBreak } from './extensions/PageBreak'
 import { InkwellSceneBreak } from './extensions/InkwellSceneBreak'
 import { WriterComment } from './extensions/WriterComment'
@@ -22,6 +23,7 @@ export function createManuscriptTipTapExtensions(opts: {
   void opts.wikilinkMode
   return [
     StarterKit.configure({
+      paragraph: false,
       heading: { levels: [1, 2, 3] },
       horizontalRule: false,
       link: {
@@ -29,6 +31,7 @@ export function createManuscriptTipTapExtensions(opts: {
         autolink: false,
       },
     }),
+    InkwellParagraph,
     InkwellSceneBreak,
     Underline,
     TextAlign.configure({

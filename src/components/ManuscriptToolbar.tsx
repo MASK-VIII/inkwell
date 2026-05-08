@@ -29,6 +29,7 @@ import {
   AlignJustify,
   AlignLeft,
   AlignRight,
+  ALargeSmall,
   AtSign,
   Bold,
   ChevronDown,
@@ -51,12 +52,14 @@ import {
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type MutableRefObject,
   type ReactNode,
 } from 'react'
+import { createPortal } from 'react-dom'
 import {
   defaultToolbarLayout,
   loadToolbarLayout,
@@ -64,6 +67,7 @@ import {
   type ToolbarLayoutState,
   type ToolbarRowEntry,
 } from '../lib/editorToolbarLayout'
+import { SCENE_BREAK_OPTIONS } from '../lib/sceneBreakCatalog'
 
 const HEADINGS = [
   { value: '', label: 'Normal text' },
@@ -71,13 +75,6 @@ const HEADINGS = [
   { value: '2', label: 'Heading 2 — Chapter title' },
   { value: '3', label: 'Heading 3 — Section break' },
 ] as const
-
-const SCENE_BREAK_OPTIONS: { value: string; label: string }[] = [
-  { value: 'orn:❧', label: 'Fleuron' },
-  { value: 'orn:✦ · ✦ · ✦', label: 'Stars' },
-  { value: 'orn:* * *', label: 'Asterism' },
-  { value: 'orn:— — —', label: 'Emdashes' },
-]
 
 function headingSelectValue(editor: Editor): string {
   if (editor.isActive('heading', { level: 1 })) return '1'
@@ -245,6 +242,8 @@ function ToolbarDragIconPreview({ entry }: { entry: ToolbarRowEntry }) {
         return <ListOrdered className="h-4 w-4" strokeWidth={sw} />
       case 'blockquote':
         return <Quote className="h-4 w-4" strokeWidth={sw} />
+      case 'dropCap':
+        return <ALargeSmall className="h-4 w-4" strokeWidth={sw} />
       case 'align':
         return <AlignCenter className="h-4 w-4" strokeWidth={sw} />
       case 'link':
@@ -282,8 +281,57 @@ function toolBtnClass(active: boolean) {
   }`
 }
 
-const PANEL_POPOVER_CLASS =
-  'absolute right-0 top-full z-50 mt-2 flex min-w-[min(18rem,calc(100vw-2rem))] flex-col gap-2 rounded-2xl border border-dust bg-parchment p-3 shadow-lg ring-1 ring-black/5 dark:border-border-dark dark:bg-panel-dark dark:ring-white/10'
+/** Surface only — position via fixed coords from anchor (see ToolbarAnchoredPopover). */
+const PANEL_POPOVER_SURFACE_CLASS =
+  'flex min-w-[min(18rem,calc(100vw-2rem))] flex-col gap-2 rounded-2xl border border-dust bg-parchment p-3 shadow-lg ring-1 ring-black/5 dark:border-border-dark dark:bg-panel-dark dark:ring-white/10'
+
+function ToolbarAnchoredPopover({
+  open,
+  anchorRef,
+  panelRef,
+  children,
+}: {
+  open: boolean
+  anchorRef: MutableRefObject<HTMLElement | null>
+  panelRef: MutableRefObject<HTMLDivElement | null>
+  children: React.ReactNode
+}) {
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null)
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setPos(null)
+      return
+    }
+    const update = () => {
+      const el = anchorRef.current
+      if (!el) return
+      const rect = el.getBoundingClientRect()
+      setPos({ top: rect.bottom + 8, right: window.innerWidth - rect.right })
+    }
+    update()
+    window.addEventListener('resize', update)
+    window.addEventListener('scroll', update, true)
+    return () => {
+      window.removeEventListener('resize', update)
+      window.removeEventListener('scroll', update, true)
+    }
+  }, [open, anchorRef])
+
+  if (!open || pos === null) return null
+
+  return createPortal(
+    <div
+      ref={panelRef}
+      className={`${PANEL_POPOVER_SURFACE_CLASS} z-[80]`}
+      style={{ position: 'fixed', top: pos.top, right: pos.right }}
+      onMouseDown={(e) => e.stopPropagation()}
+    >
+      {children}
+    </div>,
+    document.body,
+  )
+}
 
 const MORE_PANEL_CLASS =
   'absolute right-0 top-full z-50 mt-2 flex max-h-[min(70vh,28rem)] w-[min(calc(100vw-2rem),36rem)] flex-col gap-3 overflow-y-auto overscroll-contain rounded-2xl border border-dust bg-parchment p-3 shadow-xl ring-1 ring-black/5 dark:border-border-dark dark:bg-panel-dark dark:ring-white/10'
@@ -304,7 +352,7 @@ function MoreToolbarOverflowUse({
   setMoreOpen: (value: boolean | ((prev: boolean) => boolean)) => void
   moreWrapRef: MutableRefObject<HTMLDivElement | null>
   overflow: ToolbarRowEntry[]
-  renderTool: (entry: ToolbarRowEntry, opts: { moreVariant?: boolean; commentIdSuffix?: string }) => ReactNode
+  renderTool: (entry: ToolbarRowEntry, opts: { moreVariant?: boolean }) => ReactNode
   menuId: string
 }) {
   return (
@@ -340,7 +388,11 @@ function MoreToolbarOverflowUse({
           <div
             className={`flex flex-col gap-3 ${overflow.length === 0 ? 'min-h-[4.5rem] justify-center rounded-xl border border-dashed border-dust/60 dark:border-border-dark/70' : ''}`}
           >
-            {overflow.map((entry, i) => renderTool(entry, { moreVariant: true, commentIdSuffix: `-more-${i}` }))}
+            {overflow.map((entry, idx) => (
+              <div key={`overflow-${idx}-${entry}`} className="flex flex-col">
+                {renderTool(entry, { moreVariant: true })}
+              </div>
+            ))}
           </div>
         </div>
       ) : null}
@@ -366,7 +418,7 @@ function MoreToolbarOverflowCustomize({
   moreWrapRef: MutableRefObject<HTMLDivElement | null>
   overflow: ToolbarRowEntry[]
   overflowIds: string[]
-  renderTool: (entry: ToolbarRowEntry, opts?: { moreVariant?: boolean; commentIdSuffix?: string }) => ReactNode
+  renderTool: (entry: ToolbarRowEntry, opts?: { moreVariant?: boolean }) => ReactNode
   customizing: boolean
   menuId: string
   /** Absolute panel box — used so collision detection matches the visible drop zone (droppable ref stays on the button-sized wrapper). */
@@ -512,14 +564,17 @@ export function ManuscriptToolbar({
   const [linkOpen, setLinkOpen] = useState(false)
   const [linkUrlDraft, setLinkUrlDraft] = useState('')
   const linkPanelRef = useRef<HTMLDivElement | null>(null)
+  const linkPopoverAnchorRef = useRef<HTMLElement | null>(null)
 
   const [commentOpen, setCommentOpen] = useState(false)
   const [commentDraft, setCommentDraft] = useState('')
   const commentPanelRef = useRef<HTMLDivElement | null>(null)
+  const commentPopoverAnchorRef = useRef<HTMLElement | null>(null)
 
   const [footnoteOpen, setFootnoteOpen] = useState(false)
   const [footnoteDraft, setFootnoteDraft] = useState('')
   const footnotePanelRef = useRef<HTMLDivElement | null>(null)
+  const footnotePopoverAnchorRef = useRef<HTMLElement | null>(null)
 
   const imageInputRef = useRef<HTMLInputElement | null>(null)
   const layoutRef = useRef(layout)
@@ -594,8 +649,9 @@ export function ManuscriptToolbar({
     return () => window.removeEventListener('keydown', onKey)
   }, [moreOpen])
 
-  const openLinkPanel = useCallback(() => {
+  const openLinkPanel = useCallback((anchor?: HTMLElement | null) => {
     if (!editor) return
+    if (anchor) linkPopoverAnchorRef.current = anchor
     const href = (editor.getAttributes('link') as { href?: string }).href ?? ''
     setLinkUrlDraft(typeof href === 'string' ? href : '')
     setLinkOpen(true)
@@ -622,8 +678,9 @@ export function ManuscriptToolbar({
     bumpToolbar()
   }, [editor, bumpToolbar])
 
-  const openCommentPanel = useCallback(() => {
+  const openCommentPanel = useCallback((anchor?: HTMLElement | null) => {
     if (!editor) return
+    if (anchor) commentPopoverAnchorRef.current = anchor
     const mark = editor.getAttributes('writerComment') as { body?: string }
     setCommentDraft(typeof mark.body === 'string' ? mark.body : '')
     setCommentOpen(true)
@@ -695,8 +752,8 @@ export function ManuscriptToolbar({
     [editor, bumpToolbar],
   )
 
-  const renderTool = (entry: ToolbarRowEntry, opts: { moreVariant?: boolean; commentIdSuffix?: string } = {}): ReactNode => {
-    const { moreVariant = false, commentIdSuffix = '' } = opts
+  const renderTool = (entry: ToolbarRowEntry, opts: { moreVariant?: boolean } = {}): ReactNode => {
+    const { moreVariant = false } = opts
 
     if (entry === 'divider') {
       return <div className="hidden h-6 w-px shrink-0 bg-dust sm:block dark:bg-border-dark" />
@@ -821,6 +878,22 @@ export function ManuscriptToolbar({
             {!moreVariant ? <span className="hidden sm:inline">Quote</span> : <span>Quote</span>}
           </button>
         )
+      case 'dropCap':
+        return (
+          <button
+            type="button"
+            className={toolBtnClass(Boolean(editor?.getAttributes('paragraph').inkwellDropCap))}
+            title="Drop cap on paragraph (ebook)"
+            onClick={() => {
+              if (!editor || !editor.isActive('paragraph')) return
+              const cur = Boolean(editor.getAttributes('paragraph').inkwellDropCap)
+              editor.chain().focus().updateAttributes('paragraph', { inkwellDropCap: !cur }).run()
+              bumpToolbar()
+            }}
+          >
+            <ALargeSmall className="h-4 w-4" strokeWidth={2.25} />
+          </button>
+        )
       case 'align':
         return editor ? (
           <div className="flex flex-wrap gap-1">
@@ -865,48 +938,10 @@ export function ManuscriptToolbar({
               type="button"
               className={toolBtnClass(editor?.isActive('link') ?? false)}
               title="Link"
-              onClick={openLinkPanel}
+              onClick={(e) => openLinkPanel(e.currentTarget)}
             >
               <Link2 className="h-4 w-4" strokeWidth={2.25} />
             </button>
-            {linkOpen && editor ? (
-              <div ref={linkPanelRef} className={PANEL_POPOVER_CLASS} onMouseDown={(e) => e.stopPropagation()}>
-                <label className="text-xs font-semibold text-ink/80 dark:text-ink-dark/80" htmlFor={`inkwell-link-url-${manuscriptId}`}>
-                  URL
-                </label>
-                <input
-                  id={`inkwell-link-url-${manuscriptId}`}
-                  type="url"
-                  value={linkUrlDraft}
-                  onChange={(e) => setLinkUrlDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault()
-                      applyLink()
-                    }
-                  }}
-                  placeholder="https://…"
-                  className="rounded-xl border border-dust bg-white px-3 py-2 text-sm text-ink focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:text-ink-dark dark:focus:border-cream"
-                  autoFocus
-                />
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    className="rounded-full bg-ink px-4 py-2 text-xs font-semibold text-parchment hover:bg-walnut dark:bg-cream dark:text-ink dark:hover:bg-accent-warm"
-                    onClick={applyLink}
-                  >
-                    Apply
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-full border border-dust px-4 py-2 text-xs font-semibold text-ink hover:bg-dust/30 dark:border-border-dark dark:text-ink-dark dark:hover:bg-border-dark/50"
-                    onClick={removeLink}
-                  >
-                    Remove link
-                  </button>
-                </div>
-              </div>
-            ) : null}
           </div>
         )
       case 'sceneBreak':
@@ -965,45 +1000,10 @@ export function ManuscriptToolbar({
               type="button"
               className={toolBtnClass(editor?.isActive('writerComment') ?? false)}
               title="Comment on selection"
-              onClick={openCommentPanel}
+              onClick={(e) => openCommentPanel(e.currentTarget)}
             >
               <MessageSquare className="h-4 w-4" strokeWidth={2.25} />
             </button>
-            {commentOpen && editor ? (
-              <div ref={commentPanelRef} className={PANEL_POPOVER_CLASS} onMouseDown={(e) => e.stopPropagation()}>
-                <label
-                  className="text-xs font-semibold text-ink/80 dark:text-ink-dark/80"
-                  htmlFor={`inkwell-comment-${manuscriptId}${commentIdSuffix}`}
-                >
-                  Comment
-                </label>
-                <textarea
-                  id={`inkwell-comment-${manuscriptId}${commentIdSuffix}`}
-                  value={commentDraft}
-                  onChange={(e) => setCommentDraft(e.target.value)}
-                  rows={3}
-                  placeholder="Note to self or editor…"
-                  className="resize-y rounded-xl border border-dust bg-white px-3 py-2 text-sm text-ink focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:text-ink-dark dark:focus:border-cream"
-                  autoFocus
-                />
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    className="rounded-full bg-ink px-4 py-2 text-xs font-semibold text-parchment hover:bg-walnut dark:bg-cream dark:text-ink dark:hover:bg-accent-warm"
-                    onClick={applyComment}
-                  >
-                    Apply
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-full border border-dust px-4 py-2 text-xs font-semibold text-ink hover:bg-dust/30 dark:border-border-dark dark:text-ink-dark dark:hover:bg-border-dark/50"
-                    onClick={removeComment}
-                  >
-                    Remove
-                  </button>
-                </div>
-              </div>
-            ) : null}
           </div>
         )
       case 'footnote':
@@ -1013,40 +1013,14 @@ export function ManuscriptToolbar({
               type="button"
               className={toolBtnClass(false)}
               title="Insert footnote"
-              onClick={() => {
+              onClick={(e) => {
+                footnotePopoverAnchorRef.current = e.currentTarget
                 setFootnoteDraft('')
                 setFootnoteOpen(true)
               }}
             >
               <NotebookPen className="h-4 w-4" strokeWidth={2.25} />
             </button>
-            {footnoteOpen && editor ? (
-              <div ref={footnotePanelRef} className={PANEL_POPOVER_CLASS} onMouseDown={(e) => e.stopPropagation()}>
-                <label
-                  className="text-xs font-semibold text-ink/80 dark:text-ink-dark/80"
-                  htmlFor={`inkwell-fn-${manuscriptId}${commentIdSuffix}`}
-                >
-                  Footnote text
-                </label>
-                <textarea
-                  id={`inkwell-fn-${manuscriptId}${commentIdSuffix}`}
-                  value={footnoteDraft}
-                  onChange={(e) => setFootnoteDraft(e.target.value)}
-                  rows={3}
-                  className="resize-y rounded-xl border border-dust bg-white px-3 py-2 text-sm text-ink focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:text-ink-dark dark:focus:border-cream"
-                  autoFocus
-                />
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    className="rounded-full bg-ink px-4 py-2 text-xs font-semibold text-parchment hover:bg-walnut dark:bg-cream dark:text-ink dark:hover:bg-accent-warm"
-                    onClick={applyFootnote}
-                  >
-                    Insert
-                  </button>
-                </div>
-              </div>
-            ) : null}
           </div>
         )
       case 'mention':
@@ -1191,13 +1165,15 @@ export function ManuscriptToolbar({
       onDragCancel={clearToolbarDragUi}
     >
       <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-2">
-        <SortableContext items={primaryIds} strategy={horizontalListSortingStrategy}>
-          {layout.primary.map((entry, i) => (
-            <SortableSlot key={`primary-${i}-${entry}`} id={`primary:${i}`} customizing={customizing}>
-              {renderTool(entry)}
-            </SortableSlot>
-          ))}
-        </SortableContext>
+        <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-x-auto overscroll-x-contain">
+          <SortableContext items={primaryIds} strategy={horizontalListSortingStrategy}>
+            {layout.primary.map((entry, i) => (
+              <SortableSlot key={`primary-${i}-${entry}`} id={`primary:${i}`} customizing={customizing}>
+                {renderTool(entry)}
+              </SortableSlot>
+            ))}
+          </SortableContext>
+        </div>
         <MoreToolbarOverflowCustomize
           moreOpen={moreOpen}
           setMoreOpen={setMoreOpen}
@@ -1217,11 +1193,13 @@ export function ManuscriptToolbar({
     </DndContext>
   ) : (
     <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-2">
-      {layout.primary.map((entry, i) => (
-        <div key={`p-${i}-${entry}`} className="flex items-center">
-          {renderTool(entry)}
-        </div>
-      ))}
+      <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-x-auto overscroll-x-contain">
+        {layout.primary.map((entry, i) => (
+          <div key={`p-${i}-${entry}`} className="flex items-center">
+            {renderTool(entry)}
+          </div>
+        ))}
+      </div>
       <MoreToolbarOverflowUse
         moreOpen={moreOpen}
         setMoreOpen={setMoreOpen}
@@ -1234,8 +1212,9 @@ export function ManuscriptToolbar({
   )
 
   return (
+    <>
     <div
-      className={`flex flex-nowrap items-center gap-2 overflow-x-auto overscroll-x-contain border-b border-dust bg-white/50 dark:border-border-dark dark:bg-panel-dark/50 ${shellPad}`}
+      className={`relative z-[70] flex flex-nowrap items-center gap-2 border-b border-dust bg-white/50 dark:border-border-dark dark:bg-panel-dark/50 ${shellPad}`}
     >
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-2" data-inkwell-tour="editor-toolbar-bar">
@@ -1333,5 +1312,101 @@ export function ManuscriptToolbar({
           </button>
         </div>
     </div>
+
+      {editor ?
+        <>
+          <ToolbarAnchoredPopover open={linkOpen} anchorRef={linkPopoverAnchorRef} panelRef={linkPanelRef}>
+            <label className="text-xs font-semibold text-ink/80 dark:text-ink-dark/80" htmlFor={`inkwell-link-url-${manuscriptId}`}>
+              URL
+            </label>
+            <input
+              id={`inkwell-link-url-${manuscriptId}`}
+              type="url"
+              value={linkUrlDraft}
+              onChange={(e) => setLinkUrlDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  applyLink()
+                }
+              }}
+              placeholder="https://…"
+              className="rounded-xl border border-dust bg-white px-3 py-2 text-sm text-ink focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:text-ink-dark dark:focus:border-cream"
+              autoFocus
+            />
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="rounded-full bg-ink px-4 py-2 text-xs font-semibold text-parchment hover:bg-walnut dark:bg-cream dark:text-ink dark:hover:bg-accent-warm"
+                onClick={applyLink}
+              >
+                Apply
+              </button>
+              <button
+                type="button"
+                className="rounded-full border border-dust px-4 py-2 text-xs font-semibold text-ink hover:bg-dust/30 dark:border-border-dark dark:text-ink-dark dark:hover:bg-border-dark/50"
+                onClick={removeLink}
+              >
+                Remove link
+              </button>
+            </div>
+          </ToolbarAnchoredPopover>
+
+          <ToolbarAnchoredPopover open={commentOpen} anchorRef={commentPopoverAnchorRef} panelRef={commentPanelRef}>
+            <label className="text-xs font-semibold text-ink/80 dark:text-ink-dark/80" htmlFor={`inkwell-comment-${manuscriptId}`}>
+              Comment
+            </label>
+            <textarea
+              id={`inkwell-comment-${manuscriptId}`}
+              value={commentDraft}
+              onChange={(e) => setCommentDraft(e.target.value)}
+              rows={3}
+              placeholder="Note to self or editor…"
+              className="resize-y rounded-xl border border-dust bg-white px-3 py-2 text-sm text-ink focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:text-ink-dark dark:focus:border-cream"
+              autoFocus
+            />
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="rounded-full bg-ink px-4 py-2 text-xs font-semibold text-parchment hover:bg-walnut dark:bg-cream dark:text-ink dark:hover:bg-accent-warm"
+                onClick={applyComment}
+              >
+                Apply
+              </button>
+              <button
+                type="button"
+                className="rounded-full border border-dust px-4 py-2 text-xs font-semibold text-ink hover:bg-dust/30 dark:border-border-dark dark:text-ink-dark dark:hover:bg-border-dark/50"
+                onClick={removeComment}
+              >
+                Remove
+              </button>
+            </div>
+          </ToolbarAnchoredPopover>
+
+          <ToolbarAnchoredPopover open={footnoteOpen} anchorRef={footnotePopoverAnchorRef} panelRef={footnotePanelRef}>
+            <label className="text-xs font-semibold text-ink/80 dark:text-ink-dark/80" htmlFor={`inkwell-fn-${manuscriptId}`}>
+              Footnote text
+            </label>
+            <textarea
+              id={`inkwell-fn-${manuscriptId}`}
+              value={footnoteDraft}
+              onChange={(e) => setFootnoteDraft(e.target.value)}
+              rows={3}
+              className="resize-y rounded-xl border border-dust bg-white px-3 py-2 text-sm text-ink focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:text-ink-dark dark:focus:border-cream"
+              autoFocus
+            />
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="rounded-full bg-ink px-4 py-2 text-xs font-semibold text-parchment hover:bg-walnut dark:bg-cream dark:text-ink dark:hover:bg-accent-warm"
+                onClick={applyFootnote}
+              >
+                Insert
+              </button>
+            </div>
+          </ToolbarAnchoredPopover>
+        </>
+      : null}
+    </>
   )
 }

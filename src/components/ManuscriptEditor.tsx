@@ -434,7 +434,7 @@ function ManuscriptEditorInner({
 
   return (
     <div
-      className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+      className="flex min-h-0 min-w-0 flex-1 flex-col overflow-visible"
       data-inkwell-tour="editor-toolbar"
       {...(formatSplitMode ? { 'data-inkwell-format-split': true } : {})}
     >

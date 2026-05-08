@@ -1,9 +1,11 @@
 import JSZip from 'jszip'
 import type { InkwellProject } from '../../types'
 import { CHAPTER_TITLE_STYLES } from '../../types'
+import type { ManuscriptSectionRole } from '../../types'
 import {
   displayChapterLabel,
   effectiveSectionRole,
+  layoutProfileForManuscript,
   manuscriptsForEpub,
 } from '../bookAssembly'
 import { ebookCss, resolveEbookTitleFontId } from '../ebook/ebookCss'
@@ -32,6 +34,47 @@ function epubFontMediaType(filename: string): string {
   if (filename.endsWith('.woff2')) return 'font/woff2'
   if (filename.endsWith('.woff')) return 'font/woff'
   return 'font/ttf'
+}
+
+function decodeCoverAsset(dataUrl: string): { bytes: Uint8Array; href: string; mediaType: string } | null {
+  const m = /^data:(image\/(?:png|jpeg|jpg));base64,(.+)$/i.exec(dataUrl.trim())
+  if (!m?.[2]) return null
+  const mimeRaw = m[1].toLowerCase()
+  const mediaType = mimeRaw.endsWith('png') ? 'image/png' : 'image/jpeg'
+  const href = mediaType === 'image/png' ? 'images/cover.png' : 'images/cover.jpg'
+  try {
+    const bin = atob(m[2])
+    const bytes = new Uint8Array(bin.length)
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+    return { bytes, href, mediaType }
+  } catch {
+    return null
+  }
+}
+
+function epubTypeAttrForRole(role: ManuscriptSectionRole): string {
+  switch (role) {
+    case 'copyright':
+      return 'copyright'
+    case 'dedication':
+      return 'dedication'
+    case 'epigraph':
+      return 'epigraph'
+    case 'foreword':
+      return 'foreword'
+    case 'preface':
+      return 'preface'
+    case 'introduction':
+      return 'introduction'
+    case 'acknowledgments':
+      return 'acknowledgments'
+    case 'toc':
+      return 'toc'
+    case 'title_page':
+      return 'titlepage'
+    default:
+      return ''
+  }
 }
 
 export async function buildEpub(project: InkwellProject): Promise<Uint8Array> {
@@ -95,11 +138,24 @@ export async function buildEpub(project: InkwellProject): Promise<Uint8Array> {
   const author = project.book.authorName?.trim() || 'Unknown'
   const lang = project.book.language?.trim() || 'en'
   const bookId = project.book.isbn?.trim() || `urn:uuid:${project.id}`
+  const modifiedIso = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
+
+  const coverAsset = project.book.coverImageDataUrl ?
+    decodeCoverAsset(project.book.coverImageDataUrl)
+  : null
+  if (coverAsset) {
+    oebps.folder('images')?.file(coverAsset.href.replace(/^images\//, ''), coverAsset.bytes)
+  }
 
   const manifestItems: string[] = [
     `<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>`,
     `<item id="css" href="styles/book.css" media-type="text/css"/>`,
   ]
+  if (coverAsset) {
+    manifestItems.push(
+      `<item id="cover-image" href="${escXml(coverAsset.href)}" media-type="${coverAsset.mediaType}" properties="cover-image"/>`,
+    )
+  }
   if (embedFont) {
     const mt = epubFontMediaType(fontRow.epubFilename)
     const props =
@@ -136,6 +192,7 @@ export async function buildEpub(project: InkwellProject): Promise<Uint8Array> {
     const id = `c${n}`
     const href = `chapters/${id}.xhtml`
     const role = effectiveSectionRole(ch)
+    const layout = layoutProfileForManuscript(ch)
     if (role === 'chapter') bodyChapterCount += 1
     const chapterTitle =
       role === 'chapter'
@@ -143,19 +200,28 @@ export async function buildEpub(project: InkwellProject): Promise<Uint8Array> {
         : ch.title?.trim() || `Section ${n}`
 
     const body = tiptapDocToXhtmlBody(ch.content)
+    const epubType = epubTypeAttrForRole(role)
+    const epubTypeAttr =
+      epubType && layout !== 'chapter' && layout !== 'part' ? ` epub:type="${escXml(epubType)}"` : ''
+    const sectionInner =
+      layout === 'chapter' || layout === 'part' ?
+        `<section class="${layout === 'part' ? 'chapter part' : 'chapter'}" aria-label="${escXml(chapterTitle)}">
+      <h1>${escXml(chapterTitle)}</h1>${ornamentMarkup}
+      ${body}
+    </section>`
+      : `<section class="inkwell-matter matter-${escXml(role)}" aria-label="${escXml(chapterTitle)}"${epubTypeAttr}>
+      ${body}
+    </section>`
     const xhtml = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="${escXml(lang)}" lang="${escXml(lang)}">
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="${escXml(lang)}" lang="${escXml(lang)}">
   <head>
     <meta charset="utf-8" />
     <title>${escXml(chapterTitle)}</title>
     <link rel="stylesheet" type="text/css" href="../styles/book.css" />
   </head>
   <body>
-    <section class="chapter" aria-label="${escXml(chapterTitle)}">
-      <h1>${escXml(chapterTitle)}</h1>${ornamentMarkup}
-      ${body}
-    </section>
+    ${sectionInner}
   </body>
 </html>`
 
@@ -209,7 +275,11 @@ export async function buildEpub(project: InkwellProject): Promise<Uint8Array> {
     <dc:title>${escXml(title)}</dc:title>
     <dc:language>${escXml(lang)}</dc:language>
     <dc:creator>${escXml(author)}</dc:creator>${desc}${pub}${seriesBlock}
-    <meta property="dcterms:modified">2000-01-01T00:00:00Z</meta>
+    <meta property="dcterms:modified">${escXml(modifiedIso)}</meta>${
+      coverAsset ?
+        `\n    <meta name="cover" content="cover-image"/>`
+      : ''
+    }
   </metadata>
   <manifest>
     ${manifestItems.join('\n    ')}
@@ -220,7 +290,6 @@ export async function buildEpub(project: InkwellProject): Promise<Uint8Array> {
 </package>`
   oebps.file('content.opf', contentOpf)
 
-  // Deterministic-ish: JSZip won't embed timestamps unless asked; we also keep modified meta fixed.
   const bytes = await zip.generateAsync({
     type: 'uint8array',
     compression: 'DEFLATE',

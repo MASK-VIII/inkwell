@@ -14,8 +14,8 @@ export const INKWELL_DISPLAY_PRICE_BASIC_TO_PRO = '$50'
 export const INKWELL_DISPLAY_PRICE_PRO_LIST = '$149'
 
 export const pricingCopy = {
-  basicFinePrint: `Upgrade Basic → Pro later for ${INKWELL_DISPLAY_PRICE_BASIC_TO_PRO} one-time. New purchase: Basic ${INKWELL_DISPLAY_PRICE_BASIC} or Pro ${INKWELL_DISPLAY_PRICE_PRO}.`,
-  proFinePrint: `Full price moves to ${INKWELL_DISPLAY_PRICE_PRO_LIST} after early access.`,
+  basicFinePrint: `Upgrade Basic → Pro later for ${INKWELL_DISPLAY_PRICE_BASIC_TO_PRO} one-time. New purchase: Basic ${INKWELL_DISPLAY_PRICE_BASIC} or Pro ${INKWELL_DISPLAY_PRICE_PRO}. Basic stays ${INKWELL_DISPLAY_PRICE_BASIC} for new buyers after early access ends.`,
+  proFinePrint: `After early access, new Pro purchases list at ${INKWELL_DISPLAY_PRICE_PRO_LIST}. Buy Pro during early access (${INKWELL_DISPLAY_PRICE_PRO}) and your lifetime Pro tier is grandfathered—no retroactive price change.`,
   /** Shown under the plan cards on the marketing pricing section. */
   upgradePathLine: `Basic → Pro upgrade: ${INKWELL_DISPLAY_PRICE_BASIC_TO_PRO} one-time (you already have Basic; backup rises to ${CLOUD_LIMIT_PRO_DISPLAY}). Go Pro from Free: ${INKWELL_DISPLAY_PRICE_PRO} one-time.`,
 } as const

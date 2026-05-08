@@ -12,6 +12,8 @@ export type ThemePresetId =
   | 'ui_clean_sans'
   | 'readable_inter'
   | 'contemporary_dejavu_sans'
+  | 'memoir_warm'
+  | 'sf_crisp'
 
 export type ThemePreset = {
   id: ThemePresetId
@@ -251,6 +253,55 @@ export const THEME_PRESETS: ThemePreset[] = [
         paragraphSpacingEm: 0.55,
         textAlign: 'left',
         firstLineIndentEm: 0,
+      },
+    },
+  },
+  {
+    id: 'memoir_warm',
+    label: 'Memoir (warm)',
+    description: 'Relaxed Lora, roomy paragraphs',
+    group: 'Pacing & genre',
+    patch: {
+      print: {
+        bodyFontId: 'lora',
+        fontSizePt: 11.25,
+        lineHeight: 1.62,
+        hyphenation: false,
+        chapterTitleStyleId: 'literary_display',
+      },
+      ebook: {
+        bodyFontId: 'lora',
+        baseFontSizePx: 19,
+        lineHeight: 1.78,
+        maxWidthPx: 540,
+        paragraphSpacingEm: 0.65,
+        firstLineIndentEm: 0.35,
+        chapterTitleStyleId: 'literary_display',
+      },
+    },
+  },
+  {
+    id: 'sf_crisp',
+    label: 'Sci‑fi (crisp)',
+    description: 'Tight Inter, narrow measure',
+    group: 'Pacing & genre',
+    patch: {
+      print: {
+        bodyFontId: 'inter',
+        fontSizePt: 10.5,
+        lineHeight: 1.42,
+        hyphenation: true,
+        chapterTitleStyleId: 'modern_sans_tracked',
+      },
+      ebook: {
+        bodyFontId: 'inter',
+        baseFontSizePx: 17,
+        lineHeight: 1.55,
+        maxWidthPx: 460,
+        paragraphSpacingEm: 0.45,
+        textAlign: 'justify',
+        firstLineIndentEm: 0,
+        chapterTitleStyleId: 'modern_sans_tracked',
       },
     },
   },

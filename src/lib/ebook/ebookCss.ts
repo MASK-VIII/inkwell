@@ -109,6 +109,25 @@ export function ebookCss(theme: EbookTheme, ctx: EbookCssContext = { kind: 'prev
       ? '.chapter > .inkwell-ch-ornament, .inkwell-ebook-preview .chapter .inkwell-ch-ornament'
       : '.inkwell-ebook-preview .chapter .inkwell-ch-ornament'
 
+  const dropCapCss =
+    ctx.kind === 'epub'
+      ? `p.inkwell-drop-cap::first-letter {
+  float: left;
+  font-size: 3.1em;
+  line-height: 0.82;
+  padding-right: 0.06em;
+  margin-top: 0.05em;
+  font-weight: 600;
+}`
+      : `.inkwell-ebook-preview p.inkwell-drop-cap::first-letter {
+  float: left;
+  font-size: 3.1em;
+  line-height: 0.82;
+  padding-right: 0.06em;
+  margin-top: 0.05em;
+  font-weight: 600;
+}`
+
   const chapterTitleStyleCss =
     theme.chapterTitleStyleId === 'inherit'
       ? `${titleSelector} { text-align: center; }`
@@ -211,6 +230,7 @@ ${chapterTitleStyleCss}
 .inkwell-ebook-preview .inkwell-footnotes { margin-top: 2em; font-size: 0.9em; }
 .inkwell-ebook-preview .inkwell-footnotes ol { padding-left: 1.25em; }
 .inkwell-ebook-preview .inkwell-footnotes li { margin: 0.5em 0; }
+${dropCapCss}
 `
     .trim()
     .replace(/\n{3,}/g, '\n\n')

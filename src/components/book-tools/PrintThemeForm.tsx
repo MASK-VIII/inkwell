@@ -198,6 +198,27 @@ export function PrintThemeForm({ theme, onThemeChange }: Props) {
         </label>
       </div>
 
+      <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <label className="flex items-center justify-between gap-3 rounded-2xl border border-dust bg-parchment px-4 py-3 text-sm dark:border-border-dark dark:bg-panel-dark">
+          <span className="text-sm font-medium text-ink/80 dark:text-ink-dark/80">Paragraph widow/orphan guard</span>
+          <input
+            type="checkbox"
+            checked={theme.print.avoidShortParagraphSplit !== false}
+            onChange={(e) => onThemeChange({ print: { avoidShortParagraphSplit: e.target.checked } })}
+            className="h-4 w-4 accent-ink dark:accent-cream"
+          />
+        </label>
+        <label className="flex items-center justify-between gap-3 rounded-2xl border border-dust bg-parchment px-4 py-3 text-sm dark:border-border-dark dark:bg-panel-dark">
+          <span className="text-sm font-medium text-ink/80 dark:text-ink-dark/80">Avoid lonely headings</span>
+          <input
+            type="checkbox"
+            checked={theme.print.avoidLonelyHeading !== false}
+            onChange={(e) => onThemeChange({ print: { avoidLonelyHeading: e.target.checked } })}
+            className="h-4 w-4 accent-ink dark:accent-cream"
+          />
+        </label>
+      </div>
+
         <label className="mt-3 block space-y-1">
           <span className="text-xs font-medium text-ink/70 dark:text-ink-dark/70">Chapter opener (print)</span>
           <select

@@ -10,13 +10,13 @@ export function HeroSection({ darkMode = false }: { darkMode?: boolean }) {
       <div className="mx-auto grid max-w-6xl items-center gap-12 px-5 py-16 sm:gap-14 sm:px-8 sm:py-28 lg:grid-cols-[1.05fr_1fr] lg:gap-16">
         <div className="flex flex-col gap-7">
           <p className="text-xs font-medium uppercase tracking-[0.18em] text-walnut/75 dark:text-ink-dark/60">
-            Inkwell &nbsp;&middot;&nbsp; in beta
+            Inkwell &nbsp;&middot;&nbsp; early access
           </p>
           <h1 className="font-serif text-4xl leading-[1.05] text-ink sm:text-5xl lg:text-6xl dark:text-ink-dark">
             Draft. Format. Publish.
           </h1>
           <p className="max-w-xl text-lg leading-relaxed text-walnut/90 dark:text-ink-dark/82">
-            Draft in a calm, type-led workspace; refine layout when you are ready; export when the manuscript is finished—the same arc whether it is your first book or your fifth. Chapters, revisions, and notes stay together all the way through. Start writing locally for free with no sign-up—open the app and go.
+            Draft in a calm, type-led workspace; refine layout when you are ready; export when the manuscript is finished—the same arc whether it is your first book or your fifth. Chapters, revisions, and notes stay together all the way through. Start writing locally for free with no sign-up—open the app and go. EPUB and the full print-oriented export suite unlock on paid tiers (see pricing).
           </p>
           <div className="flex flex-wrap items-center gap-4 pt-2">
             <a

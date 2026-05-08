@@ -1,4 +1,10 @@
-import { CLOUD_LIMIT_BASIC_DISPLAY, CLOUD_LIMIT_PRO_DISPLAY } from './pricingCopy'
+import {
+  CLOUD_LIMIT_BASIC_DISPLAY,
+  CLOUD_LIMIT_PRO_DISPLAY,
+  INKWELL_DISPLAY_PRICE_BASIC,
+  INKWELL_DISPLAY_PRICE_PRO,
+  INKWELL_DISPLAY_PRICE_PRO_LIST,
+} from './pricingCopy'
 
 type Qa = {
   q: string
@@ -30,6 +36,10 @@ const FAQ: Qa[] = [
   {
     q: 'Why are exports paid?',
     a: 'Because Inkwell is built by one developer. Paid exports keep the lights on and the updates coming.',
+  },
+  {
+    q: 'What happens to pricing after early access?',
+    a: `Pro lists at ${INKWELL_DISPLAY_PRICE_PRO_LIST} for new purchases once early access ends. If you buy Pro during early access (${INKWELL_DISPLAY_PRICE_PRO}), you keep lifetime Pro at that tier—your purchase is grandfathered. Basic remains ${INKWELL_DISPLAY_PRICE_BASIC} for new buyers; if you already bought Basic, nothing changes for your license.`,
   },
   {
     q: 'What is your refund policy?',

@@ -4,6 +4,7 @@ import {
   AlignJustify,
   AlignLeft,
   AlignRight,
+  ALargeSmall,
   Bold,
   ImagePlus,
   Italic,
@@ -20,6 +21,7 @@ import {
   Undo2,
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { SCENE_BREAK_OPTIONS } from '../lib/sceneBreakCatalog'
 
 function chainToggleList(editor: Editor, kind: 'bullet' | 'ordered') {
   const c = editor.chain().focus()
@@ -55,13 +57,6 @@ function headingValue(editor: Editor): '' | '1' | '2' | '3' {
   if (editor.isActive('heading', { level: 3 })) return '3'
   return ''
 }
-
-const SCENE_OPTIONS: { value: string; label: string }[] = [
-  { value: 'orn:❧', label: 'Fleuron' },
-  { value: 'orn:✦ · ✦ · ✦', label: 'Stars' },
-  { value: 'orn:* * *', label: 'Asterism' },
-  { value: 'orn:— — —', label: 'Emdashes' },
-]
 
 type Props = {
   open: boolean
@@ -393,6 +388,20 @@ export function MobileFormatSheet({ open, editor, onClose, onOpenFindReplace }: 
             >
               <Quote className="h-5 w-5" strokeWidth={2.25} />
             </button>
+            <button
+              type="button"
+              className={toolSquare(Boolean(ed.getAttributes('paragraph').inkwellDropCap))}
+              title="Drop cap (ebook)"
+              aria-label="Drop cap paragraph"
+              onClick={() => {
+                if (!ed.isActive('paragraph')) return
+                const cur = Boolean(ed.getAttributes('paragraph').inkwellDropCap)
+                ed.chain().focus().updateAttributes('paragraph', { inkwellDropCap: !cur }).run()
+                refresh()
+              }}
+            >
+              <ALargeSmall className="h-5 w-5" strokeWidth={2.25} />
+            </button>
           </div>
 
           <p className="mb-2 text-[11px] font-medium text-ink/60 dark:text-ink-dark/60">Align</p>
@@ -521,7 +530,7 @@ export function MobileFormatSheet({ open, editor, onClose, onOpenFindReplace }: 
                   Scene break…
                 </option>
                 <option value="plain">Plain rule</option>
-                {SCENE_OPTIONS.map((o) => (
+                {SCENE_BREAK_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>
                     {o.label}
                   </option>

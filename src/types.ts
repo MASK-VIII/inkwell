@@ -78,7 +78,7 @@ export type WritingGoals = {
   dailyBaselineWordCount: number
 }
 
-export type TrimPresetId = 'kdp_6x9' | 'kdp_5x8' | 'kdp_5_5x8_5'
+export type TrimPresetId = 'kdp_6x9' | 'kdp_5x8' | 'kdp_5_5x8_5' | 'kdp_7x10'
 
 export type TrimPreset = {
   id: TrimPresetId
@@ -93,6 +93,7 @@ export const TRIM_PRESETS: Record<TrimPresetId, TrimPreset> = {
   kdp_6x9: { id: 'kdp_6x9', label: 'KDP • 6" × 9"', widthIn: 6, heightIn: 9 },
   kdp_5x8: { id: 'kdp_5x8', label: 'KDP • 5" × 8"', widthIn: 5, heightIn: 8 },
   kdp_5_5x8_5: { id: 'kdp_5_5x8_5', label: 'KDP • 5.5" × 8.5"', widthIn: 5.5, heightIn: 8.5 },
+  kdp_7x10: { id: 'kdp_7x10', label: 'KDP • 7" × 10"', widthIn: 7, heightIn: 10 },
 }
 
 export function trimLabel(id: TrimPresetId): string {
@@ -234,6 +235,13 @@ export type PrintTheme = {
   chapterOpener: PrintChapterOpener
   /** Independent chapter title style; `inherit` defers to the interior preset's defaults. */
   chapterTitleStyleId: ChapterTitleStyleId
+  /**
+   * Simple widow/orphan guard for body paragraphs: avoids placing exactly one line of a
+   * multi-line paragraph alone at the bottom or top of a page when possible.
+   */
+  avoidShortParagraphSplit?: boolean
+  /** Prefer not to leave a lone heading line at the bottom when the next block needs multiple lines. */
+  avoidLonelyHeading?: boolean
   header: PrintHeaderFooterTheme
   footer: PrintHeaderFooterTheme
 }
@@ -360,6 +368,8 @@ export function defaultTheme(): Theme {
       chapterStartsOn: 'right',
       chapterOpener: 'titleOnly',
       chapterTitleStyleId: 'inherit',
+      avoidShortParagraphSplit: true,
+      avoidLonelyHeading: true,
       header: {
         enabled: true,
         fontSizePt: 9,

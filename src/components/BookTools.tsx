@@ -54,6 +54,7 @@ type Props = {
   wordsWrittenToday: number
   onExportPdfKdp: () => void
   onExportEpub: () => void
+  onExportDocx: () => void
   onImportDocx: (file: File) => void
   historyEntries: ProjectHistoryEntry[]
   onRestoreHistory: (snapshotId: string) => void
@@ -103,6 +104,7 @@ function BookToolsInner({
   wordsWrittenToday,
   onExportPdfKdp,
   onExportEpub,
+  onExportDocx,
   onImportDocx,
   historyEntries,
   onRestoreHistory,
@@ -1023,6 +1025,20 @@ function BookToolsInner({
                 >
                   Export EPUB
                   {!pa.allowEpub ? <span className="ml-1 text-[11px] opacity-80">· Basic</span> : null}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!pa.allowProSuite) {
+                      pa.onUnlockPro()
+                      return
+                    }
+                    onExportDocx()
+                  }}
+                  className="inkwell-hub-row-btn"
+                >
+                  Export DOCX
+                  {!pa.allowProSuite ? <span className="ml-1 text-[11px] opacity-80">· Pro</span> : null}
                 </button>
                 <label className="block">
                   <input

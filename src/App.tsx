@@ -123,6 +123,7 @@ import { tiptapDocToMarkdown } from './lib/export/tiptapToMarkdown'
 import { buildWebHtmlDocument } from './lib/export/webHtml'
 import { buildKdpPdf } from './lib/export/pdfKdp'
 import { buildEpub, epubFilename } from './lib/export/epub'
+import { buildDocx, docxFilename } from './lib/export/docx'
 import { importDocxToChapters } from './lib/import/docx'
 import { isCloudBackupConfigured, uploadFullLibraryCloudBackup } from './lib/cloudBackup'
 import {
@@ -2029,6 +2030,26 @@ export default function App() {
       showToast('Exported EPUB')
     } catch {
       showToast('EPUB export failed')
+    }
+  }
+
+  const exportDocx = async () => {
+    if (!requireEntitlement('pro')) return
+    try {
+      const bytes = await buildDocx(project)
+      const buf = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
+      const blob = new Blob([buf], {
+        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = docxFilename(project)
+      a.click()
+      URL.revokeObjectURL(url)
+      showToast('Exported DOCX')
+    } catch {
+      showToast('DOCX export failed')
     }
   }
 
@@ -5121,6 +5142,7 @@ export default function App() {
                     onOpenBookTools={() => setBookToolsOpen(true)}
                     onExportPdfKdp={() => void exportPdfKdp()}
                     onExportEpub={() => void exportEpub()}
+                    onExportDocx={() => void exportDocx()}
                     onImportDocx={(file) => void importDocx(file)}
                     onExportTxt={exportTxt}
                     onExportProjectArchive={() => void exportBookArchive()}
@@ -5213,6 +5235,10 @@ export default function App() {
             }}
             onExportEpub={() => {
               void exportEpub()
+              setBookToolsOpen(false)
+            }}
+            onExportDocx={() => {
+              void exportDocx()
               setBookToolsOpen(false)
             }}
             onImportDocx={(file) => {

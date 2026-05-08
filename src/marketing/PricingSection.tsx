@@ -179,7 +179,7 @@ export function PricingSection() {
             Start free. Upgrade when you’re ready.
           </h2>
           <p className="mt-4 text-base leading-relaxed text-walnut/85 dark:text-ink-dark/80">
-            The full writing workspace stays free and local-first—you can install or open the app and write with no sign-up. Add Basic when you want sync and EPUB ({CLOUD_LIMIT_BASIC_DISPLAY} cloud backup); step up to Pro when you need the full export suite, advanced formatting for print or submissions, and {CLOUD_LIMIT_PRO_DISPLAY} backup. Basic and Pro are one-time purchases and both include lifetime app updates as Inkwell grows. Paid tiers include a 30-day refund—see{' '}
+            The full writing workspace stays free and local-first—you can install or open the app and write with no sign-up. Add Basic when you want sync and EPUB ({CLOUD_LIMIT_BASIC_DISPLAY} cloud backup); step up to Pro when you need the full export suite (PDF, DOCX, Markdown, plain text), advanced formatting for print or submissions, and {CLOUD_LIMIT_PRO_DISPLAY} backup. Basic and Pro are one-time purchases and both include lifetime app updates as Inkwell grows. Pro is at early-access pricing today; when the listed price moves to {INKWELL_DISPLAY_PRICE_PRO_LIST}, purchases made during early access keep lifetime Pro at the price you paid. Basic stays {INKWELL_DISPLAY_PRICE_BASIC} for new buyers after early access. Paid tiers include a 30-day refund—see{' '}
             <a
               href="/refund"
               className="font-medium text-ink underline decoration-walnut/35 underline-offset-2 hover:decoration-walnut/55 dark:text-ink-dark dark:decoration-cream/35 dark:hover:decoration-cream/55"

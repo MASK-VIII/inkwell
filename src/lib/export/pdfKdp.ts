@@ -10,6 +10,47 @@ import type { InkwellProject } from '../../types'
 import { paginateProjectForPrintExport, resolvePrintTitleFontId } from '../print/paginate'
 import { getPrintFontPairForPdf } from '../print/fonts'
 
+function decodeDataUrl(src: string): { bytes: Uint8Array; mime: string } | null {
+  const m = /^data:([^;,]+)?;base64,(.+)$/i.exec(src.trim())
+  if (!m?.[2]) return null
+  const mime = (m[1] ?? 'application/octet-stream').trim().toLowerCase()
+  try {
+    const bin = atob(m[2])
+    const bytes = new Uint8Array(bin.length)
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+    return { bytes, mime }
+  } catch {
+    return null
+  }
+}
+
+async function tryEmbedRaster(
+  pdf: PDFDocument,
+  src: string,
+  cache: Map<string, Awaited<ReturnType<PDFDocument['embedPng']>> | Awaited<ReturnType<PDFDocument['embedJpg']>> | null>,
+) {
+  const key = src.trim()
+  const cached = cache.get(key)
+  if (cached !== undefined) return cached
+
+  const dec = decodeDataUrl(key)
+  if (!dec) {
+    cache.set(key, null)
+    return null
+  }
+  try {
+    const embedded =
+      dec.mime.includes('png') ? await pdf.embedPng(dec.bytes)
+      : dec.mime.includes('jpeg') || dec.mime.includes('jpg') ? await pdf.embedJpg(dec.bytes)
+      : null
+    cache.set(key, embedded)
+    return embedded
+  } catch {
+    cache.set(key, null)
+    return null
+  }
+}
+
 function toWinAnsiFallback(s: string): string {
   const normalized = s.normalize('NFKD').replace(/\p{M}+/gu, '')
   return (
@@ -52,10 +93,36 @@ export async function buildKdpPdf(project: InkwellProject): Promise<Uint8Array> 
     }
   }
 
+  const imageCache = new Map<
+    string,
+    Awaited<ReturnType<PDFDocument['embedPng']>> | Awaited<ReturnType<PDFDocument['embedJpg']>> | null
+  >()
+
   for (const p of pages) {
     const page = pdf.addPage([p.widthPt + 2 * bleedPt, p.heightPt + 2 * bleedPt])
     if (!p.isBlank) {
       for (const l of p.lines) {
+        if (l.kind === 'figure' && l.figureSrc && l.figureWidthPt && l.figureHeightPt) {
+          const embedded = await tryEmbedRaster(pdf, l.figureSrc, imageCache)
+          if (embedded) {
+            page.drawImage(embedded, {
+              x: l.xPt + bleedPt,
+              y: l.yPt + bleedPt,
+              width: l.figureWidthPt,
+              height: l.figureHeightPt,
+            })
+          } else {
+            page.drawText(drawWith(body, `[${l.text}]`), {
+              x: l.xPt + bleedPt,
+              y: l.yPt + bleedPt,
+              font: body,
+              size: Math.min(l.fontSizePt, 11),
+              color: rgb(0.12, 0.1, 0.09),
+            })
+          }
+          continue
+        }
+
         // Title font for chapter banner / ornament lines (set via line.fontId in paginate),
         // body font for everything else.
         const useTitleFont = l.fontId != null && l.fontId === titleFontId

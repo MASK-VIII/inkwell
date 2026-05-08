@@ -20,6 +20,7 @@ import {
   stripSyntheticToc,
 } from '../bookAssembly'
 import { extractPrintBlocks, type PrintBlock } from './extractBlocks'
+import { figureDisplayPts } from './imageDims'
 import { getEnglishHypher } from './hyphen'
 import { getPrintFontPairForMeasurement } from './fonts'
 
@@ -29,7 +30,7 @@ export type PrintLine = {
   yPt: number
   fontSizePt: number
   chapterId: number
-  kind: 'body' | 'header' | 'footer'
+  kind: 'body' | 'header' | 'footer' | 'figure'
   /**
    * Optional font id used to draw this line in PDF/HTML output. When unset, renderers fall back
    * to the body font. Set on chapter banner / ornament lines so the title font is rendered.
@@ -37,6 +38,12 @@ export type PrintLine = {
   fontId?: InkwellFontId
   /** Letter-spacing in em (chapter banner / ornament lines). */
   trackingEm?: number
+  /** Additional left offset for hanging list lines (pt). */
+  extraLeftPt?: number
+  /** Raster figure (usually a data URL); PDF preview embeds when possible. */
+  figureSrc?: string
+  figureWidthPt?: number
+  figureHeightPt?: number
 }
 
 /**
@@ -235,11 +242,67 @@ function bodyStartsWithChapterHeading(bodyBlocks: PrintBlock[], chapterTitle: st
   const t = normalizeSpaces(chapterTitle).toLowerCase()
   if (!t) return false
   for (const b of bodyBlocks) {
-    if (b.type === 'pageBreak') continue
+    if (b.type === 'pageBreak' || b.type === 'figure') continue
     if (b.type === 'heading' && b.level === 1 && normalizeSpaces(b.text).toLowerCase() === t) return true
     return false
   }
   return false
+}
+
+const BLOCKQUOTE_INDENT_PT = 28
+
+/** First line includes prefix; continuation lines use hanging indent via extraLeftPt in layout. */
+function wrapHangParagraph(
+  prefix: string,
+  body: string,
+  maxWidthPt: number,
+  fontSizePt: number,
+  font: FontMeasurer,
+  opts?: { hyphenate?: boolean; hypher?: HypherLike | null },
+): Array<{ text: string; extraLeftPt: number }> {
+  const t = normalizeSpaces(body)
+  if (!prefix) {
+    return wrapText(t, maxWidthPt, fontSizePt, font, opts).map((line) => ({
+      text: line,
+      extraLeftPt: 0,
+    }))
+  }
+
+  const gap = fontSizePt * 0.35
+  const hang = safeWidthOfTextAtSize(prefix, fontSizePt, font) + gap
+  const firstInnerW = Math.max(40, maxWidthPt - hang)
+  const restInnerW = Math.max(40, maxWidthPt - hang)
+
+  const words = t.length ? t.split(' ') : ['']
+  let i = 0
+  let firstInner = ''
+  while (i < words.length) {
+    const w = words[i]!
+    const trial = firstInner ? `${firstInner} ${w}` : w
+    if (safeWidthOfTextAtSize(trial, fontSizePt, font) <= firstInnerW) {
+      firstInner = trial
+      i++
+    } else break
+  }
+  if (!firstInner && i < words.length) {
+    const broken = hardBreakLongWord(words[i]!, firstInnerW, fontSizePt, font)
+    firstInner = broken[0]!
+    const rest = broken.slice(1).join('')
+    if (rest) words[i] = rest
+    else i++
+  }
+
+  const lines: Array<{ text: string; extraLeftPt: number }> = []
+  lines.push({ text: `${prefix}${firstInner}`, extraLeftPt: 0 })
+
+  const remainder = words.slice(i).join(' ')
+  if (!remainder.trim()) return lines
+
+  const tailLines = wrapText(remainder.trim(), restInnerW, fontSizePt, font, opts)
+  for (const tl of tailLines) {
+    lines.push({ text: tl, extraLeftPt: hang })
+  }
+  return lines
 }
 
 function emDashRuleLine(contentWidthPt: number, fontSizePt: number, font: FontMeasurer): string {
@@ -436,7 +499,8 @@ function applyPrintHeadersFooters(
   for (const p of pages) {
     if (p.isBlank) continue
     const pageBox = contentBoxForPage(print, p.pageNumber, boxOpts)
-    const bodyChapterId = p.lines.find((l) => l.kind === 'body')?.chapterId ?? null
+    const bodyChapterId =
+      p.lines.find((l) => l.kind === 'body' || l.kind === 'figure')?.chapterId ?? null
     const chapterIdForNav = bodyChapterId ?? fallbackChapterId
 
     const isOdd = p.pageNumber % 2 === 1
@@ -595,6 +659,45 @@ export async function paginateChapterWithFont(
     ensurePage()
     const page = pages[pages.length - 1]!
 
+    if (block.type === 'figure') {
+      const dims = figureDisplayPts(block.src, Math.max(40, box.contentWidthPt))
+      const figW = dims.widthPt
+      const figH = dims.heightPt
+      const vGap = print.fontSizePt * print.lineHeight * 0.5
+      const prevLineFig = page.lines.length ? page.lines[page.lines.length - 1]! : null
+      let topFig: number
+      if (!prevLineFig) {
+        topFig = box.heightPt - box.topPt - figH
+      } else if (prevLineFig.kind === 'figure') {
+        topFig = prevLineFig.yPt - vGap - figH
+      } else {
+        topFig = prevLineFig.yPt - print.fontSizePt * print.lineHeight * 0.85 - figH
+      }
+      let bottomFig = topFig - figH
+      if (bottomFig < box.bottomPt) {
+        nextPage(false)
+        const nb = contentBoxForPage(print, pageNumber, boxOpts)
+        topFig = nb.heightPt - nb.topPt - figH
+        bottomFig = topFig - figH
+      }
+      const boxNow = contentBoxForPage(print, pageNumber, boxOpts)
+      const pageNow = pages[pages.length - 1]!
+      const xFig = boxNow.leftPt + Math.max(0, (boxNow.contentWidthPt - figW) / 2)
+      pageNow.lines.push({
+        text: block.alt,
+        xPt: xFig,
+        yPt: bottomFig,
+        fontSizePt: print.fontSizePt,
+        chapterId: run.chapterId,
+        kind: 'figure',
+        figureSrc: block.src ?? '',
+        figureWidthPt: figW,
+        figureHeightPt: figH,
+      })
+      prevBlockChapterIntro = false
+      continue
+    }
+
     const isChapterBanner = block.type === 'heading' && block.printRole === 'chapterBanner'
     const isChapterOrnament = block.type === 'heading' && block.printRole === 'chapterOrnament'
     const isSceneBreak = block.type === 'heading' && block.printRole === 'sceneBreak'
@@ -635,27 +738,46 @@ export async function paginateChapterWithFont(
           : isSceneBreak
             ? fontSizePt * 1.35
             : fontSizePt * print.lineHeight
-    const lines = wrapText(block.text, box.contentWidthPt, fontSizePt, blockFont, {
-      hyphenate: !isChapterIntro && !isSceneBreak && print.hyphenation,
-      hypher: isChapterIntro || isSceneBreak ? null : hypher,
-      trackingEm: blockTrackingEm || undefined,
-    })
 
-    const yStartPt =
-      box.heightPt -
-      box.topPt -
-      (page.lines.length === 0 ? 0 : blockLineHeightPt * 0.4) -
-      page.lines.reduce((acc, l) => Math.max(acc, box.heightPt - l.yPt), 0)
+    const quotePad = block.type === 'paragraph' && block.blockquote ? BLOCKQUOTE_INDENT_PT : 0
+    const listInd = block.type === 'paragraph' ? (block.listIndentPt ?? 0) : 0
+    const innerWidth = Math.max(36, box.contentWidthPt - quotePad - listInd)
+
+    const hyphenOpts =
+      block.type === 'heading' ?
+        {
+          hyphenate: !isChapterIntro && !isSceneBreak && print.hyphenation,
+          hypher: isChapterIntro || isSceneBreak ? null : hypher,
+          trackingEm: blockTrackingEm || undefined,
+        }
+      : {
+          hyphenate: print.hyphenation,
+          hypher,
+          trackingEm: undefined as number | undefined,
+        }
+
+    let wrappedLines: Array<{ text: string; extraLeftPt?: number }>
+    if (block.type === 'paragraph') {
+      if (block.listPrefix) {
+        wrappedLines = wrapHangParagraph(block.listPrefix, block.text, innerWidth, fontSizePt, bodyFont, hyphenOpts)
+      } else {
+        wrappedLines = wrapText(block.text, innerWidth, fontSizePt, bodyFont, hyphenOpts).map((t) => ({
+          text: t,
+          extraLeftPt: 0,
+        }))
+      }
+    } else {
+      wrappedLines = wrapText(block.text, box.contentWidthPt, fontSizePt, blockFont, hyphenOpts).map((t) => ({
+        text: t,
+        extraLeftPt: 0,
+      }))
+    }
 
     const prevLine = page.lines.length ? page.lines[page.lines.length - 1]! : null
     let cursorYPt: number
     if (page.lines.length === 0) {
       cursorYPt = box.heightPt - box.topPt
     } else if (isChapterOrnament && prevBlockChapterIntro && prevLine != null) {
-      // The ornament's own (small) line-height is too tight to clear the title's
-      // descenders; drop a body-leading instead so the glyph sits cleanly below
-      // the title rather than tucked under it. Proportional to body line height
-      // so the gap stays consistent across themes.
       const ornamentLeadPt = print.fontSizePt * print.lineHeight * 1.6
       const drop = Math.max(blockLineHeightPt, ornamentLeadPt)
       cursorYPt = prevLine.yPt - drop
@@ -663,13 +785,6 @@ export async function paginateChapterWithFont(
       cursorYPt = prevLine!.yPt - blockLineHeightPt
     }
 
-    // After the chapter banner / ornament block, drop ~2 body line-heights of breathing
-    // room before the first paragraph. Combined with the natural blockLineHeightPt drop
-    // above, this gives ~3 body lines of empty space between the title baseline and the
-    // first body baseline, matching mainstream print interiors (e.g. Atticus). Tied to
-    // `print.lineHeight` so the gap stays proportional when the user changes line
-    // spacing in the print theme. Skipped when the current block is the chapter ornament
-    // itself (we want the ornament tucked tight under the title).
     const shouldGapAfterBanner =
       prevBlockChapterIntro && !isChapterIntro && prevLine != null && prevLine.kind === 'body'
     const gapAfterBanner = shouldGapAfterBanner ? print.fontSizePt * print.lineHeight * 2 : 0
@@ -681,28 +796,59 @@ export async function paginateChapterWithFont(
 
     if (block.type === 'heading' && !isChapterIntro && page.lines.length > 0)
       cursorYPt -= blockLineHeightPt * 0.25
-    void yStartPt
 
-    for (const line of lines) {
-      const minYPt = box.bottomPt + blockLineHeightPt
+    if (
+      block.type === 'heading' &&
+      !isChapterIntro &&
+      print.avoidLonelyHeading !== false &&
+      wrappedLines.length > 0
+    ) {
+      const boxLive = contentBoxForPage(print, pageNumber, boxOpts)
+      const fitBefore = Math.max(0, Math.floor((cursorYPt - boxLive.bottomPt) / blockLineHeightPt))
+      if (fitBefore <= 1) {
+        nextPage(false)
+        const nb = contentBoxForPage(print, pageNumber, boxOpts)
+        cursorYPt = nb.heightPt - nb.topPt
+      }
+    }
+
+    for (let li = 0; li < wrappedLines.length; li++) {
+      const line = wrappedLines[li]!
+      const remainingAfter = wrappedLines.length - li - 1
+      const boxLive = contentBoxForPage(print, pageNumber, boxOpts)
+      const linesFit = Math.max(0, Math.floor((cursorYPt - boxLive.bottomPt) / blockLineHeightPt))
+
+      if (
+        print.avoidShortParagraphSplit !== false &&
+        block.type === 'paragraph' &&
+        wrappedLines.length >= 2 &&
+        remainingAfter >= 1 &&
+        linesFit === 1
+      ) {
+        nextPage(false)
+        const nb = contentBoxForPage(print, pageNumber, boxOpts)
+        cursorYPt = nb.heightPt - nb.topPt
+        li -= 1
+        continue
+      }
+
+      const minYPt = boxLive.bottomPt + blockLineHeightPt
       if (cursorYPt <= minYPt) {
         nextPage(false)
         const nextBox = contentBoxForPage(print, pageNumber, boxOpts)
-        const nextPageObj = pages[pages.length - 1]!
         cursorYPt = nextBox.heightPt - nextBox.topPt
-        ;(void nextPageObj)
       }
 
       const boxNow = contentBoxForPage(print, pageNumber, boxOpts)
-      const lineWidth = widthWithTracking(line, fontSizePt, blockFont, blockTrackingEm || undefined)
-      const xPt =
-        block.type === 'heading'
-          ? boxNow.leftPt + Math.max(0, (boxNow.contentWidthPt - lineWidth) / 2)
-          : boxNow.leftPt
+      const baseLeftNow = boxNow.leftPt + quotePad + listInd
+      const lineWidth = widthWithTracking(line.text, fontSizePt, blockFont, blockTrackingEm || undefined)
+      const hang = line.extraLeftPt ?? 0
+      const xHeading = boxNow.leftPt + Math.max(0, (boxNow.contentWidthPt - lineWidth) / 2)
+      const xPara = baseLeftNow + hang
       const pageNow = pages[pages.length - 1]!
       pageNow.lines.push({
-        text: line,
-        xPt,
+        text: line.text,
+        xPt: block.type === 'heading' ? xHeading : xPara,
         yPt: cursorYPt,
         fontSizePt,
         chapterId: run.chapterId,

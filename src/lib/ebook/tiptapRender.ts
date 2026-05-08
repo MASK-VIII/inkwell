@@ -133,8 +133,11 @@ function blockTextAlignAttr(attrs: Record<string, unknown> | undefined | null): 
 function renderNode(node: JSONContent, footnoteById: Map<string, string>): string {
   switch (node.type) {
     case 'paragraph': {
-      const st = blockTextAlignAttr(node.attrs as Record<string, unknown> | undefined)
-      return `<p${st}>${renderInlineChildren(node.content, footnoteById)}</p>`
+      const attrs = node.attrs as Record<string, unknown> | undefined
+      const st = blockTextAlignAttr(attrs)
+      const dc =
+        attrs?.inkwellDropCap === true ? ' class="inkwell-drop-cap"' : ''
+      return `<p${dc}${st}>${renderInlineChildren(node.content, footnoteById)}</p>`
     }
     case 'heading': {
       const level = (node.attrs as { level?: number } | undefined)?.level ?? 2

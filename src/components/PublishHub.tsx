@@ -16,6 +16,7 @@ export type PublishHubProps = {
   onOpenBookTools: () => void
   onExportPdfKdp: () => void
   onExportEpub: () => void
+  onExportDocx: () => void
   onImportDocx: (file: File) => void
   onExportTxt?: () => void
   onExportProjectArchive?: () => void
@@ -54,6 +55,7 @@ export function PublishHub({
   onOpenBookTools,
   onExportPdfKdp,
   onExportEpub,
+  onExportDocx,
   onImportDocx,
   onExportTxt,
   onExportProjectArchive,
@@ -150,9 +152,24 @@ export function PublishHub({
             Export EPUB
             {!pa.allowEpub ? <span className="ml-1 text-[11px] font-normal opacity-80">· Basic</span> : null}
           </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (!pa.allowProSuite) {
+                pa.onUnlockPro()
+                return
+              }
+              onExportDocx()
+            }}
+            className="inkwell-hub-secondary"
+          >
+            Export DOCX
+            {!pa.allowProSuite ? <span className="ml-1 text-[11px] font-normal opacity-80">· Pro</span> : null}
+          </button>
         </div>
         <p className="text-xs text-ink/60 dark:text-ink-dark/60">
-          Print layout and page breaks live under Format. EPUB uses your ebook theme and reflowable HTML.
+          Print layout and page breaks live under Format. EPUB uses your ebook theme and reflowable HTML. DOCX is a
+          Word-compatible manuscript for editors and agents.
         </p>
         {(onOpenFormatPrint || onOpenFormatEbook) && (
           <div className="flex flex-wrap gap-2">

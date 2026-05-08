@@ -725,10 +725,31 @@ export function PrintReview({
                 ) : (
                   <div className="absolute inset-0">
                     {currentPage.lines.map((l, i) => {
+                      const usingTitleFont = l.fontId != null && l.fontId === titleFontId
+                      if (
+                        l.kind === 'figure' &&
+                        l.figureSrc &&
+                        l.figureWidthPt != null &&
+                        l.figureHeightPt != null
+                      ) {
+                        const wPx = l.figureWidthPt * PX_PER_PT
+                        const hPx = l.figureHeightPt * PX_PER_PT
+                        const left = l.xPt * PX_PER_PT
+                        const top =
+                          (currentPage.heightPt - l.yPt - l.figureHeightPt) * PX_PER_PT
+                        return (
+                          <img
+                            key={`${currentPage.pageNumber}_${i}`}
+                            src={l.figureSrc}
+                            alt={l.text}
+                            className="absolute object-contain text-ink"
+                            style={{ left, top, width: `${wPx}px`, height: `${hPx}px` }}
+                          />
+                        )
+                      }
                       const left = l.xPt * PX_PER_PT
                       const top = (currentPage.heightPt - l.yPt) * PX_PER_PT
                       const fontSizePx = l.fontSizePt * PX_PER_PT
-                      const usingTitleFont = l.fontId != null && l.fontId === titleFontId
                       return (
                         <div
                           key={`${currentPage.pageNumber}_${i}`}
