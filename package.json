@@ -20,8 +20,10 @@
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
+    "@fontsource/cinzel": "^5.2.8",
     "@fontsource/dm-serif-display": "^5.2.8",
     "@fontsource/eb-garamond": "^5.2.7",
+    "@fontsource/great-vibes": "^5.2.8",
     "@fontsource/inter": "^5.2.8",
     "@fontsource/libre-baskerville": "^5.2.10",
     "@fontsource/lora": "^5.2.8",
@@ -93,7 +95,7 @@
     "icon": "build/icon.png",
     "productName": "Inkwell",
     "directories": {
-      "output": "ebuild-out"
+      "output": "C:\\\\Users\\\\stevey\\\\AppData\\\\Local\\\\Temp\\\\inkwell-ebuild-out"
     },
     "files": [
       "dist/**/*",

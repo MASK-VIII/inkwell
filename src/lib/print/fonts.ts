@@ -38,3 +38,48 @@ export async function getPrintFontForPdf(pdf: PDFDocument, id?: InkwellFontId): 
   pdf.registerFontkit(fontkit)
   return await pdf.embedFont(bytes, { subset: false })
 }
+
+/**
+ * Embed both the body font and the (optional) chapter-title font into a single throwaway
+ * `PDFDocument` used for measurement during pagination. When `titleId` resolves to the
+ * same font as `bodyId`, the same `PDFFont` instance is returned for both slots so we
+ * don't pay the embed cost twice.
+ */
+export async function getPrintFontPairForMeasurement(
+  bodyId?: InkwellFontId,
+  titleId?: InkwellFontId,
+): Promise<{ pdf: PDFDocument; body: PDFFont; title: PDFFont }> {
+  const bId = resolveFontId(bodyId)
+  const tId = resolveFontId(titleId)
+  const pdf = await PDFDocument.create()
+  pdf.registerFontkit(fontkit)
+  const bodyBytes = await getPrintFontBytes(bId)
+  const body = await pdf.embedFont(bodyBytes, { subset: false })
+  if (tId === bId) {
+    return { pdf, body, title: body }
+  }
+  const titleBytes = await getPrintFontBytes(tId)
+  const title = await pdf.embedFont(titleBytes, { subset: false })
+  return { pdf, body, title }
+}
+
+/**
+ * PDF-export equivalent of {@link getPrintFontPairForMeasurement}: embeds body and
+ * title fonts into the supplied `PDFDocument`, reusing one `PDFFont` instance when
+ * the two ids resolve to the same font.
+ */
+export async function getPrintFontPairForPdf(
+  pdf: PDFDocument,
+  bodyId?: InkwellFontId,
+  titleId?: InkwellFontId,
+): Promise<{ body: PDFFont; title: PDFFont }> {
+  const bId = resolveFontId(bodyId)
+  const tId = resolveFontId(titleId)
+  pdf.registerFontkit(fontkit)
+  const bodyBytes = await getPrintFontBytes(bId)
+  const body = await pdf.embedFont(bodyBytes, { subset: false })
+  if (tId === bId) return { body, title: body }
+  const titleBytes = await getPrintFontBytes(tId)
+  const title = await pdf.embedFont(titleBytes, { subset: false })
+  return { body, title }
+}

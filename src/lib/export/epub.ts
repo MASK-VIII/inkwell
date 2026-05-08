@@ -1,11 +1,12 @@
 import JSZip from 'jszip'
 import type { InkwellProject } from '../../types'
+import { CHAPTER_TITLE_STYLES } from '../../types'
 import {
   displayChapterLabel,
   effectiveSectionRole,
   manuscriptsForEpub,
 } from '../bookAssembly'
-import { ebookCss } from '../ebook/ebookCss'
+import { ebookCss, resolveEbookTitleFontId } from '../ebook/ebookCss'
 import { tiptapDocToXhtmlBody } from '../ebook/tiptapRender'
 import { DEFAULT_BODY_FONT_ID, FONT_CATALOG, isInkwellFontId } from '../fonts/fontCatalog'
 import { getPrintFontBytes } from '../print/fonts'
@@ -62,11 +63,30 @@ export async function buildEpub(project: InkwellProject): Promise<Uint8Array> {
     bundledFontHref = `../fonts/${fontRow.epubFilename}`
   }
 
+  // Resolve and (optionally) embed the chapter title font when distinct.
+  const titleFontId = resolveEbookTitleFontId(ebookTheme)
+  const titleFontRow = FONT_CATALOG[titleFontId]
+  const titleFontDistinct = titleFontId !== bodyFontId
+  let bundledTitleFontHref: string | undefined
+  let bundledTitleFontFilename: string | undefined
+  if (embedFont && titleFontDistinct) {
+    const bytes = await getPrintFontBytes(titleFontId)
+    oebps.folder('fonts')?.file(titleFontRow.epubFilename, bytes)
+    bundledTitleFontHref = `../fonts/${titleFontRow.epubFilename}`
+    bundledTitleFontFilename = titleFontRow.epubFilename
+  }
+
   oebps
     .folder('styles')
     ?.file(
       'book.css',
-      ebookCss(ebookTheme, { kind: 'epub', embedFont, bundledFontHref }),
+      ebookCss(ebookTheme, {
+        kind: 'epub',
+        embedFont,
+        bundledFontHref,
+        bundledTitleFontHref,
+        bundledTitleFontFilename,
+      }),
     )
 
   const chaptersFolder = oebps.folder('chapters')!
@@ -87,9 +107,27 @@ export async function buildEpub(project: InkwellProject): Promise<Uint8Array> {
     manifestItems.push(
       `<item id="inkwell-body-font" href="fonts/${fontRow.epubFilename}" media-type="${mt}"${props}/>`,
     )
+    if (titleFontDistinct) {
+      const tmt = epubFontMediaType(titleFontRow.epubFilename)
+      const tprops =
+        tmt === 'font/woff2'
+          ? ` properties="font/woff2"`
+          : tmt === 'font/woff'
+            ? ` properties="font/woff"`
+            : ''
+      manifestItems.push(
+        `<item id="inkwell-title-font" href="fonts/${titleFontRow.epubFilename}" media-type="${tmt}"${tprops}/>`,
+      )
+    }
   }
   const spineItems: string[] = []
   const navLi: string[] = []
+
+  const titleSpec = CHAPTER_TITLE_STYLES[ebookTheme.chapterTitleStyleId]
+  const ornamentMarkup =
+    titleSpec.ornamentBelow
+      ? `\n      <div class="inkwell-ch-ornament" aria-hidden="true">${escXml(titleSpec.ornamentBelow)}</div>`
+      : ''
 
   const epubChapters = manuscriptsForEpub(project)
   let bodyChapterCount = 0
@@ -115,7 +153,7 @@ export async function buildEpub(project: InkwellProject): Promise<Uint8Array> {
   </head>
   <body>
     <section class="chapter" aria-label="${escXml(chapterTitle)}">
-      <h1>${escXml(chapterTitle)}</h1>
+      <h1>${escXml(chapterTitle)}</h1>${ornamentMarkup}
       ${body}
     </section>
   </body>

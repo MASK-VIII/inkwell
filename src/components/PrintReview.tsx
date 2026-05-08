@@ -10,6 +10,7 @@ import type { BookMeta, Manuscript, Theme } from '../types'
 import { TRIM_PRESETS } from '../types'
 import { layoutProfileForManuscript } from '../lib/bookAssembly'
 import type { PrintLayoutKind, PrintPage } from '../lib/print/paginate'
+import { resolvePrintTitleFontId } from '../lib/print/paginate'
 import { hashStringDjb2 } from '../lib/hash'
 import {
   nextWorkerRev,
@@ -107,13 +108,19 @@ export function PrintReview({
   const pageWidthPx = trim.widthIn * 96
   const pageHeightPx = trim.heightIn * 96
 
-  const printFontFaceCss = useMemo(
-    () => buildPrintPreviewFontFaceCss(theme.print.bodyFontId),
-    [theme.print.bodyFontId],
-  )
+  const titleFontId = useMemo(() => resolvePrintTitleFontId(theme.print), [theme.print])
+  const printFontFaceCss = useMemo(() => {
+    const bodyFace = buildPrintPreviewFontFaceCss(theme.print.bodyFontId)
+    if (titleFontId === theme.print.bodyFontId) return bodyFace
+    return `${bodyFace}\n${buildPrintPreviewFontFaceCss(titleFontId)}`
+  }, [theme.print.bodyFontId, titleFontId])
   const printFontStack = useMemo(
     () => printPreviewFontFamilyStack(theme.print.bodyFontId),
     [theme.print.bodyFontId],
+  )
+  const titleFontStack = useMemo(
+    () => printPreviewFontFamilyStack(titleFontId),
+    [titleFontId],
   )
 
   useEffect(() => {
@@ -721,6 +728,7 @@ export function PrintReview({
                       const left = l.xPt * PX_PER_PT
                       const top = (currentPage.heightPt - l.yPt) * PX_PER_PT
                       const fontSizePx = l.fontSizePt * PX_PER_PT
+                      const usingTitleFont = l.fontId != null && l.fontId === titleFontId
                       return (
                         <div
                           key={`${currentPage.pageNumber}_${i}`}
@@ -728,9 +736,12 @@ export function PrintReview({
                           style={{
                             left,
                             top,
-                            fontFamily: printFontStack,
+                            fontFamily: usingTitleFont ? titleFontStack : printFontStack,
                             fontSize: `${fontSizePx}px`,
                             lineHeight: `${theme.print.lineHeight}`,
+                            ...(l.trackingEm
+                              ? { letterSpacing: `${l.trackingEm}em` }
+                              : null),
                           }}
                           onClick={() => onJumpToChapter?.(l.chapterId)}
                           role={onJumpToChapter ? 'button' : undefined}

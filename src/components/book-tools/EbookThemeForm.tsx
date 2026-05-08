@@ -1,6 +1,7 @@
-import type { EbookTheme, Theme } from '../../types'
+import type { ChapterTitleStyleId, EbookTheme, Theme } from '../../types'
 import { clampNumber } from './clamp'
 import { BodyFontPicker } from './BodyFontPicker'
+import { ChapterTitleStylePicker } from './ChapterTitleStylePicker'
 import { CollapsibleSection } from './CollapsibleSection'
 
 type Props = {
@@ -14,6 +15,16 @@ export function EbookThemeForm({ theme, onThemeChange }: Props) {
       <div className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
         Ebook
       </div>
+
+      <ChapterTitleStylePicker
+        id="inkwell-ebook-chapter-title-style"
+        label="Chapter title style"
+        value={theme.ebook.chapterTitleStyleId}
+        onChange={(id: ChapterTitleStyleId) =>
+          onThemeChange({ ebook: { chapterTitleStyleId: id } })
+        }
+      />
+
       <CollapsibleSection
         title="Reflow & EPUB typography"
         description="Preview pane and exported ebook styling."

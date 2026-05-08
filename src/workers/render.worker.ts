@@ -1,12 +1,18 @@
 import type { JSONContent } from '@tiptap/core'
 import type { EbookTheme, InkwellProject, Manuscript, Theme } from '../types'
+import { CHAPTER_TITLE_STYLES } from '../types'
 import { ebookCss } from '../lib/ebook/ebookCss'
 import { tiptapDocToXhtmlBody } from '../lib/ebook/tiptapRender'
 import { escapeHtml } from '../lib/escapeHtml'
 import { hashStringDjb2 } from '../lib/hash'
 import { layoutProfileForManuscript } from '../lib/bookAssembly'
-import { getPrintFontForMeasurement } from '../lib/print/fonts'
-import { paginateChapterWithFont, type PrintLayoutKind, type PrintPage } from '../lib/print/paginate'
+import { getPrintFontPairForMeasurement } from '../lib/print/fonts'
+import {
+  paginateChapterWithFont,
+  resolvePrintTitleFontId,
+  type PrintLayoutKind,
+  type PrintPage,
+} from '../lib/print/paginate'
 
 type RenderEbookJob = {
   kind: 'renderEbook'
@@ -80,10 +86,17 @@ function safeStringify(x: unknown): string {
   }
 }
 
-function renderChapterHtml(chapter: { id: number; title: string; content: JSONContent }): string {
+function renderChapterHtml(
+  chapter: { id: number; title: string; content: JSONContent },
+  ebookTheme: EbookTheme,
+): string {
   const title = chapter.title?.trim() || 'Untitled chapter'
   const body = tiptapDocToXhtmlBody(chapter.content)
-  return `<div class="chapter"><h1>${escapeHtml(title)}</h1>${body}</div>`
+  const spec = CHAPTER_TITLE_STYLES[ebookTheme.chapterTitleStyleId]
+  const ornament = spec.ornamentBelow
+    ? `<div class="inkwell-ch-ornament">${escapeHtml(spec.ornamentBelow)}</div>`
+    : ''
+  return `<div class="chapter"><h1>${escapeHtml(title)}</h1>${ornament}${body}</div>`
 }
 
 function post(msg: WorkerResponse) {
@@ -108,7 +121,7 @@ self.onmessage = async (ev: MessageEvent<WorkerRequest>) => {
       const html = (() => {
         const cached = ebookHtmlCache.get(cacheKey)
         if (cached) return cached
-        const next = renderChapterHtml(req.chapter)
+        const next = renderChapterHtml(req.chapter, req.ebookTheme)
         ebookHtmlCache.set(cacheKey, next)
         return next
       })()
@@ -135,12 +148,16 @@ self.onmessage = async (ev: MessageEvent<WorkerRequest>) => {
       )
       let cached = printChapterCache.get(cacheKey)
       if (!cached) {
-        const { font } = await getPrintFontForMeasurement(req.theme.print.bodyFontId)
+        const titleFontId = resolvePrintTitleFontId(req.theme.print)
+        const { body, title } = await getPrintFontPairForMeasurement(
+          req.theme.print.bodyFontId,
+          titleFontId,
+        )
         const res = await paginateChapterWithFont(
           req.chapter,
           req.chapterIndex,
           req.theme,
-          font,
+          { body, title },
           req.startPageNumber,
           {
             bookTitle: req.meta.bookTitle,

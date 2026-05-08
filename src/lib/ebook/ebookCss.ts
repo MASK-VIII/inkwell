@@ -1,4 +1,5 @@
 import type { EbookTheme } from '../../types'
+import { CHAPTER_TITLE_STYLES } from '../../types'
 import {
   DEFAULT_BODY_FONT_ID,
   FONT_CATALOG,
@@ -19,9 +20,21 @@ function resolvedBodyFontId(theme: EbookTheme): InkwellFontId {
   return isInkwellFontId(theme.bodyFontId) ? theme.bodyFontId : DEFAULT_BODY_FONT_ID
 }
 
+export function resolveEbookTitleFontId(theme: EbookTheme): InkwellFontId {
+  const spec = CHAPTER_TITLE_STYLES[theme.chapterTitleStyleId]
+  return spec.fontId ?? resolvedBodyFontId(theme)
+}
+
 export type EbookCssContext =
   | { kind: 'preview' }
-  | { kind: 'epub'; embedFont: boolean; bundledFontHref?: string }
+  | {
+      kind: 'epub'
+      embedFont: boolean
+      bundledFontHref?: string
+      /** When provided, emits an additional @font-face for the chapter title font. */
+      bundledTitleFontHref?: string
+      bundledTitleFontFilename?: string
+    }
 
 export function ebookCss(theme: EbookTheme, ctx: EbookCssContext = { kind: 'preview' }): string {
   const id = resolvedBodyFontId(theme)
@@ -42,6 +55,40 @@ export function ebookCss(theme: EbookTheme, ctx: EbookCssContext = { kind: 'prev
     fontStack = genericFontFallback(entry.stackKind)
   }
 
+  // Chapter title style: independent font + case + tracking + size knob.
+  const titleSpec = CHAPTER_TITLE_STYLES[theme.chapterTitleStyleId]
+  const titleFontId = titleSpec.fontId ?? id
+  const titleEntry = FONT_CATALOG[titleFontId]
+  const titleIsDistinct = titleFontId !== id
+
+  let titleFaceBlock = ''
+  let titleFontStack: string = fontStack
+
+  if (titleIsDistinct) {
+    if (ctx.kind === 'preview') {
+      const fmt = formatForUrl(titleEntry.ebookFontUrl)
+      titleFaceBlock = `@font-face{font-family:${JSON.stringify(titleEntry.cssFamily)};src:url(${JSON.stringify(titleEntry.ebookFontUrl)}) format('${fmt}');font-weight:400;font-style:normal;font-display:swap;}`
+      titleFontStack = `${JSON.stringify(titleEntry.cssFamily)}, ${genericFontFallback(titleEntry.stackKind)}`
+    } else if (ctx.embedFont && ctx.bundledTitleFontHref && ctx.bundledTitleFontFilename) {
+      const fmt = formatForFilename(ctx.bundledTitleFontFilename)
+      titleFaceBlock = `@font-face{font-family:${JSON.stringify(titleEntry.cssFamily)};src:url(${JSON.stringify(ctx.bundledTitleFontHref)}) format('${fmt}');font-weight:400;font-style:normal;font-display:swap;}`
+      titleFontStack = `${JSON.stringify(titleEntry.cssFamily)}, ${genericFontFallback(titleEntry.stackKind)}`
+    } else {
+      titleFontStack = genericFontFallback(titleEntry.stackKind)
+    }
+  }
+
+  const titleCaseCss =
+    titleSpec.case === 'upper'
+      ? 'uppercase'
+      : titleSpec.case === 'titleCase'
+        ? 'capitalize'
+        : 'none'
+
+  // Script display fonts (e.g. Great Vibes) need extra leading or ascenders/descenders clash.
+  const titleLineHeight =
+    titleEntry.cssFamily.toLowerCase().includes('great vibes') ? 1.4 : 1.15
+
   const base = Math.max(12, Math.min(28, theme.baseFontSizePx))
   const lh = Math.max(1.1, Math.min(2.4, theme.lineHeight))
   const maxWidthPx = Math.max(280, Math.min(900, theme.maxWidthPx))
@@ -49,8 +96,41 @@ export function ebookCss(theme: EbookTheme, ctx: EbookCssContext = { kind: 'prev
   const indentEm = Math.max(0, Math.min(6, theme.firstLineIndentEm))
   const align = theme.textAlign === 'justify' ? 'justify' : 'left'
 
+  // Chapter title selectors. Preview is scoped under .inkwell-ebook-preview so the
+  // styling doesn't leak elsewhere. EPUB chapter XHTML (no wrapper class) uses the
+  // bare `.chapter > h1:first-of-type` selector so reflowable readers pick it up.
+  const titleSelector =
+    ctx.kind === 'epub'
+      ? '.chapter > h1:first-of-type, .inkwell-ebook-preview .chapter > h1:first-of-type'
+      : '.inkwell-ebook-preview .chapter > h1:first-of-type'
+
+  const ornamentSelector =
+    ctx.kind === 'epub'
+      ? '.chapter > .inkwell-ch-ornament, .inkwell-ebook-preview .chapter .inkwell-ch-ornament'
+      : '.inkwell-ebook-preview .chapter .inkwell-ch-ornament'
+
+  const chapterTitleStyleCss =
+    theme.chapterTitleStyleId === 'inherit'
+      ? `${titleSelector} { text-align: center; }`
+      : `${titleSelector} {
+  text-align: center;
+  font-family: ${titleFontStack};
+  text-transform: ${titleCaseCss};
+  letter-spacing: ${titleSpec.trackingEm}em;
+  font-size: calc(1em * ${titleSpec.sizeMultiplier.toFixed(3)});
+  line-height: ${titleLineHeight};
+}
+${ornamentSelector} {
+  text-align: center;
+  font-family: ${titleFontStack};
+  font-size: calc(1em * ${(titleSpec.sizeMultiplier * 0.55).toFixed(3)});
+  line-height: 1;
+  margin: 0.25em 0 1.25em;
+}`
+
   return `
 ${faceBlock}
+${titleFaceBlock}
 .inkwell-ebook-preview {
   -webkit-text-size-adjust: 100%;
   margin: 0;
@@ -78,10 +158,8 @@ ${faceBlock}
 .inkwell-ebook-preview h1 { font-size: 1.6em; }
 .inkwell-ebook-preview h2 { font-size: 1.35em; }
 .inkwell-ebook-preview h3 { font-size: 1.15em; }
-/* Chapter title from preview (first h1 in .chapter); keep body headings unchanged below */
-.inkwell-ebook-preview .chapter > h1:first-of-type {
-  text-align: center;
-}
+/* Chapter title style (independent knob, see CHAPTER_TITLE_STYLES). */
+${chapterTitleStyleCss}
 .inkwell-ebook-preview p {
   margin: ${paraSpaceEm}em 0;
   text-align: ${align};

@@ -1,12 +1,15 @@
+import cinzelWoff2 from '@fontsource/cinzel/files/cinzel-latin-400-normal.woff2?url'
 import dejaVuSansCondensedUrl from 'dejavu-fonts-ttf/ttf/DejaVuSansCondensed.ttf?url'
 import dejaVuSansMonoUrl from 'dejavu-fonts-ttf/ttf/DejaVuSansMono.ttf?url'
 import dejaVuSansUrl from 'dejavu-fonts-ttf/ttf/DejaVuSans.ttf?url'
 import dejaVuSerifCondensedUrl from 'dejavu-fonts-ttf/ttf/DejaVuSerifCondensed.ttf?url'
 import dejaVuSerifUrl from 'dejavu-fonts-ttf/ttf/DejaVuSerif.ttf?url'
 import ebGaramondWoff2 from '@fontsource/eb-garamond/files/eb-garamond-latin-400-normal.woff2?url'
+import greatVibesWoff2 from '@fontsource/great-vibes/files/great-vibes-latin-400-normal.woff2?url'
 import interWoff2 from '@fontsource/inter/files/inter-latin-400-normal.woff2?url'
 import libreBaskervilleWoff2 from '@fontsource/libre-baskerville/files/libre-baskerville-latin-400-normal.woff2?url'
 import loraWoff2 from '@fontsource/lora/files/lora-latin-400-normal.woff2?url'
+import playfairDisplayWoff2 from '@fontsource/playfair-display/files/playfair-display-latin-400-normal.woff2?url'
 import sourceSans3Woff2 from '@fontsource/source-sans-3/files/source-sans-3-latin-400-normal.woff2?url'
 
 export type FontStackKind = 'serif' | 'sans' | 'mono'
@@ -144,6 +147,42 @@ export const FONT_CATALOG = {
     printFontUrl: sourceSans3Woff2,
     ebookFontUrl: sourceSans3Woff2,
     epubFilename: 'InkwellSourceSans3.woff2',
+  },
+  cinzel: {
+    label: 'Cinzel',
+    category: 'Display',
+    license: 'OFL-1.1',
+    cssFamily: 'Cinzel',
+    stackKind: 'serif',
+    supportsPrint: true,
+    supportsEbook: true,
+    printFontUrl: cinzelWoff2,
+    ebookFontUrl: cinzelWoff2,
+    epubFilename: 'InkwellCinzel.woff2',
+  },
+  playfair_display: {
+    label: 'Playfair Display',
+    category: 'Display',
+    license: 'OFL-1.1',
+    cssFamily: 'Playfair Display',
+    stackKind: 'serif',
+    supportsPrint: true,
+    supportsEbook: true,
+    printFontUrl: playfairDisplayWoff2,
+    ebookFontUrl: playfairDisplayWoff2,
+    epubFilename: 'InkwellPlayfairDisplay.woff2',
+  },
+  great_vibes: {
+    label: 'Great Vibes',
+    category: 'Display',
+    license: 'OFL-1.1',
+    cssFamily: 'Great Vibes',
+    stackKind: 'serif',
+    supportsPrint: true,
+    supportsEbook: true,
+    printFontUrl: greatVibesWoff2,
+    ebookFontUrl: greatVibesWoff2,
+    epubFilename: 'InkwellGreatVibes.woff2',
   },
 } as const satisfies Record<string, InkwellFontCatalogRow>
 

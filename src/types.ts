@@ -104,6 +104,111 @@ export type PrintChapterOpener = 'off' | 'titleOnly' | 'numberRuleTitle'
 
 export type PrintBinding = 'paperback' | 'hardcover'
 
+/**
+ * Chapter title style: an independent knob (separate from interior preset) that controls
+ * how the chapter title block is rendered in both print and ebook. `inherit` means
+ * "use the interior preset's defaults" (today's behavior — body font, 2.5x size, no tracking).
+ */
+export type ChapterTitleStyleId =
+  | 'inherit'
+  | 'classic_serif_caps'
+  | 'engraved_roman_caps'
+  | 'literary_display'
+  | 'modern_sans_tracked'
+  | 'condensed_thriller'
+  | 'minimalist'
+  | 'ornament_heart'
+
+export type ChapterTitleStyleSpec = {
+  /** undefined = use book body font */
+  fontId?: InkwellFontId
+  case: 'asis' | 'upper' | 'titleCase'
+  /** letter-spacing in em units */
+  trackingEm: number
+  /** multiplier applied to body fontSizePt for the chapter title (default banner is 2.5) */
+  sizeMultiplier: number
+  /** Single Unicode glyph rendered centered below the title when set */
+  ornamentBelow?: string
+  /** Short human-readable description shown under the picker */
+  label: string
+  /** Optional family-grouping label for the picker UI */
+  group?: 'Serif caps' | 'Display' | 'Sans' | 'Minimal'
+}
+
+export const CHAPTER_TITLE_STYLES: Readonly<Record<ChapterTitleStyleId, ChapterTitleStyleSpec>> =
+  Object.freeze({
+    inherit: {
+      case: 'asis',
+      trackingEm: 0,
+      sizeMultiplier: 2.5,
+      label: 'Use interior preset (default)',
+    },
+    classic_serif_caps: {
+      fontId: 'libre_baskerville',
+      case: 'upper',
+      trackingEm: 0.18,
+      sizeMultiplier: 2.0,
+      label: 'Classic serif caps · Libre Baskerville',
+      group: 'Serif caps',
+    },
+    engraved_roman_caps: {
+      fontId: 'cinzel',
+      case: 'upper',
+      trackingEm: 0.06,
+      sizeMultiplier: 2.4,
+      label: 'Engraved Roman caps · Cinzel',
+      group: 'Serif caps',
+    },
+    literary_display: {
+      fontId: 'playfair_display',
+      case: 'titleCase',
+      trackingEm: 0.02,
+      sizeMultiplier: 2.6,
+      label: 'Literary display · Playfair Display',
+      group: 'Display',
+    },
+    modern_sans_tracked: {
+      fontId: 'inter',
+      case: 'upper',
+      trackingEm: 0.32,
+      sizeMultiplier: 1.6,
+      label: 'Modern sans, wide-tracked · Inter',
+      group: 'Sans',
+    },
+    condensed_thriller: {
+      fontId: 'dejavu_sans_condensed',
+      case: 'upper',
+      trackingEm: 0.12,
+      sizeMultiplier: 2.1,
+      label: 'Condensed thriller · DejaVu Sans Condensed',
+      group: 'Sans',
+    },
+    minimalist: {
+      case: 'asis',
+      trackingEm: 0,
+      sizeMultiplier: 1.8,
+      label: 'Minimalist · body font, calm',
+      group: 'Minimal',
+    },
+    ornament_heart: {
+      fontId: 'eb_garamond',
+      case: 'upper',
+      trackingEm: 0.18,
+      sizeMultiplier: 2.0,
+      ornamentBelow: '\u2766',
+      label: 'Ornamental · EB Garamond with heart',
+      group: 'Serif caps',
+    },
+  })
+
+export function isChapterTitleStyleId(id: unknown): id is ChapterTitleStyleId {
+  return typeof id === 'string' && id in CHAPTER_TITLE_STYLES
+}
+
+export function coerceChapterTitleStyleId(id: unknown): ChapterTitleStyleId {
+  return isChapterTitleStyleId(id) ? id : 'inherit'
+}
+
 export type PrintTheme = {
   trimPreset: TrimPresetId
   /** Inches */
@@ -127,6 +232,8 @@ export type PrintTheme = {
   chapterStartsOn: 'either' | 'right'
   /** Centered opener before chapter body; skipped when body already starts with an H1 matching the chapter title. */
   chapterOpener: PrintChapterOpener
+  /** Independent chapter title style; `inherit` defers to the interior preset's defaults. */
+  chapterTitleStyleId: ChapterTitleStyleId
   header: PrintHeaderFooterTheme
   footer: PrintHeaderFooterTheme
 }
@@ -159,6 +266,8 @@ export type EbookTheme = {
   textAlign: 'left' | 'justify'
   /** First-line indentation for paragraphs */
   firstLineIndentEm: number
+  /** Independent chapter title style; `inherit` defers to the interior preset's defaults. */
+  chapterTitleStyleId: ChapterTitleStyleId
 }
 
 export type Theme = {
@@ -250,6 +359,7 @@ export function defaultTheme(): Theme {
       pageNumbers: 'footerCenter',
       chapterStartsOn: 'right',
       chapterOpener: 'titleOnly',
+      chapterTitleStyleId: 'inherit',
       header: {
         enabled: true,
         fontSizePt: 9,
@@ -272,6 +382,7 @@ export function defaultTheme(): Theme {
       paragraphSpacingEm: 0.75,
       textAlign: 'left',
       firstLineIndentEm: 0,
+      chapterTitleStyleId: 'inherit',
     },
   }
 }

@@ -1,7 +1,15 @@
-import type { PrintBinding, PrintChapterOpener, PrintTheme, Theme, TrimPresetId } from '../../types'
+import type {
+  ChapterTitleStyleId,
+  PrintBinding,
+  PrintChapterOpener,
+  PrintTheme,
+  Theme,
+  TrimPresetId,
+} from '../../types'
 import { TRIM_PRESETS } from '../../types'
 import { clampNumber } from './clamp'
 import { BodyFontPicker } from './BodyFontPicker'
+import { ChapterTitleStylePicker } from './ChapterTitleStylePicker'
 import { CollapsibleSection } from './CollapsibleSection'
 import { HeaderFooterRow } from './HeaderFooterRow'
 import { getFontCatalogEntry } from '../../lib/fonts/fontCatalog'
@@ -19,6 +27,15 @@ export function PrintThemeForm({ theme, onThemeChange }: Props) {
       <div className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
         Print
       </div>
+
+      <ChapterTitleStylePicker
+        id="inkwell-print-chapter-title-style"
+        label="Chapter title style"
+        value={theme.print.chapterTitleStyleId}
+        onChange={(id: ChapterTitleStyleId) =>
+          onThemeChange({ print: { chapterTitleStyleId: id } })
+        }
+      />
 
       <CollapsibleSection
         title="Layout & body text"

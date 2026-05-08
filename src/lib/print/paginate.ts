@@ -1,5 +1,7 @@
 import type { JSONContent } from '@tiptap/core'
 import type {
+  ChapterTitleStyleSpec,
+  InkwellFontId,
   InkwellProject,
   Manuscript,
   PrintChapterOpener,
@@ -8,7 +10,7 @@ import type {
   PrintTheme,
   Theme,
 } from '../../types'
-import { TRIM_PRESETS } from '../../types'
+import { CHAPTER_TITLE_STYLES, TRIM_PRESETS } from '../../types'
 import {
   buildPrintTocManuscript,
   insertPrintTocInSpine,
@@ -19,7 +21,7 @@ import {
 } from '../bookAssembly'
 import { extractPrintBlocks, type PrintBlock } from './extractBlocks'
 import { getEnglishHypher } from './hyphen'
-import { getPrintFontForMeasurement } from './fonts'
+import { getPrintFontPairForMeasurement } from './fonts'
 
 export type PrintLine = {
   text: string
@@ -28,6 +30,24 @@ export type PrintLine = {
   fontSizePt: number
   chapterId: number
   kind: 'body' | 'header' | 'footer'
+  /**
+   * Optional font id used to draw this line in PDF/HTML output. When unset, renderers fall back
+   * to the body font. Set on chapter banner / ornament lines so the title font is rendered.
+   */
+  fontId?: InkwellFontId
+  /** Letter-spacing in em (chapter banner / ornament lines). */
+  trackingEm?: number
+}
+
+/**
+ * Print pipeline carries two `FontMeasurer` slots so chapter banners can use a
+ * different display font from the body. When the user picks `inherit` for the
+ * chapter title style, both slots resolve to the same font instance.
+ */
+export type PrintFontPair = { body: FontMeasurer; title: FontMeasurer }
+
+function isFontPair(x: FontMeasurer | PrintFontPair): x is PrintFontPair {
+  return typeof (x as PrintFontPair).body === 'object' && typeof (x as PrintFontPair).title === 'object'
 }
 
 export type PrintPage = {
@@ -75,6 +95,24 @@ function safeWidthOfTextAtSize(text: string, size: number, font: FontMeasurer): 
   }
 }
 
+/**
+ * Width of a string at the given size with optional letter-spacing applied.
+ * Letter-spacing in CSS / PDF `characterSpacing` adds `trackingEm * size` after each
+ * character — i.e. `(L - 1)` extra gaps for an L-character string.
+ */
+function widthWithTracking(
+  text: string,
+  size: number,
+  font: FontMeasurer,
+  trackingEm: number | undefined,
+): number {
+  const base = safeWidthOfTextAtSize(text, size, font)
+  if (!trackingEm) return base
+  const len = [...text].length
+  if (len <= 1) return base
+  return base + (len - 1) * trackingEm * size
+}
+
 function normalizeSpaces(s: string): string {
   return s.replace(/\s+/g, ' ').trim()
 }
@@ -109,7 +147,7 @@ function wrapText(
   maxWidthPt: number,
   fontSizePt: number,
   font: FontMeasurer,
-  opts?: { hyphenate?: boolean; hypher?: HypherLike | null },
+  opts?: { hyphenate?: boolean; hypher?: HypherLike | null; trackingEm?: number },
 ): string[] {
   const t = normalizeSpaces(text)
   if (t.length === 0) return ['']
@@ -119,8 +157,9 @@ function wrapText(
   let current = ''
   const hyphenateOn = Boolean(opts?.hyphenate && opts?.hypher)
   const hypher = opts?.hypher ?? null
+  const trackingEm = opts?.trackingEm
 
-  const widthOf = (s: string) => safeWidthOfTextAtSize(s, fontSizePt, font)
+  const widthOf = (s: string) => widthWithTracking(s, fontSizePt, font, trackingEm)
 
   for (const w of words) {
     const chunks = hyphenationChunks(w, hyphenateOn, hypher)
@@ -219,6 +258,17 @@ function emDashRuleLine(contentWidthPt: number, fontSizePt: number, font: FontMe
   return mdash.repeat(Math.max(3, best))
 }
 
+/** Title-case heuristic: capitalize the first letter of each whitespace-separated word. */
+function toTitleCase(text: string): string {
+  return text.replace(/\S+/g, (w) => (w.length === 0 ? w : w[0]!.toUpperCase() + w.slice(1).toLowerCase()))
+}
+
+function applyCaseTransform(text: string, mode: ChapterTitleStyleSpec['case']): string {
+  if (mode === 'upper') return text.toLocaleUpperCase()
+  if (mode === 'titleCase') return toTitleCase(text)
+  return text
+}
+
 function buildChapterOpenerBlocks(
   opener: PrintChapterOpener,
   chapterTitle: string,
@@ -231,26 +281,43 @@ function buildChapterOpenerBlocks(
   if (opener === 'off') return []
   if (bodyStartsWithChapterHeading(bodyBlocks, chapterTitle)) return []
 
-  const title = normalizeSpaces(chapterTitle) || `Chapter ${chapterIndex}`
+  const rawTitle = normalizeSpaces(chapterTitle) || `Chapter ${chapterIndex}`
+  const spec = CHAPTER_TITLE_STYLES[theme.chapterTitleStyleId]
+  const transformedTitle = applyCaseTransform(rawTitle, spec.case)
 
   const banner = (txt: string): PrintBlock => ({
     type: 'heading',
     level: 1,
     text: txt,
     printRole: 'chapterBanner',
+    sizeMultiplier: spec.sizeMultiplier,
+    trackingEm: spec.trackingEm || undefined,
+    fontIdOverride: spec.fontId,
   })
 
-  if (opener === 'titleOnly') {
-    return [banner(title)]
-  }
+  const ornament = (glyph: string): PrintBlock => ({
+    type: 'heading',
+    level: 2,
+    text: glyph,
+    printRole: 'chapterOrnament',
+    sizeMultiplier: 1.4,
+    fontIdOverride: spec.fontId,
+  })
 
-  const h2Size = theme.fontSizePt * 1.3
-  const ruleText = emDashRuleLine(contentWidthPt, h2Size, font)
-  return [
-    { type: 'heading', level: 3, text: `Chapter ${chapterIndex}` },
-    { type: 'heading', level: 2, text: ruleText },
-    banner(title),
-  ]
+  const blocks: PrintBlock[] = []
+  if (opener === 'titleOnly') {
+    blocks.push(banner(transformedTitle))
+  } else {
+    const h2Size = theme.fontSizePt * 1.3
+    const ruleText = emDashRuleLine(contentWidthPt, h2Size, font)
+    blocks.push({ type: 'heading', level: 3, text: `Chapter ${chapterIndex}` })
+    blocks.push({ type: 'heading', level: 2, text: ruleText })
+    blocks.push(banner(transformedTitle))
+  }
+  if (spec.ornamentBelow) {
+    blocks.push(ornament(spec.ornamentBelow))
+  }
+  return blocks
 }
 
 function contentBoxForPage(
@@ -276,6 +343,12 @@ function contentBoxForPage(
   return { widthPt, heightPt, leftPt, rightPt, topPt: top, bottomPt: bottom, contentWidthPt, contentHeightPt }
 }
 
+/** Resolve the chapter-title font id from the chosen chapter title style spec. */
+export function resolvePrintTitleFontId(theme: PrintTheme): InkwellFontId {
+  const spec = CHAPTER_TITLE_STYLES[theme.chapterTitleStyleId]
+  return spec.fontId ?? theme.bodyFontId
+}
+
 export async function paginateForPrintReview(
   chapters: Manuscript[],
   theme: Theme,
@@ -283,8 +356,9 @@ export async function paginateForPrintReview(
 ): Promise<PrintPage[]> {
   // Use the same embedded Unicode font strategy as PDF export so Print Review
   // is a true WYSIWYG preview (including diacritics/symbols where glyphs exist).
-  const { font } = await getPrintFontForMeasurement(theme.print.bodyFontId)
-  return paginateWithFont(chapters, theme, font, ctx)
+  const titleFontId = resolvePrintTitleFontId(theme.print)
+  const { body, title } = await getPrintFontPairForMeasurement(theme.print.bodyFontId, titleFontId)
+  return paginateWithFont(chapters, theme, { body, title }, ctx)
 }
 
 export type PrintLayoutContext = {
@@ -426,13 +500,18 @@ export async function paginateChapterWithFont(
   chapter: Manuscript,
   chapterIndex: number,
   theme: Theme,
-  font: FontMeasurer,
+  fontOrPair: FontMeasurer | PrintFontPair,
   startPageNumber: number,
   ctx?: PrintLayoutContext,
   layoutKind: PrintLayoutKind = layoutProfileForManuscript(chapter),
   chapterOrdinalForOpener: number = chapterIndex + 1,
 ): Promise<ChapterPaginationResult> {
   const print = theme.print
+  const fonts: PrintFontPair = isFontPair(fontOrPair)
+    ? fontOrPair
+    : { body: fontOrPair, title: fontOrPair }
+  const bodyFont = fonts.body
+  const titleFont = fonts.title
   const headerReservePt = print.header.enabled ? print.header.fontSizePt * 1.8 : 0
   const footerReservePt = print.footer.enabled ? print.footer.fontSizePt * 1.8 : 0
   const boxOpts = { headerReservePt, footerReservePt }
@@ -474,6 +553,7 @@ export async function paginateChapterWithFont(
 
   const boxStart = contentBoxForPage(print, pageNumber, boxOpts)
   const chapterTitle = chapter.title?.trim() ?? ''
+  const titleSpec = CHAPTER_TITLE_STYLES[print.chapterTitleStyleId]
   const openerBlocks: PrintBlock[] =
     layoutKind === 'matter' || layoutKind === 'toc'
       ? []
@@ -482,8 +562,14 @@ export async function paginateChapterWithFont(
             {
               type: 'heading',
               level: 1,
-              text: chapterTitle || `Part ${chapterOrdinalForOpener}`,
+              text: applyCaseTransform(
+                chapterTitle || `Part ${chapterOrdinalForOpener}`,
+                titleSpec.case,
+              ),
               printRole: 'chapterBanner',
+              sizeMultiplier: titleSpec.sizeMultiplier,
+              trackingEm: titleSpec.trackingEm || undefined,
+              fontIdOverride: titleSpec.fontId,
             },
           ]
         : buildChapterOpenerBlocks(
@@ -493,13 +579,15 @@ export async function paginateChapterWithFont(
             run.blocks,
             boxStart.contentWidthPt,
             print,
-            font,
+            bodyFont,
           )
   const blocksToLayout = [...openerBlocks, ...run.blocks]
 
+  let prevBlockChapterIntro = false
   for (const block of blocksToLayout) {
     if (block.type === 'pageBreak') {
       nextPage(false)
+      prevBlockChapterIntro = false
       continue
     }
 
@@ -508,26 +596,49 @@ export async function paginateChapterWithFont(
     const page = pages[pages.length - 1]!
 
     const isChapterBanner = block.type === 'heading' && block.printRole === 'chapterBanner'
+    const isChapterOrnament = block.type === 'heading' && block.printRole === 'chapterOrnament'
     const isSceneBreak = block.type === 'heading' && block.printRole === 'sceneBreak'
+    const isChapterIntro = isChapterBanner || isChapterOrnament
+
+    // Chapter banner / ornament use the title font; everything else uses the body font.
+    const blockFont: FontMeasurer = isChapterIntro ? titleFont : bodyFont
+    const blockFontId: InkwellFontId | undefined =
+      block.type === 'heading' && isChapterIntro
+        ? (block.fontIdOverride ?? print.bodyFontId)
+        : undefined
+    const blockTrackingEm =
+      block.type === 'heading' && isChapterIntro ? (block.trackingEm ?? 0) : 0
+
+    const headingMultiplier =
+      block.type === 'heading' && (isChapterBanner || isChapterOrnament)
+        ? (block.sizeMultiplier ?? (isChapterBanner ? 2.5 : 1.4))
+        : null
 
     const fontSizePt =
       block.type === 'heading'
-        ? isChapterBanner
-          ? print.fontSizePt * 2.5
+        ? headingMultiplier != null
+          ? print.fontSizePt * headingMultiplier
           : isSceneBreak
             ? print.fontSizePt * 1.08
             : block.level === 1
-            ? print.fontSizePt * 1.55
-            : block.level === 2
-              ? print.fontSizePt * 1.3
-              : print.fontSizePt * 1.15
+              ? print.fontSizePt * 1.55
+              : block.level === 2
+                ? print.fontSizePt * 1.3
+                : print.fontSizePt * 1.15
         : print.fontSizePt
 
     const blockLineHeightPt =
-      isChapterBanner ? fontSizePt * 1.18 : isSceneBreak ? fontSizePt * 1.35 : fontSizePt * print.lineHeight
-    const lines = wrapText(block.text, box.contentWidthPt, fontSizePt, font, {
-      hyphenate: !isChapterBanner && !isSceneBreak && print.hyphenation,
-      hypher: isChapterBanner || isSceneBreak ? null : hypher,
+      isChapterBanner
+        ? fontSizePt * 1.18
+        : isChapterOrnament
+          ? fontSizePt * 1.25
+          : isSceneBreak
+            ? fontSizePt * 1.35
+            : fontSizePt * print.lineHeight
+    const lines = wrapText(block.text, box.contentWidthPt, fontSizePt, blockFont, {
+      hyphenate: !isChapterIntro && !isSceneBreak && print.hyphenation,
+      hypher: isChapterIntro || isSceneBreak ? null : hypher,
+      trackingEm: blockTrackingEm || undefined,
     })
 
     const yStartPt =
@@ -537,20 +648,38 @@ export async function paginateChapterWithFont(
       page.lines.reduce((acc, l) => Math.max(acc, box.heightPt - l.yPt), 0)
 
     const prevLine = page.lines.length ? page.lines[page.lines.length - 1]! : null
-    let cursorYPt =
-      page.lines.length === 0 ? box.heightPt - box.topPt : prevLine!.yPt - blockLineHeightPt
+    let cursorYPt: number
+    if (page.lines.length === 0) {
+      cursorYPt = box.heightPt - box.topPt
+    } else if (isChapterOrnament && prevBlockChapterIntro && prevLine != null) {
+      // The ornament's own (small) line-height is too tight to clear the title's
+      // descenders; drop a body-leading instead so the glyph sits cleanly below
+      // the title rather than tucked under it. Proportional to body line height
+      // so the gap stays consistent across themes.
+      const ornamentLeadPt = print.fontSizePt * print.lineHeight * 1.6
+      const drop = Math.max(blockLineHeightPt, ornamentLeadPt)
+      cursorYPt = prevLine.yPt - drop
+    } else {
+      cursorYPt = prevLine!.yPt - blockLineHeightPt
+    }
 
-    const gapAfterBanner =
-      prevLine && prevLine.kind === 'body' && prevLine.fontSizePt >= print.fontSizePt * 2.2
-        ? print.fontSizePt * 1.35
-        : 0
+    // After the chapter banner / ornament block, drop ~2 body line-heights of breathing
+    // room before the first paragraph. Combined with the natural blockLineHeightPt drop
+    // above, this gives ~3 body lines of empty space between the title baseline and the
+    // first body baseline, matching mainstream print interiors (e.g. Atticus). Tied to
+    // `print.lineHeight` so the gap stays proportional when the user changes line
+    // spacing in the print theme. Skipped when the current block is the chapter ornament
+    // itself (we want the ornament tucked tight under the title).
+    const shouldGapAfterBanner =
+      prevBlockChapterIntro && !isChapterIntro && prevLine != null && prevLine.kind === 'body'
+    const gapAfterBanner = shouldGapAfterBanner ? print.fontSizePt * print.lineHeight * 2 : 0
     cursorYPt -= gapAfterBanner
 
     if (isChapterBanner && page.lines.length === 0) {
       cursorYPt -= print.fontSizePt * 1.1
     }
 
-    if (block.type === 'heading' && !isChapterBanner && page.lines.length > 0)
+    if (block.type === 'heading' && !isChapterIntro && page.lines.length > 0)
       cursorYPt -= blockLineHeightPt * 0.25
     void yStartPt
 
@@ -565,7 +694,7 @@ export async function paginateChapterWithFont(
       }
 
       const boxNow = contentBoxForPage(print, pageNumber, boxOpts)
-      const lineWidth = safeWidthOfTextAtSize(line, fontSizePt, font)
+      const lineWidth = widthWithTracking(line, fontSizePt, blockFont, blockTrackingEm || undefined)
       const xPt =
         block.type === 'heading'
           ? boxNow.leftPt + Math.max(0, (boxNow.contentWidthPt - lineWidth) / 2)
@@ -578,9 +707,13 @@ export async function paginateChapterWithFont(
         fontSizePt,
         chapterId: run.chapterId,
         kind: 'body',
+        ...(blockFontId ? { fontId: blockFontId } : {}),
+        ...(blockTrackingEm ? { trackingEm: blockTrackingEm } : {}),
       })
       cursorYPt -= blockLineHeightPt
     }
+
+    prevBlockChapterIntro = isChapterIntro
   }
 
   if (pages.length === 0) {
@@ -591,7 +724,7 @@ export async function paginateChapterWithFont(
   const nextPageNumber =
     pages.length > 0 && lastBeforeHeaderFooter.lines.length > 0 ? pageNumber + 1 : pageNumber
 
-  applyPrintHeadersFooters(pages, print, font, ctx, chapterTitleById, chapter.id, boxOpts)
+  applyPrintHeadersFooters(pages, print, bodyFont, ctx, chapterTitleById, chapter.id, boxOpts)
 
   return {
     chapterId: chapter.id,
@@ -604,10 +737,13 @@ export async function paginateChapterWithFont(
 export async function paginateSpineWithFont(
   spine: Manuscript[],
   theme: Theme,
-  font: FontMeasurer,
+  fontOrPair: FontMeasurer | PrintFontPair,
   ctx?: PrintLayoutContext,
 ): Promise<PrintPage[]> {
   const print = theme.print
+  const fonts: PrintFontPair = isFontPair(fontOrPair)
+    ? fontOrPair
+    : { body: fontOrPair, title: fontOrPair }
   const headerReservePt = print.header.enabled ? print.header.fontSizePt * 1.8 : 0
   const footerReservePt = print.footer.enabled ? print.footer.fontSizePt * 1.8 : 0
   const boxOpts = { headerReservePt, footerReservePt }
@@ -621,7 +757,7 @@ export async function paginateSpineWithFont(
     const layout = layoutProfileForManuscript(ch)
     if (layout === 'chapter') bodyOrd += 1
     const ordinal = layout === 'chapter' ? bodyOrd : Math.max(1, bodyOrd)
-    const res = await paginateChapterWithFont(ch, i, theme, font, nextStart, ctx, layout, ordinal)
+    const res = await paginateChapterWithFont(ch, i, theme, fonts, nextStart, ctx, layout, ordinal)
     pages.push(...res.pages)
     nextStart = res.nextPageNumber
   }
@@ -639,7 +775,7 @@ export async function paginateSpineWithFont(
     applyPrintHeadersFooters(
       pages,
       print,
-      font,
+      fonts.body,
       ctx,
       new Map<number, string>(),
       0,
@@ -653,22 +789,25 @@ export async function paginateSpineWithFont(
 export async function paginateWithFont(
   chapters: Manuscript[],
   theme: Theme,
-  font: FontMeasurer,
+  fontOrPair: FontMeasurer | PrintFontPair,
   ctx?: PrintLayoutContext,
 ): Promise<PrintPage[]> {
-  return paginateSpineWithFont(chapters, theme, font, ctx)
+  return paginateSpineWithFont(chapters, theme, fontOrPair, ctx)
 }
 
 /** Full book for KDP PDF: optional printable TOC with page numbers (iterative layout). */
 export async function paginateProjectForPrintExport(
   project: InkwellProject,
-  font: FontMeasurer,
+  fontOrPair: FontMeasurer | PrintFontPair,
   ctx?: PrintLayoutContext,
 ): Promise<PrintPage[]> {
   const theme = project.theme
+  const fonts: PrintFontPair = isFontPair(fontOrPair)
+    ? fontOrPair
+    : { body: fontOrPair, title: fontOrPair }
   const spine = stripSyntheticToc(manuscriptsForPrint(project))
   if (!project.assembly.includePrintToc) {
-    return paginateSpineWithFont(spine, theme, font, ctx)
+    return paginateSpineWithFont(spine, theme, fonts, ctx)
   }
 
   const cw = printContentWidthPt(theme.print)
@@ -678,15 +817,16 @@ export async function paginateProjectForPrintExport(
   for (let iter = 0; iter < 12; iter++) {
     const withToc =
       tocMs != null ? insertPrintTocInSpine(project, spine, tocMs) : spine
-    const pages = await paginateSpineWithFont(withToc, theme, font, ctx)
+    const pages = await paginateSpineWithFont(withToc, theme, fonts, ctx)
     const starts = firstPageByChapterId(pages, withToc)
-    const nextToc = buildPrintTocManuscript(project, starts, cw, font, fs)
+    // TOC entries are body-text rows, so measure them with the body font.
+    const nextToc = buildPrintTocManuscript(project, starts, cw, fonts.body, fs)
     const prevSig = tocMs ? JSON.stringify(tocMs.content) : ''
     const nextSig = JSON.stringify(nextToc.content)
     if (prevSig === nextSig) return pages
     tocMs = nextToc
   }
   const finalSpine = tocMs != null ? insertPrintTocInSpine(project, spine, tocMs) : spine
-  return paginateSpineWithFont(finalSpine, theme, font, ctx)
+  return paginateSpineWithFont(finalSpine, theme, fonts, ctx)
 }
 

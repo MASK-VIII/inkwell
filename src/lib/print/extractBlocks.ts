@@ -1,9 +1,27 @@
 import type { JSONContent } from '@tiptap/core'
+import type { InkwellFontId } from '../fonts/fontCatalog'
+
+/**
+ * `chapterBanner`     — synthetic chapter opener title (centered, multiplied size)
+ * `chapterOrnament`   — small centered glyph rendered immediately under the title
+ * `sceneBreak`        — synthetic scene-break ornament inside chapter body
+ */
+export type PrintHeadingRole = 'chapterBanner' | 'chapterOrnament' | 'sceneBreak'
 
 export type PrintBlock =
   | { type: 'paragraph'; text: string }
-  /** printRole: synthetic chapter opener title — larger centered type in paginate */
-  | { type: 'heading'; level: 1 | 2 | 3; text: string; printRole?: 'chapterBanner' | 'sceneBreak' }
+  | {
+      type: 'heading'
+      level: 1 | 2 | 3
+      text: string
+      printRole?: PrintHeadingRole
+      /** Optional override of the heading's font multiplier (relative to body fontSizePt). */
+      sizeMultiplier?: number
+      /** Optional letter-spacing applied to chapter-banner / chapter-ornament headings only. */
+      trackingEm?: number
+      /** Optional override of the font used to render this heading (chapter banner / ornament). */
+      fontIdOverride?: InkwellFontId
+    }
   | { type: 'pageBreak' }
 
 function textFromNode(node: JSONContent | null | undefined): string {

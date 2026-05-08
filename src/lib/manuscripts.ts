@@ -12,7 +12,13 @@ import type {
 } from '../types'
 import { coerceInkwellFontId } from './fonts/fontCatalog'
 import { isThemePresetId } from './themePresets'
-import { defaultBookAssembly, defaultBookMeta, defaultTheme, defaultWritingGoals } from '../types'
+import {
+  coerceChapterTitleStyleId,
+  defaultBookAssembly,
+  defaultBookMeta,
+  defaultTheme,
+  defaultWritingGoals,
+} from '../types'
 import { idbDelete, idbGet, idbSet, isIndexedDbAvailable } from './storage/projectIdb'
 import { hashStringDjb2 } from './hash'
 import { countWordsInDoc, todayLocalISODate } from './wordCount'
@@ -307,6 +313,7 @@ function normalizeStoredTheme(parsedTheme: Partial<Theme> | undefined): Theme {
     ...d.print,
     ...(parsedTheme?.print as Partial<Theme['print']>),
     bodyFontId: coerceInkwellFontId(pIn.bodyFontId, pIn.fontFamily),
+    chapterTitleStyleId: coerceChapterTitleStyleId(pIn.chapterTitleStyleId),
   }
   const ebook: Theme['ebook'] = {
     ...d.ebook,
@@ -314,6 +321,7 @@ function normalizeStoredTheme(parsedTheme: Partial<Theme> | undefined): Theme {
     bodyFontId: coerceInkwellFontId(eIn.bodyFontId, eIn.fontFamily),
     embedFontsInEpub:
       typeof eIn.embedFontsInEpub === 'boolean' ? eIn.embedFontsInEpub : d.ebook.embedFontsInEpub,
+    chapterTitleStyleId: coerceChapterTitleStyleId(eIn.chapterTitleStyleId),
   }
   delete (print as Record<string, unknown>).fontFamily
   delete (ebook as Record<string, unknown>).fontFamily
