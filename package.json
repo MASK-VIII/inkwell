@@ -125,6 +125,7 @@
         "ext": "inkwell",
         "name": "Inkwell archive",
         "description": "Inkwell manuscript backup (ZIP container)",
+        "icon": "build/icon.ico",
         "role": "Editor"
       }
     ],

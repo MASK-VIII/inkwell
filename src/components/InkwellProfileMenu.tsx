@@ -52,16 +52,16 @@ export function InkwellProfileMenu({
 
   useEffect(() => {
     if (!open) return
-    const onDoc = (e: MouseEvent) => {
+    const onDoc = (e: PointerEvent) => {
       if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) close()
     }
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') close()
     }
-    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('pointerdown', onDoc)
     window.addEventListener('keydown', onKey)
     return () => {
-      document.removeEventListener('mousedown', onDoc)
+      document.removeEventListener('pointerdown', onDoc)
       window.removeEventListener('keydown', onKey)
     }
   }, [open, close])

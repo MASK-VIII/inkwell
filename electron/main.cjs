@@ -4,11 +4,12 @@
  * and fetch behave like a normal https origin (avoids fragile `file://` semantics).
  * Development: load the Vite dev server at http://localhost:5173 (same origin as `npm run dev` in the browser).
  */
-const { app, BrowserWindow, Menu, ipcMain, dialog, protocol, safeStorage } = require('electron')
+const { app, BrowserWindow, Menu, ipcMain, dialog, protocol, safeStorage, session, shell } = require('electron')
 const path = require('path')
 const fs = require('fs')
 
 const VITE_DEV_URL = 'http://localhost:5173'
+const PROD_APP_ORIGIN = 'inkwell://app'
 
 /** @type {BrowserWindow | null} */
 let mainWindow = null
@@ -20,6 +21,23 @@ let pendingImportPayload = null
 let pendingAuthDeepLink = null
 
 const isDev = !app.isPackaged
+
+/**
+ * Restrict all privileged actions (IPC, dialogs) to our own renderer.
+ * @param {Electron.IpcMainInvokeEvent | Electron.IpcMainEvent} event
+ */
+function assertTrustedSender(event) {
+  const frameUrl = event?.senderFrame?.url || ''
+  const ok =
+    (isDev && typeof frameUrl === 'string' && frameUrl.startsWith(VITE_DEV_URL)) ||
+    (!isDev && typeof frameUrl === 'string' && frameUrl.startsWith(PROD_APP_ORIGIN))
+
+  if (!ok) {
+    const e = new Error('Untrusted sender')
+    e.code = 'ERR_UNTRUSTED_SENDER'
+    throw e
+  }
+}
 
 /**
  * @param {string} s
@@ -72,6 +90,15 @@ function deliverAuthDeepLinkIfAny() {
   pendingAuthDeepLink = null
   void mainWindow.loadURL(url)
   focusMainWindow()
+}
+
+/**
+ * @param {string} urlStr
+ */
+function isAllowedNavigationTarget(urlStr) {
+  if (!urlStr || typeof urlStr !== 'string') return false
+  if (isDev) return urlStr.startsWith(VITE_DEV_URL)
+  return urlStr.startsWith(PROD_APP_ORIGIN)
 }
 
 protocol.registerSchemesAsPrivileged([
@@ -314,11 +341,29 @@ function createWindow() {
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false,
+      webviewTag: false,
     },
   })
 
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show()
+  })
+
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    // Never allow new windows; external links open in the OS browser.
+    if (typeof url === 'string' && (url.startsWith('http://') || url.startsWith('https://'))) {
+      void shell.openExternal(url)
+    }
+    return { action: 'deny' }
+  })
+
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (!isAllowedNavigationTarget(url)) {
+      event.preventDefault()
+      if (typeof url === 'string' && (url.startsWith('http://') || url.startsWith('https://'))) {
+        void shell.openExternal(url)
+      }
+    }
   })
 
   buildAppMenu(mainWindow)
@@ -342,13 +387,15 @@ function createWindow() {
 }
 
 function registerIpcHandlers() {
-  ipcMain.handle('inkwell:take-pending-import', () => {
+  ipcMain.handle('inkwell:take-pending-import', (event) => {
+    assertTrustedSender(event)
     const p = pendingImportPayload
     pendingImportPayload = null
     return p
   })
 
   ipcMain.handle('inkwell:import-archive-dialog', async (event) => {
+    assertTrustedSender(event)
     const win = BrowserWindow.fromWebContents(event.sender)
     const r = await dialog.showOpenDialog(win ?? undefined, {
       title: 'Import Inkwell backup',
@@ -368,6 +415,7 @@ function registerIpcHandlers() {
   })
 
   ipcMain.handle('inkwell:save-book-backup', async (event, payload) => {
+    assertTrustedSender(event)
     const win = BrowserWindow.fromWebContents(event.sender)
     const defaultBase =
       typeof payload?.defaultBase === 'string' && payload.defaultBase.trim() ?
@@ -386,14 +434,22 @@ function registerIpcHandlers() {
   })
 
   ipcMain.handle('inkwell:auth-kv-get', (_event, key) => {
+    assertTrustedSender(_event)
     if (typeof key !== 'string') return null
+    if (!safeStorage.isEncryptionAvailable() && !isDev) return null
     const m = readInkwellAuthKvMap()
     const v = m[key]
     return typeof v === 'string' ? v : null
   })
 
   ipcMain.handle('inkwell:auth-kv-set', (_event, key, value) => {
+    assertTrustedSender(_event)
     if (typeof key !== 'string') return
+    if (!safeStorage.isEncryptionAvailable() && !isDev) {
+      const e = new Error('Secure storage unavailable')
+      e.code = 'ERR_SECURE_STORAGE_UNAVAILABLE'
+      throw e
+    }
     const m = readInkwellAuthKvMap()
     if (value == null) delete m[key]
     else m[key] = String(value)
@@ -401,13 +457,16 @@ function registerIpcHandlers() {
   })
 
   ipcMain.handle('inkwell:auth-kv-remove', (_event, key) => {
+    assertTrustedSender(_event)
     if (typeof key !== 'string') return
+    if (!safeStorage.isEncryptionAvailable() && !isDev) return
     const m = readInkwellAuthKvMap()
     delete m[key]
     writeInkwellAuthKvMap(m)
   })
 
   ipcMain.handle('inkwell:save-library-backup', async (event, payload) => {
+    assertTrustedSender(event)
     const win = BrowserWindow.fromWebContents(event.sender)
     const r = await dialog.showSaveDialog(win ?? undefined, {
       title: 'Export library backup',
@@ -455,6 +514,12 @@ if (!gotLock) {
         /* ignore */
       }
     }
+
+    // Deny sensitive permissions by default. (Inkwell is a local-first editor.)
+    session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
+      const denied = new Set(['media', 'geolocation', 'notifications', 'midi', 'clipboard-sanitized-write'])
+      callback(!denied.has(permission))
+    })
 
     collectAuthDeepLinksFromArgv(process.argv)
     await queueFirstImportableFromArgv(process.argv)

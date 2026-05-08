@@ -62,6 +62,13 @@ type Props = {
   onWikilinkClick?: (noteProjectId: string) => void
 }
 
+function readCssSafeInsetBottomPx(): number {
+  if (typeof document === 'undefined') return 0
+  const raw = getComputedStyle(document.documentElement).getPropertyValue('--inkwell-safe-inset-bottom').trim()
+  const n = parseFloat(raw)
+  return Number.isFinite(n) ? n : 0
+}
+
 /** Offset from sticky top-right anchor (negative x moves left, positive y moves down). */
 function clampWordStatOffset(
   shellW: number,
@@ -73,10 +80,11 @@ function clampWordStatOffset(
 ) {
   const pad = 8
   const gutter = 12
+  const safeBottom = readCssSafeInsetBottomPx()
   const minDx = -(Math.max(0, shellW - floatW - pad - gutter))
   const maxDx = 56
   const minDy = -36
-  const maxDy = Math.max(minDy, shellH - floatH - pad)
+  const maxDy = Math.max(minDy, shellH - floatH - pad - safeBottom)
   return {
     x: Math.min(Math.max(minDx, dx), maxDx),
     y: Math.min(Math.max(minDy, dy), maxDy),

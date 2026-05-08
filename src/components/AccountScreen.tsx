@@ -8,6 +8,7 @@ import type { LibrarySyncStatus } from '../lib/sync/useInkwellLibrarySync'
 import type { InkwellTier } from '../lib/inkwellEntitlements'
 import type { InkwellEntitlementStatus } from '../hooks/useInkwellEntitlements'
 import { CLOUD_LIMIT_BASIC_DISPLAY, CLOUD_LIMIT_PRO_DISPLAY, formatCloudBytes } from '../lib/cloudQuota'
+import { InstallToHomeScreen } from './InstallToHomeScreen'
 import {
   INKWELL_DISPLAY_PRICE_BASIC,
   INKWELL_DISPLAY_PRICE_BASIC_TO_PRO,
@@ -487,6 +488,8 @@ export function AccountScreen({
             Cloud sync is not enabled in this build.
           </section>
         )}
+
+        <InstallToHomeScreen />
 
         <section className="rounded-2xl border border-dust/80 bg-white/80 p-5 shadow-sm dark:border-border-dark dark:bg-panel-dark/70">
           <h2 className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">

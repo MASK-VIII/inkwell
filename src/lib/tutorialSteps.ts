@@ -9,6 +9,7 @@ export type TourDomTarget =
   | 'editor-toolbar-customize'
   | 'header-workspace-format'
   | 'header-workspace-publish'
+  | 'format-preview-modes'
   | 'workspace-modes'
 
 export type TourStepId =
@@ -19,6 +20,7 @@ export type TourStepId =
   | 'write-toolbar-customize'
   | 'write-toolbar-dnd'
   | 'workspace-format'
+  | 'format-preview-modes'
   | 'workspace-publish'
 
 export type TourStepKind = 'info' | 'action'
@@ -98,6 +100,15 @@ export const TUTORIAL_STEPS: TourStep[] = [
     title: 'Format',
     body: 'When the draft is ready, open Format for print and ebook previews — typography, margins, and theme presets.',
     hint: 'We advance when the Format workspace opens.',
+  },
+  {
+    id: 'format-preview-modes',
+    kind: 'info',
+    route: 'format',
+    target: 'format-preview-modes',
+    title: 'Preview ebook and print',
+    body: 'Toggle Ebook and Print to see your manuscript in both formats. The side panel tunes typography, margins, and theme presets — switching modes lets you check that each format reads the way you want before exporting.',
+    hint: 'Print previews and the full export suite live on Pro; Basic covers the ebook side.',
   },
   {
     id: 'workspace-publish',

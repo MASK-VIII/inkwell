@@ -65,5 +65,29 @@ const icns = png2icons.createICNS(masterPng, png2icons.BICUBIC, 0)
 if (!icns) throw new Error('png2icons.createICNS returned null')
 await writeFile(iconIcns, icns)
 
+/* Web app manifest / install: raster from same opaque master as desktop (readable on home screens). */
+const web192 = join(root, 'public', 'icon-192.png')
+const web512 = join(root, 'public', 'icon-512.png')
+const web512Maskable = join(root, 'public', 'icon-512-maskable.png')
+await sharp(masterPng).resize(192, 192).png().toFile(web192)
+await sharp(masterPng).resize(512, 512).png().toFile(web512)
+/* Maskable safe zone ~72% emblem on parchment field (Android adaptive icon). */
+const maskSide = 512
+const inner = Math.round(maskSide * 0.72)
+const pad = Math.floor((maskSide - inner) / 2)
+const innerBuf = await sharp(masterPng).resize(inner, inner).png().toBuffer()
+await sharp({
+  create: {
+    width: maskSide,
+    height: maskSide,
+    channels: 4,
+    background: { r: 248, g: 241, b: 227, alpha: 1 },
+  },
+})
+  .composite([{ input: innerBuf, left: pad, top: pad }])
+  .png()
+  .toFile(web512Maskable)
+
 console.log('Wrote', apple180)
 console.log('Wrote', iconPng, iconIco, iconIcns)
+console.log('Wrote', web192, web512, web512Maskable)

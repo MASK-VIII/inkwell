@@ -24,20 +24,32 @@ html,
 body,
 #root {
   height: 100%;
+  min-height: 100dvh;
   transition:
     background-color var(--inkwell-theme-bridge-duration) var(--inkwell-theme-bridge-ease),
     color var(--inkwell-theme-bridge-duration) var(--inkwell-theme-bridge-ease);
 }
 
+#root {
+  overscroll-behavior-y: contain;
+}
+
 /* Base canvas so theme toggles always interpolate a visible wash (not “instant” behind opaque UI). */
 html {
   background-color: var(--color-parchment);
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   margin: 0;
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+}
+
+button,
+[role='button'],
+a {
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* Brand wordmark: literal stack so Tailwind @theme vars cannot leave font-family invalid (inherit → Inter). */
@@ -110,6 +122,11 @@ button:not(:disabled):not(.cursor-grab) {
   --inkwell-theme-bridge-ease: cubic-bezier(0.22, 1, 0.36, 1);
   /* Mirrors @theme --font-brand; available here for any non-Tailwind CSS. */
   --font-brand: 'DM Serif Display', Georgia, 'Times New Roman', serif;
+  /* Resolved for JS (e.g. word-count float clamp) and fallbacks where env() is unsupported. */
+  --inkwell-safe-inset-top: env(safe-area-inset-top, 0px);
+  --inkwell-safe-inset-right: env(safe-area-inset-right, 0px);
+  --inkwell-safe-inset-bottom: env(safe-area-inset-bottom, 0px);
+  --inkwell-safe-inset-left: env(safe-area-inset-left, 0px);
 }
 
 /* Shorter ramp than full motion, but still a real crossfade (not a hard cut). */
@@ -357,6 +374,12 @@ select {
 }
 
 /* Sticky app chrome: titles sit in plain divs (not `header` itself) — keep typography in sync with the wash. */
+.inkwell-chrome-header {
+  padding-left: max(0px, env(safe-area-inset-left, 0px));
+  padding-right: max(0px, env(safe-area-inset-right, 0px));
+  padding-top: max(0px, env(safe-area-inset-top, 0px));
+}
+
 .inkwell-chrome-header :where(h1, h2, p) {
   transition: color var(--inkwell-theme-bridge-duration) var(--inkwell-theme-bridge-ease);
 }
@@ -368,6 +391,8 @@ select {
 
 .inkwell-drawer-panel {
   transition: transform var(--inkwell-panel-motion-duration) var(--inkwell-panel-motion-ease);
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 .inkwell-panel-motion--live {
@@ -396,6 +421,17 @@ select {
 
   .inkwell-btn-icon-xs {
     @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl text-ink transition-colors outline-none hover:bg-dust/40 focus-visible:ring-2 focus-visible:ring-walnut/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:text-ink-dark dark:hover:bg-border-dark/50 dark:focus-visible:ring-cream/50 dark:focus-visible:ring-offset-panel-dark;
+  }
+
+  /* ~44px minimum tap targets on coarse pointers (phones); desktop hover mice unchanged. */
+  @media (hover: none) and (pointer: coarse) {
+    .inkwell-btn-icon {
+      @apply h-11 w-11 min-h-[2.75rem] min-w-[2.75rem];
+    }
+
+    .inkwell-chapter-row-menu-btn {
+      @apply h-10 w-10 min-h-10 min-w-10;
+    }
   }
 
   .inkwell-btn-chapter-new-sm {
@@ -716,7 +752,7 @@ select {
 
 .tiptap.ProseMirror {
   outline: none;
-  min-height: calc(100vh - 14rem);
+  min-height: calc(100dvh - 14rem);
   max-width: 720px;
   margin-inline: auto;
   font-family: var(--font-serif);
@@ -726,6 +762,20 @@ select {
   /* Tab inserts \\t at the caret (Word/Docs-style); tab stops need non-collapsing whitespace */
   white-space: break-spaces;
   tab-size: 8;
+}
+
+@media (max-width: 639.98px) {
+  .tiptap.ProseMirror {
+    min-height: calc(100dvh - 11rem);
+    max-width: none;
+    margin-inline: 0;
+    padding-left: max(0.75rem, env(safe-area-inset-left, 0px));
+    padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
+  }
+
+  [data-inkwell-format-split] .tiptap.ProseMirror {
+    min-height: 12rem;
+  }
 }
 
 .dark .tiptap.ProseMirror {
@@ -963,6 +1013,10 @@ select {
 }
 
 /* Manuscript editor — floating word-count control */
+.inkwell-wordstat-float-root {
+  margin-bottom: max(0px, env(safe-area-inset-bottom, 0px));
+}
+
 .inkwell-wordstat-float-btn {
   touch-action: none;
   border: 1px solid color-mix(in srgb, var(--color-walnut) 28%, var(--color-dust));

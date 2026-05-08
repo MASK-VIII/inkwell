@@ -3081,21 +3081,23 @@ export default function App() {
 
   useEffect(() => {
     if (route !== 'account') {
-      setAccountCloudMeter(null)
+      queueMicrotask(() => setAccountCloudMeter(null))
       return
     }
     if (!isInkwellCloudSyncConfigured()) return
     if (inkwellEntitlements.loading) return
     if (!inkwellEntitlements.gates.canUseCloudSync) {
-      setAccountCloudMeter(null)
+      queueMicrotask(() => setAccountCloudMeter(null))
       return
     }
     let cancelled = false
-    setAccountCloudMeter({
-      loading: true,
-      zipBytes: null,
-      estimateImageBytes: 0,
-      estimateManuscriptBytes: 0,
+    queueMicrotask(() => {
+      setAccountCloudMeter({
+        loading: true,
+        zipBytes: null,
+        estimateImageBytes: 0,
+        estimateManuscriptBytes: 0,
+      })
     })
     void (async () => {
       try {
@@ -3504,13 +3506,17 @@ export default function App() {
                           return next
                         })
                       }}
-                      className="flex items-center gap-2 rounded-3xl bg-ink px-4 py-2.5 text-sm font-semibold text-parchment hover:bg-walnut dark:bg-cream dark:text-ink dark:hover:bg-accent-warm"
+                      className="flex max-[380px]:gap-1 max-[380px]:px-2.5 max-[380px]:py-2 items-center gap-2 rounded-3xl bg-ink px-4 py-2.5 text-sm font-semibold text-parchment hover:bg-walnut dark:bg-cream dark:text-ink dark:hover:bg-accent-warm"
                       aria-expanded={newProjectMenuOpen}
                       aria-haspopup="menu"
                     >
-                      <Plus className="h-4 w-4" strokeWidth={2.5} />
+                      <Plus className="h-4 w-4 shrink-0" strokeWidth={2.5} />
                       New
-                      <ChevronDown className="h-4 w-4 opacity-80" strokeWidth={2.5} />
+                      <ChevronDown
+                        className="h-4 w-4 shrink-0 opacity-80 max-[380px]:hidden"
+                        strokeWidth={2.5}
+                        aria-hidden
+                      />
                     </button>
                     {newProjectMenuOpen ? (
                       <div
@@ -4504,7 +4510,7 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="flex min-h-[3.25rem] shrink-0 flex-col items-center justify-center px-3 py-2 sm:min-h-[3.5rem] sm:px-4 sm:py-3">
+              <div className="flex min-h-[3.25rem] shrink-0 flex-col items-center justify-center px-1 py-2 max-[390px]:px-0.5 sm:px-4 sm:py-3 sm:min-h-[3.5rem]">
                 <div className="min-w-0 w-full max-w-[min(44rem,100%)]">
                   {isNote ? (
                     <input
@@ -4513,7 +4519,7 @@ export default function App() {
                       disabled={!current || (route !== 'write' && route !== 'note_export')}
                       onChange={(e) => updateCurrentTitle(e.target.value)}
                       placeholder="Note title"
-                      className="w-full min-w-0 rounded-2xl border border-transparent bg-transparent px-3 py-2 text-center text-base font-medium focus:border-cream focus:outline-none dark:focus:border-cream sm:px-4 sm:text-lg"
+                      className="w-full min-w-0 rounded-2xl border border-transparent bg-transparent px-2 py-2 text-center text-base font-medium focus:border-cream focus:outline-none dark:focus:border-cream sm:px-4 sm:text-lg"
                     />
                   ) : route === 'write' ? (
                     <div
@@ -4542,10 +4548,10 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="relative z-10 flex min-w-0 flex-1 items-center justify-end gap-2 py-2 pl-2 pr-3 sm:py-3 sm:pr-5">
+              <div className="relative z-10 flex min-w-0 flex-1 items-center justify-end gap-1 py-2 pl-1 pr-2 max-[390px]:pr-1.5 sm:gap-2 sm:py-3 sm:pl-2 sm:pr-5">
                 {/* Keep profile menu outside overflow-x-auto (Format toolbar); otherwise the dropdown is clipped. */}
                 <div
-                  className={`flex min-w-0 flex-1 items-center justify-end gap-1 sm:gap-2 ${
+                  className={`flex min-w-0 flex-1 items-center justify-end gap-0.5 max-[390px]:gap-0.5 sm:gap-2 ${
                     !isNote && isFormatWorkspace
                       ? 'max-w-full flex-nowrap overflow-x-auto overscroll-x-contain px-0.5 sm:px-1'
                       : 'max-w-full flex-wrap'
