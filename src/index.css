@@ -773,9 +773,132 @@ select {
     padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
   }
 
+  .inkwell-editor-shell--mobile-notoolbar .tiptap.ProseMirror {
+    min-height: calc(100dvh - 7rem);
+  }
+
   [data-inkwell-format-split] .tiptap.ProseMirror {
     min-height: 12rem;
   }
+
+  .inkwell-mobile-aa-fab {
+    position: fixed;
+    z-index: 56;
+    right: max(1rem, env(safe-area-inset-right, 0px));
+    bottom: max(1rem, calc(env(safe-area-inset-bottom, 0px) + 0.5rem));
+    display: flex;
+    height: 2.75rem;
+    min-width: 2.75rem;
+    align-items: center;
+    justify-content: center;
+    padding: 0 0.65rem;
+    border-radius: 9999px;
+    border: 1px solid color-mix(in srgb, var(--color-walnut) 35%, transparent);
+    background: color-mix(in srgb, var(--color-parchment) 94%, white);
+    font-family: var(--font-serif);
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: var(--color-walnut);
+    box-shadow:
+      0 10px 28px -12px rgba(0, 0, 0, 0.35),
+      0 2px 8px -4px rgba(0, 0, 0, 0.2);
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .dark .inkwell-mobile-aa-fab {
+    border-color: color-mix(in srgb, var(--color-cream) 28%, transparent);
+    background: color-mix(in srgb, var(--color-panel-dark) 92%, black);
+    color: var(--color-accent-warm);
+    box-shadow:
+      0 12px 32px -14px rgba(0, 0, 0, 0.65),
+      0 0 0 1px color-mix(in srgb, var(--color-cream) 10%, transparent);
+  }
+
+  .inkwell-mobile-format-sheet-root {
+    position: fixed;
+    inset: 0;
+    z-index: 55;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    pointer-events: auto;
+  }
+
+  .inkwell-mobile-format-sheet-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 17, 19, 0.45);
+  }
+
+  .inkwell-mobile-format-sheet {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    max-height: min(70vh, 32rem);
+    flex-direction: column;
+    border-top-left-radius: 1.25rem;
+    border-top-right-radius: 1.25rem;
+    border: 1px solid color-mix(in srgb, var(--color-dust) 80%, transparent);
+    background: var(--color-parchment);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    box-shadow: 0 -18px 48px -18px rgba(0, 0, 0, 0.35);
+    animation: inkwell-mobile-sheet-in 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .dark .inkwell-mobile-format-sheet {
+    border-color: color-mix(in srgb, var(--color-border-dark) 90%, transparent);
+    background: var(--color-panel-dark);
+    box-shadow:
+      0 -18px 48px -18px rgba(0, 0, 0, 0.55),
+      0 0 0 1px color-mix(in srgb, var(--color-cream) 10%, transparent);
+  }
+
+  .inkwell-mobile-format-sheet-handle {
+    margin: 0.5rem auto 0.25rem;
+    height: 0.3rem;
+    width: 2.5rem;
+    border-radius: 9999px;
+    background: color-mix(in srgb, var(--color-ink) 18%, transparent);
+  }
+
+  .dark .inkwell-mobile-format-sheet-handle {
+    background: color-mix(in srgb, var(--color-ink-dark) 28%, transparent);
+  }
+
+  .inkwell-mobile-format-sheet-scroll {
+    min-height: 0;
+    flex: 1;
+    overflow: auto;
+    overscroll-behavior: contain;
+    padding: 0.75rem 1rem 0.5rem;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .inkwell-mobile-format-sheet-footer {
+    flex-shrink: 0;
+    border-top: 1px solid color-mix(in srgb, var(--color-dust) 70%, transparent);
+    padding: 0.75rem 1rem max(0.75rem, env(safe-area-inset-bottom, 0px));
+  }
+
+  .dark .inkwell-mobile-format-sheet-footer {
+    border-top-color: color-mix(in srgb, var(--color-border-dark) 85%, transparent);
+  }
+}
+
+@keyframes inkwell-mobile-sheet-in {
+  from {
+    transform: translate3d(0, 110%, 0);
+    opacity: 0.6;
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+    opacity: 1;
+  }
+}
+
+#root.inkwell-mobile-sheet-open {
+  overflow: hidden;
 }
 
 .dark .tiptap.ProseMirror {

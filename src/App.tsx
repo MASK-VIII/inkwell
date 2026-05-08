@@ -14,6 +14,7 @@ import {
   PenLine,
   Plus,
   Rocket,
+  Search,
   Sun,
   Trash2,
 } from 'lucide-react'
@@ -135,6 +136,7 @@ import { getInkwellSupabasePublicConfig, isInkwellCloudSyncConfigured } from './
 import { cloudLibraryQuotaBytes } from './lib/inkwellEntitlements'
 import { useInkwellLibrarySync } from './lib/sync/useInkwellLibrarySync'
 import { useInkwellEntitlements } from './hooks/useInkwellEntitlements'
+import { useIsMobileViewport } from './hooks/useIsMobileViewport'
 import {
   appendInkwellUserToCheckoutUrl,
   getPaddleCheckoutEnv,
@@ -581,6 +583,30 @@ export default function App() {
   const projectRef = useRef(project)
   const supabasePublicConfig = useMemo(() => getInkwellSupabasePublicConfig(), [])
   const inkwellEntitlements = useInkwellEntitlements(supabasePublicConfig)
+  const isMobile = useIsMobileViewport()
+  const [writeMobileOverflowOpen, setWriteMobileOverflowOpen] = useState(false)
+  const writeMobileOverflowRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (route !== 'write') setWriteMobileOverflowOpen(false)
+  }, [route])
+
+  useEffect(() => {
+    if (!writeMobileOverflowOpen) return
+    const onDoc = (e: PointerEvent) => {
+      const el = writeMobileOverflowRef.current
+      if (el && !el.contains(e.target as Node)) setWriteMobileOverflowOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setWriteMobileOverflowOpen(false)
+    }
+    document.addEventListener('pointerdown', onDoc)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('pointerdown', onDoc)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [writeMobileOverflowOpen])
 
   useEffect(() => {
     if (upgradeOfferIntent == null) {
@@ -2958,6 +2984,7 @@ export default function App() {
 
   const writeChaptersOverlay = useMemo(() => {
     if (isNote || route !== 'write') return null
+    if (isMobile && chaptersAsideCollapsed) return null
     return (
       <div
         data-inkwell-tour="write-chapters"
@@ -3035,6 +3062,7 @@ export default function App() {
   }, [
     isNote,
     route,
+    isMobile,
     chaptersAsideCollapsed,
     chaptersPanelMotionLive,
     onChaptersPanelTransitionEnd,
@@ -4549,162 +4577,354 @@ export default function App() {
               </div>
 
               <div className="relative z-10 flex min-w-0 flex-1 items-center justify-end gap-1 py-2 pl-1 pr-2 max-[390px]:pr-1.5 sm:gap-2 sm:py-3 sm:pl-2 sm:pr-5">
-                {/* Keep profile menu outside overflow-x-auto (Format toolbar); otherwise the dropdown is clipped. */}
-                <div
-                  className={`flex min-w-0 flex-1 items-center justify-end gap-0.5 max-[390px]:gap-0.5 sm:gap-2 ${
-                    !isNote && isFormatWorkspace
-                      ? 'max-w-full flex-nowrap overflow-x-auto overscroll-x-contain px-0.5 sm:px-1'
-                      : 'max-w-full flex-wrap'
-                  }`}
-                >
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (route === 'format_ebook') setEbookEditOpen((v) => !v)
-                    }}
-                    className={`shrink-0 items-center gap-2 rounded-3xl border border-dust bg-white/70 px-2.5 py-2 text-sm font-medium text-ink outline-none transition-colors hover:bg-white focus-visible:ring-2 focus-visible:ring-walnut/35 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90 dark:focus-visible:ring-cream/45 dark:focus-visible:ring-offset-panel-dark sm:px-3 ${
-                      route === 'format_ebook' ? 'flex' : 'hidden'
-                    }`}
-                    title="Toggle editor for ebook review"
-                  >
-                    <BookOpen className="h-4 w-4 shrink-0" />
-                    <span>{ebookEditOpen ? 'Hide editor' : 'Edit'}</span>
-                  </button>
-                  <div className="flex shrink-0 items-center gap-0 sm:gap-0.5">
+                {isMobile && route === 'write' ? (
+                  <div ref={writeMobileOverflowRef} className="relative z-[60] flex min-w-0 flex-1 justify-end">
                     <button
                       type="button"
-                      data-inkwell-tour="header-book-tools"
-                      onClick={() => {
-                        setBookToolsOpen(true)
-                      }}
                       className="inkwell-btn-icon"
-                      aria-label={isNote ? 'Note tools' : 'Book tools'}
-                      title={isNote ? 'Note tools' : 'Book tools'}
+                      aria-expanded={writeMobileOverflowOpen}
+                      aria-haspopup="menu"
+                      aria-label="Menu"
+                      title="Menu"
+                      onClick={() => setWriteMobileOverflowOpen((v) => !v)}
                     >
-                      <Library className="h-5 w-5" />
+                      <MoreVertical className="h-5 w-5" strokeWidth={2.25} />
                     </button>
-                    <button
-                      type="button"
-                      onClick={toggleTheme}
-                      className="inkwell-btn-icon"
-                      aria-label="Toggle theme"
-                    >
-                      {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-                    </button>
-                  </div>
-                  {isNote ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        syncPersistedState()
-                        if (route === 'note_export') navigateRoute('write')
-                        else navigateRoute('note_export')
-                      }}
-                      disabled={!current}
-                      className="flex items-center gap-2 rounded-3xl bg-ink px-3 py-2 text-sm font-medium text-parchment outline-none transition-colors hover:bg-walnut focus-visible:ring-2 focus-visible:ring-walnut/45 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:pointer-events-none disabled:opacity-40 dark:bg-cream dark:text-ink dark:hover:bg-accent-warm dark:focus-visible:ring-cream/55 dark:focus-visible:ring-offset-panel-dark sm:px-5 sm:py-2.5"
-                      aria-label={route === 'note_export' ? 'Back to Write' : 'Open Export workspace'}
-                      title={route === 'note_export' ? 'Back to writing' : 'Export for the web and backups'}
-                    >
-                      {route === 'note_export' ? (
-                        <PenLine className="h-4 w-4 shrink-0" strokeWidth={2.25} />
-                      ) : (
-                        <Download className="h-4 w-4 shrink-0" strokeWidth={2.25} />
-                      )}
-                      <span className="hidden sm:inline">{route === 'note_export' ? 'Write' : 'Export'}</span>
-                    </button>
-                  ) : route === 'publish' ? (
-                    <details ref={publishExportMenuRef} className="group relative shrink-0">
-                      <summary className="flex list-none cursor-pointer select-none items-center gap-1.5 rounded-3xl bg-ink px-3 py-2 text-sm font-medium text-parchment outline-none transition-colors hover:bg-walnut focus-visible:ring-2 focus-visible:ring-walnut/45 focus-visible:ring-offset-2 focus-visible:ring-offset-white [&::-webkit-details-marker]:hidden dark:bg-cream dark:text-ink dark:hover:bg-accent-warm dark:focus-visible:ring-cream/55 dark:focus-visible:ring-offset-panel-dark sm:gap-2 sm:px-5 sm:py-2.5">
-                        <Download className="h-4 w-4 shrink-0" strokeWidth={2.25} />
-                        <span className="hidden sm:inline">Export</span>
-                        <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-75 transition-transform group-open:rotate-180 dark:opacity-80" />
-                      </summary>
-                      <div className="absolute right-0 top-full z-[60] mt-1.5 min-w-[15rem] overflow-hidden rounded-2xl border border-dust bg-white/95 py-1 shadow-lg backdrop-blur-md dark:border-border-dark dark:bg-panel-dark/95">
+                    {writeMobileOverflowOpen ?
+                      <div
+                        role="menu"
+                        className="absolute right-0 top-full z-[70] mt-2 w-[min(18.5rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-dust bg-white/98 py-1 shadow-xl backdrop-blur-md dark:border-border-dark dark:bg-panel-dark/98"
+                      >
+                        {!isNote ?
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="block w-full px-3 py-2.5 text-left text-sm font-medium text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
+                            onClick={() => {
+                              setWriteMobileOverflowOpen(false)
+                              setChaptersAsideCollapsedPersisted(false)
+                            }}
+                          >
+                            Sections
+                          </button>
+                        : null}
                         <button
                           type="button"
-                          className="block w-full px-3 py-2.5 text-left text-sm font-medium text-ink hover:bg-parchment/80 dark:text-ink-dark dark:hover:bg-panel-dark/80"
+                          role="menuitem"
+                          className="block w-full px-3 py-2.5 text-left text-sm font-medium text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
                           onClick={() => {
-                            closePublishExportMenu()
-                            syncPersistedState()
-                            void exportPdfKdp()
-                          }}
-                        >
-                          Export PDF (KDP)
-                        </button>
-                        <button
-                          type="button"
-                          className="block w-full px-3 py-2.5 text-left text-sm font-medium text-ink hover:bg-parchment/80 dark:text-ink-dark dark:hover:bg-panel-dark/80"
-                          onClick={() => {
-                            closePublishExportMenu()
-                            syncPersistedState()
-                            void exportEpub()
-                          }}
-                        >
-                          Export EPUB
-                        </button>
-                        <div className="my-1 border-t border-dust dark:border-border-dark" />
-                        <button
-                          type="button"
-                          className="block w-full px-3 py-2.5 text-left text-sm font-medium text-ink hover:bg-parchment/80 dark:text-ink-dark dark:hover:bg-panel-dark/80"
-                          onClick={() => {
-                            closePublishExportMenu()
+                            setWriteMobileOverflowOpen(false)
                             setBookToolsOpen(true)
                           }}
                         >
-                          Import & backups…
+                          {isNote ? 'Note tools' : 'Book tools'}
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
+                          onClick={() => {
+                            setWriteMobileOverflowOpen(false)
+                            toggleTheme()
+                          }}
+                        >
+                          {darkMode ?
+                            <Sun className="h-4 w-4 shrink-0" />
+                          : <Moon className="h-4 w-4 shrink-0" />}
+                          Toggle theme
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
+                          onClick={() => {
+                            setWriteMobileOverflowOpen(false)
+                            openFindReplaceModal()
+                          }}
+                        >
+                          <Search className="h-4 w-4 shrink-0" strokeWidth={2.25} />
+                          Find in document
+                        </button>
+                        {isNote ?
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="block w-full px-3 py-2.5 text-left text-sm font-medium text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
+                            disabled={!current}
+                            onClick={() => {
+                              setWriteMobileOverflowOpen(false)
+                              syncPersistedState()
+                              navigateRoute('note_export')
+                            }}
+                          >
+                            Export workspace
+                          </button>
+                        : null}
+                        <div className="my-1 border-t border-dust dark:border-border-dark" />
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="block w-full px-3 py-2.5 text-left text-sm font-medium text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
+                          onClick={() => {
+                            setWriteMobileOverflowOpen(false)
+                            const b = readBootstrap()
+                            const persist = shouldShowTutorial(b)
+                            setTourPersistRemindLater(persist)
+                            setTourResumeStepId(persist ? (b.tutorialStepId ?? null) : null)
+                            setGettingStartedTourOpen(true)
+                          }}
+                        >
+                          Getting started
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="block w-full px-3 py-2.5 text-left text-sm font-medium text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
+                          onClick={() => {
+                            setWriteMobileOverflowOpen(false)
+                            const b = readBootstrap()
+                            setNotesTourPersistRemindLater(shouldShowNotesTutorial(b))
+                            setNotesTourResumeStepId(b.notesTutorialStepId ?? null)
+                            setNotesTourOpen(true)
+                          }}
+                        >
+                          Notes and projects tour
+                        </button>
+                        <div className="my-1 border-t border-dust dark:border-border-dark" />
+                        {!inkwellLibrarySync.userEmail &&
+                        isInkwellCloudSyncConfigured() &&
+                        profileMenuGoToCloudSignIn ?
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="block w-full px-3 py-2.5 text-left text-sm font-medium text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
+                            onClick={() => {
+                              setWriteMobileOverflowOpen(false)
+                              profileMenuGoToCloudSignIn()
+                            }}
+                          >
+                            Sign in
+                          </button>
+                        : null}
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="block w-full px-3 py-2.5 text-left text-sm font-medium text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
+                          onClick={() => {
+                            setWriteMobileOverflowOpen(false)
+                            syncPersistedState()
+                            navigateRoute('account')
+                          }}
+                        >
+                          My account
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="block w-full px-3 py-2.5 text-left text-sm font-medium text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
+                          onClick={() => {
+                            setWriteMobileOverflowOpen(false)
+                            syncPersistedState()
+                            navigateRoute('bookshelf')
+                          }}
+                        >
+                          Bookshelf
+                        </button>
+                        {isInkwellCloudSyncConfigured() && inkwellLibrarySync.userEmail ?
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="block w-full px-3 py-2.5 text-left text-sm font-medium text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
+                            onClick={() => {
+                              setWriteMobileOverflowOpen(false)
+                              if (requireEntitlement('basic')) inkwellLibrarySync.syncNow()
+                            }}
+                          >
+                            Sync library now
+                          </button>
+                        : null}
+                        {isInkwellCloudSyncConfigured() && inkwellLibrarySync.userEmail ?
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="block w-full px-3 py-2.5 text-left text-sm font-medium text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
+                            onClick={() => {
+                              setWriteMobileOverflowOpen(false)
+                              void inkwellLibrarySync.signOutCloudOnly()
+                            }}
+                          >
+                            Sign out of cloud only
+                          </button>
+                        : null}
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="block w-full px-3 py-2.5 text-left text-sm font-medium text-red-700 hover:bg-dust/30 dark:text-red-300 dark:hover:bg-border-dark/50"
+                          onClick={() => {
+                            setWriteMobileOverflowOpen(false)
+                            onBookshelfSignOut()
+                          }}
+                        >
+                          Sign out
                         </button>
                       </div>
-                    </details>
-                  ) : (
-                    <button
-                      type="button"
-                      data-inkwell-tour={isFormatWorkspace ? 'header-workspace-publish' : 'header-workspace-format'}
-                      onClick={() => {
-                        if (isFormatWorkspace) navigateRoute('publish')
-                        else {
-                          syncPersistedState()
-                          setEbookEditOpen(false)
-                          navigateRoute('format_ebook')
-                        }
-                      }}
-                      disabled={isFormatWorkspace ? false : !current || route !== 'write'}
-                      className="flex shrink-0 items-center gap-2 rounded-3xl bg-ink px-3 py-2 text-sm font-medium text-parchment outline-none transition-colors hover:bg-walnut focus-visible:ring-2 focus-visible:ring-walnut/45 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:pointer-events-none disabled:opacity-40 dark:bg-cream dark:text-ink dark:hover:bg-accent-warm dark:focus-visible:ring-cream/55 dark:focus-visible:ring-offset-panel-dark sm:px-5 sm:py-2.5"
-                      aria-label={isFormatWorkspace ? 'Go to Publish workspace' : 'Open Format workspace'}
-                      title={isFormatWorkspace ? 'Open Publish workspace' : 'Ebook & print previews'}
+                    : null}
+                  </div>
+                ) : (
+                  <>
+                    {/* Keep profile menu outside overflow-x-auto (Format toolbar); otherwise the dropdown is clipped. */}
+                    <div
+                      className={`flex min-w-0 flex-1 items-center justify-end gap-0.5 max-[390px]:gap-0.5 sm:gap-2 ${
+                        !isNote && isFormatWorkspace
+                          ? 'max-w-full flex-nowrap overflow-x-auto overscroll-x-contain px-0.5 sm:px-1'
+                          : 'max-w-full flex-wrap'
+                      }`}
                     >
-                      {isFormatWorkspace ? (
-                        <Rocket className="h-4 w-4 shrink-0" strokeWidth={2.25} />
-                      ) : (
-                        <LayoutTemplate className="h-4 w-4 shrink-0" strokeWidth={2.25} />
-                      )}
-                      <span className="hidden sm:inline">{isFormatWorkspace ? 'Publish!' : 'Format'}</span>
-                    </button>
-                  )}
-                </div>
-                <InkwellProfileMenu
-                  userEmail={inkwellLibrarySync.userEmail}
-                  cloudSyncConfigured={isInkwellCloudSyncConfigured()}
-                  onGoToSignIn={
-                    isInkwellCloudSyncConfigured() && !inkwellLibrarySync.userEmail ?
-                      profileMenuGoToCloudSignIn
-                    : undefined
-                  }
-                  onSyncNow={() => {
-                    if (requireEntitlement('basic')) inkwellLibrarySync.syncNow()
-                  }}
-                  onSignOutCloud={() => void inkwellLibrarySync.signOutCloudOnly()}
-                  onAppSignOut={onBookshelfSignOut}
-                  showLibraryHubLink
-                  onGoToAccount={() => {
-                    syncPersistedState()
-                    navigateRoute('account')
-                  }}
-                  onGoToLibraryHub={() => {
-                    syncPersistedState()
-                    navigateRoute('bookshelf')
-                  }}
-                  onRequestExclusiveOpen={() => setBookToolsOpen(false)}
-                />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (route === 'format_ebook') setEbookEditOpen((v) => !v)
+                        }}
+                        className={`shrink-0 items-center gap-2 rounded-3xl border border-dust bg-white/70 px-2.5 py-2 text-sm font-medium text-ink outline-none transition-colors hover:bg-white focus-visible:ring-2 focus-visible:ring-walnut/35 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90 dark:focus-visible:ring-cream/45 dark:focus-visible:ring-offset-panel-dark sm:px-3 ${
+                          route === 'format_ebook' ? 'flex' : 'hidden'
+                        }`}
+                        title="Toggle editor for ebook review"
+                      >
+                        <BookOpen className="h-4 w-4 shrink-0" />
+                        <span>{ebookEditOpen ? 'Hide editor' : 'Edit'}</span>
+                      </button>
+                      <div className="flex shrink-0 items-center gap-0 sm:gap-0.5">
+                        <button
+                          type="button"
+                          data-inkwell-tour="header-book-tools"
+                          onClick={() => {
+                            setBookToolsOpen(true)
+                          }}
+                          className="inkwell-btn-icon"
+                          aria-label={isNote ? 'Note tools' : 'Book tools'}
+                          title={isNote ? 'Note tools' : 'Book tools'}
+                        >
+                          <Library className="h-5 w-5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={toggleTheme}
+                          className="inkwell-btn-icon"
+                          aria-label="Toggle theme"
+                        >
+                          {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+                        </button>
+                      </div>
+                      {isNote ?
+                        <button
+                          type="button"
+                          onClick={() => {
+                            syncPersistedState()
+                            if (route === 'note_export') navigateRoute('write')
+                            else navigateRoute('note_export')
+                          }}
+                          disabled={!current}
+                          className="flex items-center gap-2 rounded-3xl bg-ink px-3 py-2 text-sm font-medium text-parchment outline-none transition-colors hover:bg-walnut focus-visible:ring-2 focus-visible:ring-walnut/45 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:pointer-events-none disabled:opacity-40 dark:bg-cream dark:text-ink dark:hover:bg-accent-warm dark:focus-visible:ring-cream/55 dark:focus-visible:ring-offset-panel-dark sm:px-5 sm:py-2.5"
+                          aria-label={route === 'note_export' ? 'Back to Write' : 'Open Export workspace'}
+                          title={route === 'note_export' ? 'Back to writing' : 'Export for the web and backups'}
+                        >
+                          {route === 'note_export' ?
+                            <PenLine className="h-4 w-4 shrink-0" strokeWidth={2.25} />
+                          : <Download className="h-4 w-4 shrink-0" strokeWidth={2.25} />}
+                          <span className="hidden sm:inline">{route === 'note_export' ? 'Write' : 'Export'}</span>
+                        </button>
+                      : route === 'publish' ?
+                        <details ref={publishExportMenuRef} className="group relative shrink-0">
+                          <summary className="flex list-none cursor-pointer select-none items-center gap-1.5 rounded-3xl bg-ink px-3 py-2 text-sm font-medium text-parchment outline-none transition-colors hover:bg-walnut focus-visible:ring-2 focus-visible:ring-walnut/45 focus-visible:ring-offset-2 focus-visible:ring-offset-white [&::-webkit-details-marker]:hidden dark:bg-cream dark:text-ink dark:hover:bg-accent-warm dark:focus-visible:ring-cream/55 dark:focus-visible:ring-offset-panel-dark sm:gap-2 sm:px-5 sm:py-2.5">
+                            <Download className="h-4 w-4 shrink-0" strokeWidth={2.25} />
+                            <span className="hidden sm:inline">Export</span>
+                            <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-75 transition-transform group-open:rotate-180 dark:opacity-80" />
+                          </summary>
+                          <div className="absolute right-0 top-full z-[60] mt-1.5 min-w-[15rem] overflow-hidden rounded-2xl border border-dust bg-white/95 py-1 shadow-lg backdrop-blur-md dark:border-border-dark dark:bg-panel-dark/95">
+                            <button
+                              type="button"
+                              className="block w-full px-3 py-2.5 text-left text-sm font-medium text-ink hover:bg-parchment/80 dark:text-ink-dark dark:hover:bg-panel-dark/80"
+                              onClick={() => {
+                                closePublishExportMenu()
+                                syncPersistedState()
+                                void exportPdfKdp()
+                              }}
+                            >
+                              Export PDF (KDP)
+                            </button>
+                            <button
+                              type="button"
+                              className="block w-full px-3 py-2.5 text-left text-sm font-medium text-ink hover:bg-parchment/80 dark:text-ink-dark dark:hover:bg-panel-dark/80"
+                              onClick={() => {
+                                closePublishExportMenu()
+                                syncPersistedState()
+                                void exportEpub()
+                              }}
+                            >
+                              Export EPUB
+                            </button>
+                            <div className="my-1 border-t border-dust dark:border-border-dark" />
+                            <button
+                              type="button"
+                              className="block w-full px-3 py-2.5 text-left text-sm font-medium text-ink hover:bg-parchment/80 dark:text-ink-dark dark:hover:bg-panel-dark/80"
+                              onClick={() => {
+                                closePublishExportMenu()
+                                setBookToolsOpen(true)
+                              }}
+                            >
+                              Import & backups…
+                            </button>
+                          </div>
+                        </details>
+                      : <button
+                          type="button"
+                          data-inkwell-tour={isFormatWorkspace ? 'header-workspace-publish' : 'header-workspace-format'}
+                          onClick={() => {
+                            if (isFormatWorkspace) navigateRoute('publish')
+                            else {
+                              syncPersistedState()
+                              setEbookEditOpen(false)
+                              navigateRoute('format_ebook')
+                            }
+                          }}
+                          disabled={isFormatWorkspace ? false : !current || route !== 'write'}
+                          className="flex shrink-0 items-center gap-2 rounded-3xl bg-ink px-3 py-2 text-sm font-medium text-parchment outline-none transition-colors hover:bg-walnut focus-visible:ring-2 focus-visible:ring-walnut/45 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:pointer-events-none disabled:opacity-40 dark:bg-cream dark:text-ink dark:hover:bg-accent-warm dark:focus-visible:ring-cream/55 dark:focus-visible:ring-offset-panel-dark sm:px-5 sm:py-2.5"
+                          aria-label={isFormatWorkspace ? 'Go to Publish workspace' : 'Open Format workspace'}
+                          title={isFormatWorkspace ? 'Open Publish workspace' : 'Ebook & print previews'}
+                        >
+                          {isFormatWorkspace ?
+                            <Rocket className="h-4 w-4 shrink-0" strokeWidth={2.25} />
+                          : <LayoutTemplate className="h-4 w-4 shrink-0" strokeWidth={2.25} />}
+                          <span className="hidden sm:inline">{isFormatWorkspace ? 'Publish!' : 'Format'}</span>
+                        </button>
+                      }
+                    </div>
+                    <InkwellProfileMenu
+                      userEmail={inkwellLibrarySync.userEmail}
+                      cloudSyncConfigured={isInkwellCloudSyncConfigured()}
+                      onGoToSignIn={
+                        isInkwellCloudSyncConfigured() && !inkwellLibrarySync.userEmail ?
+                          profileMenuGoToCloudSignIn
+                        : undefined
+                      }
+                      onSyncNow={() => {
+                        if (requireEntitlement('basic')) inkwellLibrarySync.syncNow()
+                      }}
+                      onSignOutCloud={() => void inkwellLibrarySync.signOutCloudOnly()}
+                      onAppSignOut={onBookshelfSignOut}
+                      showLibraryHubLink
+                      onGoToAccount={() => {
+                        syncPersistedState()
+                        navigateRoute('account')
+                      }}
+                      onGoToLibraryHub={() => {
+                        syncPersistedState()
+                        navigateRoute('bookshelf')
+                      }}
+                      onRequestExclusiveOpen={() => setBookToolsOpen(false)}
+                    />
+                  </>
+                )}
               </div>
             </div>
           </header>

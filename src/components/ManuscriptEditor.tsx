@@ -13,6 +13,8 @@ import {
 } from 'react'
 import { createManuscriptTipTapExtensions } from '../lib/tiptap/manuscriptExtensions'
 import type { MentionItem } from '../lib/tiptap/mentionUi'
+import { useIsMobileViewport } from '../hooks/useIsMobileViewport'
+import { MobileFormatSheet } from './MobileFormatSheet'
 import { ManuscriptToolbar } from './ManuscriptToolbar'
 
 function mentionItemsEqual(a: MentionItem[], b: MentionItem[]): boolean {
@@ -116,6 +118,8 @@ function ManuscriptEditorInner({
   onNoteMentionClick,
   onWikilinkClick,
 }: Props) {
+  const isMobile = useIsMobileViewport()
+  const [mobileFormatOpen, setMobileFormatOpen] = useState(false)
   const minimalBar = toolbarVariant === 'writeMinimal'
   const formatSplitMode = toolbarVariant === 'formatSplit'
   const [, setToolbarVersion] = useState(0)
@@ -434,7 +438,7 @@ function ManuscriptEditorInner({
       data-inkwell-tour="editor-toolbar"
       {...(formatSplitMode ? { 'data-inkwell-format-split': true } : {})}
     >
-      {!formatSplitMode ?
+      {!formatSplitMode && !isMobile ?
         <ManuscriptToolbar
           manuscriptId={manuscriptId}
           editor={editor}
@@ -449,9 +453,9 @@ function ManuscriptEditorInner({
       {leftOverlay}
       <div
         ref={shellRef}
-        className={`inkwell-editor-shell relative min-h-0 flex-1 overflow-auto ${shellPad} ${formatSplitMode ? 'inkwell-editor-shell--format-split' : ''}`}
+        className={`inkwell-editor-shell relative min-h-0 flex-1 overflow-auto ${shellPad} ${formatSplitMode ? 'inkwell-editor-shell--format-split' : ''}${isMobile && !formatSplitMode ? ' inkwell-editor-shell--mobile-notoolbar' : ''}`}
       >
-        {floatPos !== null && !formatSplitMode ? (
+        {floatPos !== null && !formatSplitMode && !isMobile ? (
           <div className="sticky top-2 z-30 flex h-0 w-full justify-end overflow-visible pr-2 pt-1 pointer-events-none">
             <div
               ref={floatClusterRef}
@@ -536,6 +540,27 @@ function ManuscriptEditorInner({
         )}
       </div>
       </div>
+
+      {isMobile && !formatSplitMode && editor ?
+        <>
+          {!mobileFormatOpen ?
+            <button
+              type="button"
+              className="inkwell-mobile-aa-fab"
+              onClick={() => setMobileFormatOpen(true)}
+              aria-label="Formatting and tools"
+            >
+              Aa
+            </button>
+          : null}
+          <MobileFormatSheet
+            open={mobileFormatOpen}
+            editor={editor}
+            onClose={() => setMobileFormatOpen(false)}
+            onOpenFindReplace={onOpenFindReplace}
+          />
+        </>
+      : null}
     </div>
   )
 }
