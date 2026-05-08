@@ -1190,7 +1190,7 @@ export function ManuscriptToolbar({
       onDragEnd={onToolbarDragEnd}
       onDragCancel={clearToolbarDragUi}
     >
-      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+      <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-2">
         <SortableContext items={primaryIds} strategy={horizontalListSortingStrategy}>
           {layout.primary.map((entry, i) => (
             <SortableSlot key={`primary-${i}-${entry}`} id={`primary:${i}`} customizing={customizing}>
@@ -1216,7 +1216,7 @@ export function ManuscriptToolbar({
       </DragOverlay>
     </DndContext>
   ) : (
-    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+    <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-2">
       {layout.primary.map((entry, i) => (
         <div key={`p-${i}-${entry}`} className="flex items-center">
           {renderTool(entry)}
