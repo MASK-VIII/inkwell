@@ -20,9 +20,9 @@ const apple180 = join(root, 'public', 'apple-touch-icon.png')
 
 await mkdir(buildDir, { recursive: true })
 
-/* Web: 180x180 apple-touch-icon from the SVG favicon (unchanged). */
+/* Web: 180x180 apple-touch-icon (iOS homescreen icon).
+   Use the emblem so home-screen shortcuts match the in-app branding. */
 const svg = await readFile(faviconSvg)
-await sharp(svg).resize(180, 180).png().toFile(apple180)
 
 /* Desktop: tight-disc emblem master + multi-size .ico / .icns.
    Geometry mirrors src/components/InkwellEmblem.tsx (scale 1.36 with
@@ -47,6 +47,8 @@ const masterPng = await sharp(emblemPng)
   .resize(SIZE, SIZE)
   .png()
   .toBuffer()
+
+await sharp(masterPng).resize(180, 180).png().toFile(apple180)
 
 const iconPng = join(buildDir, 'icon.png')
 const iconIco = join(buildDir, 'icon.ico')

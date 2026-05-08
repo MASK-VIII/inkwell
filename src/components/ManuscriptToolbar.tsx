@@ -1235,16 +1235,16 @@ export function ManuscriptToolbar({
 
   return (
     <div
-      className={`flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-dust bg-white/50 dark:border-border-dark dark:bg-panel-dark/50 ${shellPad}`}
+      className={`flex flex-nowrap items-center gap-2 overflow-x-auto overscroll-x-contain border-b border-dust bg-white/50 dark:border-border-dark dark:bg-panel-dark/50 ${shellPad}`}
     >
-      <div className="flex min-w-0 flex-1 flex-col gap-2">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-2" data-inkwell-tour="editor-toolbar-bar">
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-2" data-inkwell-tour="editor-toolbar-bar">
+          <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-2">
             {toolbarInner}
           </div>
 
           <div
-            className="flex flex-wrap items-center gap-2 border-l border-dust/80 pl-3 dark:border-border-dark/90"
+            className="flex shrink-0 items-center gap-2 border-l border-dust/80 pl-3 dark:border-border-dark/90"
             data-inkwell-tour="editor-toolbar-customize"
           >
             <button
