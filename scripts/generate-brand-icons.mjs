@@ -29,41 +29,56 @@ const svg = await readFile(faviconSvg)
    object-[50%_47%]): we visibly use ~73.5% of the source, shifted ~3%
    above center to track the disc. */
 const SIZE = 1024
-const cropFrac = 0.735
+const DESKTOP_CROP_FRAC = 0.735
+/* Mobile/web icons should avoid showing the emblem's dark corners on squared home-screen masks.
+   Crop a bit tighter so the gold disc fills the square (gold may clip; no black edges). */
+const WEB_CROP_FRAC = 0.62
 const yBiasFrac = -0.03
 
 const meta = await sharp(emblemPng).metadata()
 if (!meta.width || !meta.height) throw new Error('Could not read emblem dimensions')
-const side = Math.round(Math.min(meta.width, meta.height) * cropFrac)
-const left = Math.round((meta.width - side) / 2)
-const topRaw = Math.round((meta.height - side) / 2 + meta.height * yBiasFrac)
-const top = Math.max(0, Math.min(topRaw, meta.height - side))
+function cropSquare(cropFrac) {
+  const side = Math.round(Math.min(meta.width, meta.height) * cropFrac)
+  const left = Math.round((meta.width - side) / 2)
+  const topRaw = Math.round((meta.height - side) / 2 + meta.height * yBiasFrac)
+  const top = Math.max(0, Math.min(topRaw, meta.height - side))
+  return { left, top, side }
+}
 
 /* Opaque master only — do not apply a circular alpha mask for .ico: Explorer
    and NSIS desktop shortcuts often show a wrong/empty icon when the embedded
    image is mostly transparent. Corners keep the source artwork (dark field). */
-const masterPng = await sharp(emblemPng)
-  .extract({ left, top, width: side, height: side })
+const desktopCrop = cropSquare(DESKTOP_CROP_FRAC)
+const webCrop = cropSquare(WEB_CROP_FRAC)
+
+const masterPngDesktop = await sharp(emblemPng)
+  .extract({ left: desktopCrop.left, top: desktopCrop.top, width: desktopCrop.side, height: desktopCrop.side })
   .resize(SIZE, SIZE)
   .png()
   .toBuffer()
 
-await sharp(masterPng).resize(180, 180).png().toFile(apple180)
+const masterPngWeb = await sharp(emblemPng)
+  .extract({ left: webCrop.left, top: webCrop.top, width: webCrop.side, height: webCrop.side })
+  .resize(SIZE, SIZE)
+  .png()
+  .toBuffer()
+
+await sharp(masterPngWeb).resize(180, 180).png().toFile(apple180)
 
 const iconPng = join(buildDir, 'icon.png')
 const iconIco = join(buildDir, 'icon.ico')
 const iconIcns = join(buildDir, 'icon.icns')
 
-await writeFile(iconPng, masterPng)
+await writeFile(iconPng, masterPngDesktop)
 
 /* forWinExe=true: stores small sizes as BMP (compatible with the file
    properties dialog of older Windows) while keeping large sizes as PNG.
    numOfColors=0 = lossless. */
-const ico = png2icons.createICO(masterPng, png2icons.BICUBIC, 0, false, true)
+const ico = png2icons.createICO(masterPngDesktop, png2icons.BICUBIC, 0, false, true)
 if (!ico) throw new Error('png2icons.createICO returned null')
 await writeFile(iconIco, ico)
 
-const icns = png2icons.createICNS(masterPng, png2icons.BICUBIC, 0)
+const icns = png2icons.createICNS(masterPngDesktop, png2icons.BICUBIC, 0)
 if (!icns) throw new Error('png2icons.createICNS returned null')
 await writeFile(iconIcns, icns)
 
@@ -71,13 +86,13 @@ await writeFile(iconIcns, icns)
 const web192 = join(root, 'public', 'icon-192.png')
 const web512 = join(root, 'public', 'icon-512.png')
 const web512Maskable = join(root, 'public', 'icon-512-maskable.png')
-await sharp(masterPng).resize(192, 192).png().toFile(web192)
-await sharp(masterPng).resize(512, 512).png().toFile(web512)
+await sharp(masterPngWeb).resize(192, 192).png().toFile(web192)
+await sharp(masterPngWeb).resize(512, 512).png().toFile(web512)
 /* Maskable safe zone ~72% emblem on parchment field (Android adaptive icon). */
 const maskSide = 512
 const inner = Math.round(maskSide * 0.72)
 const pad = Math.floor((maskSide - inner) / 2)
-const innerBuf = await sharp(masterPng).resize(inner, inner).png().toBuffer()
+const innerBuf = await sharp(masterPngWeb).resize(inner, inner).png().toBuffer()
 await sharp({
   create: {
     width: maskSide,
