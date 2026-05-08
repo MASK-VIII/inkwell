@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://enterthelimelight.com/sitemap-index.xml

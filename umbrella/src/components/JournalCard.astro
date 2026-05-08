@@ -1,0 +1,124 @@
+---
+interface Props {
+  href: string
+  title: string
+  description: string
+  pubDate: Date
+  tags?: readonly string[]
+  variant?: 'compact' | 'list'
+}
+
+const {
+  href,
+  title,
+  description,
+  pubDate,
+  tags = [],
+  variant = 'list',
+} = Astro.props as Props
+
+const dateFmt = new Intl.DateTimeFormat('en-US', {
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric',
+}).format(pubDate)
+
+const isoDate = pubDate.toISOString()
+---
+
+<article class:list={['journal-card', `is-${variant}`]}>
+  <a href={href} class="journal-card-link">
+    <div class="journal-card-meta">
+      <time datetime={isoDate}>{dateFmt}</time>
+      {tags.length > 0 && <span class="journal-card-sep" aria-hidden="true">·</span>}
+      {tags.length > 0 && (
+        <span class="journal-card-tags">
+          {tags.map((tag, idx) => (
+            <span>
+              {tag}
+              {idx < tags.length - 1 && <span aria-hidden="true">, </span>}
+            </span>
+          ))}
+        </span>
+      )}
+    </div>
+    <h3 class="journal-card-title">{title}</h3>
+    <p class="journal-card-dek">{description}</p>
+    <span class="journal-card-cta" aria-hidden="true">Read &rarr;</span>
+  </a>
+</article>
+
+<style>
+  .journal-card {
+    border-top: 1px solid var(--rule-gold);
+    padding: 1.5rem 0;
+  }
+
+  .journal-card.is-compact {
+    border-top: 0;
+    padding: 0;
+  }
+
+  .journal-card-link {
+    display: block;
+    color: var(--color-cream);
+    text-decoration: none;
+    border-bottom: 0;
+    padding: 0.25rem 0;
+    transition: transform 200ms ease;
+  }
+
+  .journal-card-link:hover {
+    transform: translateX(2px);
+  }
+
+  .journal-card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: var(--font-sans);
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-gold);
+  }
+
+  .journal-card-sep {
+    color: var(--color-gold-dim);
+  }
+
+  .journal-card-tags {
+    color: var(--color-cream-mute);
+  }
+
+  .journal-card-title {
+    margin: 0.55rem 0 0.45rem;
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: clamp(1.4rem, 2.4vw, 1.85rem);
+    line-height: 1.15;
+    color: var(--color-cream);
+  }
+
+  .journal-card-link:hover .journal-card-title,
+  .journal-card-link:focus-visible .journal-card-title {
+    color: var(--color-gold-bright);
+  }
+
+  .journal-card-dek {
+    margin: 0 0 0.65rem;
+    color: var(--color-cream-dim);
+    font-size: 0.98rem;
+    line-height: 1.6;
+    max-width: 36rem;
+  }
+
+  .journal-card-cta {
+    font-family: var(--font-sans);
+    font-size: 0.78rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-gold);
+  }
+</style>

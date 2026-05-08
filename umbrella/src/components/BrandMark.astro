@@ -1,0 +1,55 @@
+---
+interface Props {
+  size?: number
+  withWordmark?: boolean
+  class?: string
+}
+
+const { size = 28, withWordmark = true, class: className } = Astro.props as Props
+---
+
+<span class:list={['brand-mark-row', className]}>
+  <svg
+    class="brand-mark-svg"
+    xmlns="http://www.w3.org/2000/svg"
+    fill="none"
+    viewBox="0 0 32 32"
+    width={size}
+    height={size}
+    aria-hidden="true"
+  >
+    <defs>
+      <radialGradient id="limelight-glow" cx="50%" cy="42%" r="55%">
+        <stop offset="0%" stop-color="#e6c989" stop-opacity="0.95" />
+        <stop offset="60%" stop-color="#c9a86a" stop-opacity="0.55" />
+        <stop offset="100%" stop-color="#a01b2a" stop-opacity="0" />
+      </radialGradient>
+    </defs>
+    <circle cx="16" cy="13" r="11" fill="url(#limelight-glow)" />
+    <path d="M10.5 22.5v-12l5.8-2v14.2l-5.8 1.8z" fill="#c9a86a" opacity="0.85" />
+    <path d="m16.3 8.5 5.8 2v12l-5.8-1.8z" fill="#c9a86a" opacity="0.55" />
+    <circle cx="16" cy="12.5" r="2.4" fill="#a01b2a" />
+  </svg>
+  {withWordmark && <span class="brand-mark-name">Enter the Limelight</span>}
+</span>
+
+<style>
+  .brand-mark-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    color: var(--color-cream);
+  }
+
+  .brand-mark-svg {
+    flex: none;
+    filter: drop-shadow(0 0 12px rgba(198, 49, 70, 0.25));
+  }
+
+  .brand-mark-name {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: 1.05rem;
+    letter-spacing: 0.04em;
+  }
+</style>

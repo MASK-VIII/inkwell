@@ -1,0 +1,148 @@
+---
+interface Props {
+  eyebrow?: string
+  heading?: string
+  blurb?: string
+  compact?: boolean
+}
+
+const {
+  eyebrow = 'The Limelight Journal',
+  heading = 'Subscribe by email',
+  blurb = 'Letters on craft, the build of Inkwell, and the books we are betting on. No spam; unsubscribe anytime.',
+  compact = false,
+} = Astro.props as Props
+
+const substackPub = (import.meta.env.PUBLIC_SUBSTACK_PUB ?? '').toString().trim()
+const embedUrl = substackPub ? `https://${substackPub}.substack.com/embed` : null
+const archiveUrl = substackPub ? `https://${substackPub}.substack.com` : null
+---
+
+<aside class:list={['subscribe-card', compact && 'is-compact']} aria-labelledby="subscribe-heading">
+  <p class="eyebrow">{eyebrow}</p>
+  <h2 id="subscribe-heading" class="subscribe-heading">{heading}</h2>
+  <p class="subscribe-blurb">{blurb}</p>
+
+  <div class="subscribe-frame">
+    {
+      embedUrl ? (
+        <iframe
+          src={embedUrl}
+          title="Subscribe to the Limelight Journal"
+          width="100%"
+          height={compact ? 180 : 240}
+          style="border:0;background:transparent"
+          frameborder="0"
+          scrolling="no"
+          loading="lazy"
+        />
+      ) : (
+        <div class="subscribe-fallback">
+          <p>Newsletter coming soon.</p>
+          <p class="subscribe-fallback-note">
+            Email <a href="mailto:contact@enterthelimelight.com">contact@enterthelimelight.com</a> to be added when it launches.
+          </p>
+        </div>
+      )
+    }
+  </div>
+
+  {
+    archiveUrl && (
+      <p class="subscribe-archive">
+        Or <a href={archiveUrl} rel="me noopener" target="_blank">read on Substack</a>.
+      </p>
+    )
+  }
+</aside>
+
+<style>
+  .subscribe-card {
+    background: var(--color-stage-elevated);
+    border: 1px solid var(--rule-gold);
+    border-radius: var(--radius-lg);
+    padding: clamp(1.75rem, 4vw, 2.5rem);
+    text-align: center;
+    max-width: 36rem;
+    margin: 0 auto;
+    box-shadow: var(--shadow-stage);
+    position: relative;
+  }
+
+  .subscribe-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background: radial-gradient(
+      ellipse at top,
+      rgba(160, 27, 42, 0.15),
+      transparent 60%
+    );
+  }
+
+  .subscribe-card.is-compact {
+    padding: 1.5rem;
+  }
+
+  .subscribe-card > * {
+    position: relative;
+  }
+
+  .subscribe-heading {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: clamp(1.5rem, 3vw, 2rem);
+    line-height: 1.15;
+    color: var(--color-cream);
+    margin: 0.5rem 0 0.5rem;
+  }
+
+  .subscribe-blurb {
+    color: var(--color-cream-dim);
+    font-size: 0.95rem;
+    line-height: 1.6;
+    margin: 0 auto 1.25rem;
+    max-width: 28rem;
+  }
+
+  .subscribe-frame {
+    border: 1px solid var(--rule-gold-strong);
+    border-radius: var(--radius);
+    padding: 0.4rem;
+    background: rgba(0, 0, 0, 0.35);
+  }
+
+  .subscribe-frame iframe {
+    display: block;
+    border-radius: calc(var(--radius) - 0.2rem);
+    background: var(--color-cream);
+  }
+
+  .subscribe-fallback {
+    padding: 1.5rem;
+    color: var(--color-cream);
+    font-family: var(--font-serif);
+    font-style: italic;
+  }
+
+  .subscribe-fallback p {
+    margin: 0;
+  }
+
+  .subscribe-fallback-note {
+    margin-top: 0.5rem !important;
+    font-size: 0.85rem;
+    color: var(--color-cream-dim);
+  }
+
+  .subscribe-archive {
+    margin: 1rem 0 0;
+    font-family: var(--font-sans);
+    font-size: 0.78rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-cream-mute);
+  }
+</style>

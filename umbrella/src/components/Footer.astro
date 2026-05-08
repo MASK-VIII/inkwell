@@ -1,0 +1,102 @@
+---
+const year = new Date().getFullYear()
+const substackPub = (import.meta.env.PUBLIC_SUBSTACK_PUB ?? '').toString().trim()
+const substackUrl = substackPub ? `https://${substackPub}.substack.com` : null
+---
+
+<footer class="site-footer">
+  <div class="container site-footer-inner">
+    <p class="site-footer-tagline">
+      A small studio for ambitious writing tools and the stories they help finish.
+    </p>
+
+    <div class="site-footer-links" aria-label="Footer navigation">
+      <a href="/inkwell">Inkwell</a>
+      <span aria-hidden="true">·</span>
+      <a href="/journal">Journal</a>
+      <span aria-hidden="true">·</span>
+      <a href="/about">About</a>
+      {
+        substackUrl && (
+          <>
+            <span aria-hidden="true">·</span>
+            <a href={substackUrl} rel="me noopener" target="_blank">
+              Substack
+            </a>
+          </>
+        )
+      }
+    </div>
+
+    <div class="site-footer-emails">
+      <a href="mailto:contact@enterthelimelight.com">contact@enterthelimelight.com</a>
+      <span aria-hidden="true">·</span>
+      <a href="mailto:support@enterthelimelight.com">support@enterthelimelight.com</a>
+    </div>
+
+    <p class="site-footer-copy">&copy; {year} Enter the Limelight.</p>
+  </div>
+</footer>
+
+<style>
+  .site-footer {
+    margin-top: 4rem;
+    padding: 3rem 0 2.5rem;
+    border-top: 1px solid var(--rule-gold);
+    background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.35));
+  }
+
+  .site-footer-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 1rem;
+  }
+
+  .site-footer-tagline {
+    font-family: var(--font-serif);
+    font-style: italic;
+    color: var(--color-cream-dim);
+    margin: 0;
+    max-width: 32rem;
+  }
+
+  .site-footer-links,
+  .site-footer-emails {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 0.5rem 0.65rem;
+    font-family: var(--font-sans);
+    font-size: 0.82rem;
+    color: var(--color-cream-mute);
+  }
+
+  .site-footer-links a,
+  .site-footer-emails a {
+    color: var(--color-cream-dim);
+    border-bottom-color: var(--rule-gold);
+  }
+
+  .site-footer-links a:hover,
+  .site-footer-emails a:hover {
+    color: var(--color-cream);
+    border-bottom-color: var(--rule-gold-strong);
+  }
+
+  .site-footer-links span,
+  .site-footer-emails span {
+    color: var(--color-gold-dim);
+  }
+
+  .site-footer-copy {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-size: 0.78rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-cream-mute);
+  }
+</style>

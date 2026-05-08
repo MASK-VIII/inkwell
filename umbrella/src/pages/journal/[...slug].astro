@@ -1,0 +1,243 @@
+---
+import { getCollection, type CollectionEntry } from 'astro:content'
+import Base from '../../layouts/Base.astro'
+import SubscribeCard from '../../components/SubscribeCard.astro'
+
+export async function getStaticPaths() {
+  const posts = await getCollection('journal', ({ data }) => !data.draft)
+  return posts.map((post) => ({
+    params: { slug: post.slug },
+    props: { post },
+  }))
+}
+
+type Props = { post: CollectionEntry<'journal'> }
+
+const { post } = Astro.props as Props
+const { Content } = await post.render()
+
+const dateFmt = new Intl.DateTimeFormat('en-US', {
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric',
+}).format(post.data.pubDate)
+const isoDate = post.data.pubDate.toISOString()
+---
+
+<Base title={`${post.data.title} — Limelight Journal`} description={post.data.description}>
+  <main>
+    <article class="post">
+      <header class="post-head container">
+        <p class="eyebrow">The Limelight Journal</p>
+        <h1 class="post-title">{post.data.title}</h1>
+        <p class="post-dek">{post.data.description}</p>
+        <div class="post-meta">
+          <time datetime={isoDate}>{dateFmt}</time>
+          {
+            post.data.tags.length > 0 && (
+              <>
+                <span aria-hidden="true">·</span>
+                <span>{post.data.tags.join(', ')}</span>
+              </>
+            )
+          }
+        </div>
+      </header>
+
+      <div class="post-rule" aria-hidden="true">&#10086;</div>
+
+      <div class="post-prose container">
+        <Content />
+      </div>
+
+      <hr class="divider-rule" />
+
+      <div class="container">
+        <SubscribeCard
+          eyebrow="Liked this?"
+          heading="Get the next one in your inbox"
+          blurb="The journal goes out by email when new posts are up. Free, occasional, easy to leave."
+        />
+      </div>
+
+      <p class="post-back">
+        <a href="/journal">&larr; All posts</a>
+      </p>
+    </article>
+  </main>
+</Base>
+
+<style>
+  .post {
+    padding: clamp(2.5rem, 6vw, 4rem) 0 1rem;
+  }
+
+  .post-head {
+    text-align: center;
+    max-width: 44rem;
+    margin: 0 auto;
+  }
+
+  .post-title {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: clamp(2.2rem, 5.5vw, 3.5rem);
+    line-height: 1.1;
+    margin: 0.85rem 0 0.85rem;
+    color: var(--color-cream);
+    letter-spacing: -0.005em;
+  }
+
+  .post-dek {
+    color: var(--color-cream-dim);
+    font-style: italic;
+    font-family: var(--font-serif);
+    font-size: 1.1rem;
+    line-height: 1.55;
+    margin: 0 auto 1rem;
+    max-width: 32rem;
+  }
+
+  .post-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-family: var(--font-sans);
+    font-size: 0.78rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-gold);
+  }
+
+  .post-rule {
+    text-align: center;
+    margin: 2.5rem 0 1.75rem;
+    color: var(--color-gold);
+    font-size: 1.25rem;
+    line-height: 1;
+  }
+
+  /* Prose styles for the rendered MDX. Cream serif on stage, gold accents,
+   * pulled in close to the editorial feel of the reference book interior. */
+  .post-prose {
+    max-width: var(--prose-max);
+    margin: 0 auto;
+    padding-bottom: 2rem;
+    color: var(--color-cream);
+    font-family: var(--font-serif);
+    font-size: 1.1rem;
+    line-height: 1.78;
+  }
+
+  .post-prose :global(h1) {
+    display: none; /* Title is already shown in the head. */
+  }
+
+  .post-prose :global(h2) {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: clamp(1.45rem, 3vw, 1.85rem);
+    line-height: 1.2;
+    margin: 2.5rem 0 0.75rem;
+    color: var(--color-cream);
+  }
+
+  .post-prose :global(h3) {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: 1.3rem;
+    line-height: 1.25;
+    margin: 2rem 0 0.5rem;
+    color: var(--color-gold-bright);
+  }
+
+  .post-prose :global(p) {
+    margin: 0 0 1.15rem;
+  }
+
+  .post-prose :global(a) {
+    color: var(--color-gold-bright);
+    border-bottom-color: var(--rule-gold-strong);
+  }
+
+  .post-prose :global(a:hover),
+  .post-prose :global(a:focus-visible) {
+    color: var(--color-cream);
+  }
+
+  .post-prose :global(blockquote) {
+    margin: 1.75rem 0;
+    padding: 0.5rem 1.25rem;
+    border-left: 2px solid var(--color-gold);
+    color: var(--color-cream-dim);
+    font-style: italic;
+  }
+
+  .post-prose :global(ul),
+  .post-prose :global(ol) {
+    margin: 0 0 1.25rem 1.25rem;
+    padding: 0;
+  }
+
+  .post-prose :global(li) {
+    margin-bottom: 0.5rem;
+  }
+
+  .post-prose :global(li::marker) {
+    color: var(--color-gold);
+  }
+
+  .post-prose :global(code) {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.92em;
+    padding: 0.1em 0.35em;
+    background: rgba(201, 168, 106, 0.1);
+    border: 1px solid var(--rule-gold);
+    border-radius: 0.3em;
+  }
+
+  .post-prose :global(pre) {
+    margin: 1.5rem 0;
+    padding: 1rem 1.15rem;
+    background: var(--color-stage-deep);
+    border: 1px solid var(--rule-gold);
+    border-radius: var(--radius);
+    overflow-x: auto;
+  }
+
+  .post-prose :global(pre code) {
+    background: transparent;
+    border: 0;
+    padding: 0;
+  }
+
+  .post-prose :global(hr) {
+    border: 0;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      var(--rule-gold-strong) 30%,
+      var(--rule-gold-strong) 70%,
+      transparent
+    );
+    margin: 2.5rem auto;
+    max-width: 16rem;
+  }
+
+  .post-back {
+    text-align: center;
+    margin: 2.5rem 0 0;
+    font-family: var(--font-sans);
+    font-size: 0.82rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .post-back a {
+    border-bottom: 0;
+    color: var(--color-gold);
+  }
+</style>

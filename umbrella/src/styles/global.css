@@ -1,15 +1,48 @@
-/* Brand tokens shared with Inkwell (kept in sync by hand for now). */
-:root {
-  --color-ink: #2c241f;
-  --color-parchment: #f8f1e3;
-  --color-walnut: #8b4513;
-  --color-dust: #d4c3a8;
-  --color-cream: #d9a441;
-  --color-white-soft: rgba(255, 255, 255, 0.6);
+/* Limelight studio — dark/red/gold theatrical identity. The Inkwell app
+ * keeps its parchment/walnut palette; the umbrella owns this stage mood. */
 
-  --font-serif: 'DM Serif Display', Georgia, 'Times New Roman', serif;
+@import '@fontsource/playfair-display/400.css';
+@import '@fontsource/playfair-display/400-italic.css';
+@import '@fontsource/playfair-display/700.css';
+@import '@fontsource/eb-garamond/400.css';
+@import '@fontsource/eb-garamond/400-italic.css';
+@import '@fontsource/eb-garamond/600.css';
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+
+:root {
+  --color-stage: #0d0a09;
+  --color-stage-elevated: #181312;
+  --color-stage-deep: #060403;
+
+  --color-blood: #a01b2a;
+  --color-blood-glow: #c63146;
+  --color-blood-deep: #6e0f1a;
+
+  --color-gold: #c9a86a;
+  --color-gold-bright: #e6c989;
+  --color-gold-dim: #7a6539;
+
+  --color-cream: #f4ead7;
+  --color-cream-dim: #bfb39b;
+  --color-cream-mute: #8a8071;
+
+  --rule-gold: rgba(201, 168, 106, 0.2);
+  --rule-gold-strong: rgba(201, 168, 106, 0.45);
+  --shadow-stage: 0 24px 60px rgba(0, 0, 0, 0.55);
+
+  --font-display: 'Playfair Display', 'Cormorant Garamond', Georgia, serif;
+  --font-serif: 'EB Garamond', 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
   --font-sans:
     'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+
+  --content-max: 64rem;
+  --prose-max: 38rem;
+  --radius: 0.75rem;
+  --radius-lg: 1.25rem;
+
+  color-scheme: dark;
 }
 
 *,
@@ -23,23 +56,232 @@ body {
   margin: 0;
   padding: 0;
   min-height: 100%;
-  background: var(--color-parchment);
-  color: var(--color-ink);
-  font-family: var(--font-sans);
+}
+
+html {
+  background: var(--color-stage);
+}
+
+body {
+  position: relative;
+  background:
+    radial-gradient(
+      ellipse 90% 55% at 50% -10%,
+      rgba(160, 27, 42, 0.22),
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 60% 40% at 12% 8%,
+      rgba(201, 168, 106, 0.08),
+      transparent 70%
+    ),
+    var(--color-stage);
+  color: var(--color-cream);
+  font-family: var(--font-serif);
+  font-size: 1.0625rem;
+  line-height: 1.7;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Subtle film-grain overlay — fixed so it doesn't scroll. ~3% opacity. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.05;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='matrix' values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.6 0'/></filter><rect width='200' height='200' filter='url(%23n)'/></svg>");
+}
+
+/* Keep page contents above the grain layer. */
+body > * {
+  position: relative;
+  z-index: 2;
 }
 
 a {
-  color: inherit;
+  color: var(--color-gold-bright);
+  text-decoration: none;
+  border-bottom: 1px solid var(--rule-gold);
+  transition: color 160ms ease, border-color 160ms ease;
+}
+
+a:hover,
+a:focus-visible {
+  color: var(--color-cream);
+  border-bottom-color: var(--rule-gold-strong);
 }
 
 button,
 input,
-textarea {
+textarea,
+select {
   font-family: inherit;
+  color: inherit;
 }
 
 ::selection {
-  background-color: rgba(217, 164, 65, 0.4);
+  background-color: rgba(201, 168, 106, 0.4);
+  color: var(--color-stage);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-gold);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+/* Typography primitives -------------------------------------------------- */
+
+.eyebrow {
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--color-gold);
+  margin: 0;
+}
+
+.display {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(2.4rem, 6vw, 4.25rem);
+  line-height: 1.05;
+  letter-spacing: -0.005em;
+  color: var(--color-cream);
+  margin: 0;
+}
+
+.display-caps {
+  font-family: var(--font-display);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  line-height: 1.1;
+  color: var(--color-cream);
+  margin: 0;
+}
+
+.lede {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: clamp(1.05rem, 1.5vw, 1.2rem);
+  line-height: 1.6;
+  color: var(--color-cream-dim);
+  max-width: 36rem;
+  margin: 0 auto;
+}
+
+/* Layout primitives ------------------------------------------------------ */
+
+.container {
+  width: 100%;
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+.section {
+  padding: clamp(3rem, 8vw, 6rem) 0;
+}
+
+.divider-rule {
+  border: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--rule-gold-strong) 30%,
+    var(--rule-gold-strong) 70%,
+    transparent
+  );
+  margin: clamp(2rem, 5vw, 4rem) auto;
+  max-width: 24rem;
+}
+
+/* Buttons ---------------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.85rem 1.75rem;
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color 200ms ease,
+    border-color 200ms ease,
+    color 200ms ease,
+    box-shadow 200ms ease,
+    transform 200ms ease;
+}
+
+.btn-primary {
+  background: var(--color-blood);
+  color: var(--color-cream);
+  border-color: var(--color-blood-deep);
+  box-shadow: 0 0 0 0 rgba(198, 49, 70, 0);
+}
+
+.btn-primary:hover,
+.btn-primary:focus-visible {
+  background: var(--color-blood-glow);
+  border-color: var(--color-gold);
+  box-shadow:
+    0 0 0 1px var(--color-gold) inset,
+    0 0 32px rgba(198, 49, 70, 0.4);
+  color: var(--color-cream);
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--color-gold-bright);
+  border-color: var(--color-gold-dim);
+}
+
+.btn-secondary:hover,
+.btn-secondary:focus-visible {
+  background: rgba(201, 168, 106, 0.08);
+  border-color: var(--color-gold);
+  color: var(--color-cream);
+}
+
+/* Cards / panels --------------------------------------------------------- */
+
+.panel {
+  background: var(--color-stage-elevated);
+  border: 1px solid var(--rule-gold);
+  border-radius: var(--radius-lg);
+  padding: clamp(1.75rem, 4vw, 2.75rem);
+  box-shadow: var(--shadow-stage);
+}
+
+.panel-quiet {
+  background: rgba(24, 19, 18, 0.6);
+  border: 1px solid var(--rule-gold);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+}
+
+/* Reduced motion --------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

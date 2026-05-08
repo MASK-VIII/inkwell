@@ -1,0 +1,225 @@
+---
+import Base from '../layouts/Base.astro'
+import SubscribeCard from '../components/SubscribeCard.astro'
+
+const elsewhere = [
+  { label: 'GitHub', href: 'https://github.com/MASK-VIII' },
+  { label: 'Email', href: 'mailto:contact@enterthelimelight.com' },
+] as const
+---
+
+<Base
+  title="About — Enter the Limelight"
+  description="A founder's note from Steven Spacek Jr. — why Limelight exists, why Inkwell, and what comes next."
+>
+  <main>
+    <article class="about">
+      <header class="about-head container">
+        <p class="eyebrow">A founder's note</p>
+        <h1 class="display about-title">Why I'm building Limelight.</h1>
+      </header>
+
+      <section class="about-body container">
+        <aside class="about-portrait" aria-hidden="true">
+          <div class="about-portrait-frame">
+            <div class="about-portrait-tile">
+              <span class="about-portrait-initials">SS</span>
+            </div>
+          </div>
+          <p class="about-portrait-cap">Steven Spacek Jr.</p>
+          <p class="about-portrait-role">Founder, Limelight</p>
+        </aside>
+
+        <div class="about-prose">
+          <p>
+            Inkwell is the writing app I wish I'd had when I was just starting
+            out as an author. I had stories I cared about, a few half-good
+            chapters, and a folder full of files that wouldn't sit still. Every
+            tool I tried had been built for someone further down the road — for
+            the writer with a system, a process, a publisher. Not the one
+            staring at chapter one wondering whether it should even exist.
+          </p>
+          <p>
+            So I'm making the tool I needed then, and the tool I still need
+            now. <a href="/inkwell">Inkwell</a> treats your manuscript like a
+            manuscript. It's chapter-first, it works offline, it doesn't ask
+            you to sign up before you can start. When you're ready, it produces
+            a print-ready PDF and an EPUB you can actually publish.
+          </p>
+          <p>
+            Limelight is the studio around it. It's a small thing — mostly me,
+            a handful of writers I trust, and an ambition to keep showing up.
+            I want to build the clear software choice for authors just
+            starting out, and a serious option for the ones who never quite
+            stopped writing. I want to do it in public, in the
+            <a href="/journal">journal</a>, with my work on the table.
+          </p>
+          <p>
+            If that sounds like your kind of place, the curtain is up. Pull up
+            a seat.
+          </p>
+          <p class="about-sign">— Steven</p>
+        </div>
+      </section>
+
+      <section class="about-elsewhere container">
+        <p class="eyebrow">Elsewhere</p>
+        <ul class="about-elsewhere-list">
+          {
+            elsewhere.map((item) => (
+              <li>
+                <a href={item.href} rel="me noopener" target="_blank">
+                  {item.label}
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+      </section>
+
+      <hr class="divider-rule" />
+
+      <section class="container">
+        <SubscribeCard
+          eyebrow="Stay close to the work"
+          heading="The journal, by email"
+          blurb="Letters on craft, the build of Inkwell, and the books I'm betting on. Free, occasional, easy to leave."
+        />
+      </section>
+    </article>
+  </main>
+</Base>
+
+<style>
+  .about {
+    padding: clamp(2.5rem, 6vw, 4rem) 0 1rem;
+  }
+
+  .about-head {
+    text-align: center;
+    margin-bottom: clamp(2rem, 5vw, 3rem);
+  }
+
+  .about-title {
+    font-size: clamp(2.4rem, 6vw, 3.75rem);
+    margin-top: 0.75rem;
+  }
+
+  .about-body {
+    display: grid;
+    gap: clamp(1.5rem, 4vw, 3rem);
+    grid-template-columns: 1fr;
+    align-items: start;
+    margin-bottom: clamp(2rem, 5vw, 3rem);
+  }
+
+  @media (min-width: 760px) {
+    .about-body {
+      grid-template-columns: minmax(12rem, 14rem) 1fr;
+    }
+  }
+
+  .about-portrait {
+    text-align: center;
+  }
+
+  .about-portrait-frame {
+    width: 11rem;
+    aspect-ratio: 1;
+    margin: 0 auto;
+    border: 1px solid var(--color-gold-dim);
+    border-radius: 50%;
+    padding: 0.5rem;
+    background: var(--color-stage-elevated);
+    box-shadow: var(--shadow-stage), 0 0 24px rgba(160, 27, 42, 0.2);
+  }
+
+  .about-portrait-tile {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: radial-gradient(
+      circle at 50% 35%,
+      rgba(198, 49, 70, 0.7),
+      rgba(110, 15, 26, 0.85) 60%,
+      rgba(13, 10, 9, 0.95)
+    );
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-cream);
+    font-family: var(--font-display);
+    font-size: 2.6rem;
+    letter-spacing: 0.05em;
+  }
+
+  .about-portrait-initials {
+    text-shadow: 0 0 18px rgba(255, 230, 180, 0.45);
+  }
+
+  .about-portrait-cap {
+    margin: 0.85rem 0 0.15rem;
+    font-family: var(--font-display);
+    color: var(--color-cream);
+  }
+
+  .about-portrait-role {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-size: 0.75rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--color-gold);
+  }
+
+  .about-prose {
+    max-width: var(--prose-max);
+    color: var(--color-cream);
+    font-size: 1.05rem;
+    line-height: 1.8;
+  }
+
+  .about-prose p {
+    margin: 0 0 1.15rem;
+  }
+
+  .about-sign {
+    font-family: var(--font-display);
+    font-style: italic;
+    color: var(--color-gold-bright);
+  }
+
+  .about-elsewhere {
+    text-align: center;
+    margin-bottom: 1.5rem;
+  }
+
+  .about-elsewhere-list {
+    list-style: none;
+    margin: 0.75rem 0 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.75rem;
+  }
+
+  .about-elsewhere-list a {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.55rem 1.25rem;
+    border: 1px solid var(--color-gold-dim);
+    border-radius: 9999px;
+    color: var(--color-gold-bright);
+    font-family: var(--font-sans);
+    font-size: 0.85rem;
+    letter-spacing: 0.06em;
+  }
+
+  .about-elsewhere-list a:hover,
+  .about-elsewhere-list a:focus-visible {
+    color: var(--color-cream);
+    border-color: var(--color-gold);
+    background: rgba(201, 168, 106, 0.08);
+  }
+</style>

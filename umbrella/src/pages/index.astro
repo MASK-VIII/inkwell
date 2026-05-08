@@ -1,238 +1,225 @@
 ---
+import { getCollection } from 'astro:content'
 import Base from '../layouts/Base.astro'
-const year = new Date().getFullYear()
+import BrandMark from '../components/BrandMark.astro'
+import InkwellPlaybill from '../components/InkwellPlaybill.astro'
+import JournalCard from '../components/JournalCard.astro'
+import SubscribeCard from '../components/SubscribeCard.astro'
+
+const allPosts = (await getCollection('journal', ({ data }) => !data.draft)).sort(
+  (a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf(),
+)
+const latestPosts = allPosts.slice(0, 2)
 ---
 
 <Base
   title="Enter the Limelight"
-  description="The home of Inkwell—a chapter-first workspace for new authors and seasoned novelists—and what comes next."
+  description="A small studio building Inkwell — a chapter-first writing app for new authors and seasoned novelists — and what comes next."
 >
-  <main class="page">
-    <header class="hero">
-      <a class="brand" href="/" aria-label="Enter the Limelight">
-        <svg
-          class="brand-mark"
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 32 32"
-          aria-hidden="true"
-        >
-          <path fill="#2c241f" d="M10.5 22.5v-12l5.8-2v14.2l-5.8 1.8z" opacity=".88"></path>
-          <path fill="#2c241f" d="m16.3 8.5 5.8 2v12l-5.8-1.8z" opacity=".72"></path>
-          <circle cx="16" cy="12.5" r="2.6" fill="#2c241f"></circle>
-        </svg>
-        <span class="brand-name">Enter the Limelight</span>
-      </a>
-
-      <p class="tagline">A small studio for ambitious writing tools and the stories they help finish.</p>
-
-      <h1 class="lede">
-        The home of <em>Inkwell</em>, and what comes next.
-      </h1>
-    </header>
-
-    <section class="card" aria-labelledby="inkwell-heading">
-      <p class="card-eyebrow">Now in beta</p>
-      <h2 id="inkwell-heading" class="card-title">Inkwell</h2>
-      <p class="card-body">
-        Built for your first novel—and every manuscript after. Chapters, drafts, notes, offline-first
-        editing, and publishing exports when you are ready.
-      </p>
-      <a class="card-cta" href="https://inkwell.enterthelimelight.com">
-        Open Inkwell
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.75"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
-        >
-          <line x1="5" y1="12" x2="19" y2="12"></line>
-          <polyline points="12 5 19 12 12 19"></polyline>
-        </svg>
-      </a>
+  <main class="home">
+    <section class="hero">
+      <div class="container hero-inner">
+        <BrandMark size={36} withWordmark={false} />
+        <p class="eyebrow hero-eyebrow">A small writing studio</p>
+        <h1 class="display hero-display">
+          The home of <em>Inkwell</em>,<br />and what comes next.
+        </h1>
+        <p class="lede hero-lede">
+          Tools and stories for writers at the start of the climb — and for the
+          ones who never quite stopped climbing.
+        </p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="https://inkwell.enterthelimelight.com">
+            Open Inkwell
+          </a>
+          <a class="btn btn-secondary" href="/inkwell">Tour the app</a>
+        </div>
+      </div>
     </section>
 
-    <p class="more">More coming soon.</p>
+    <hr class="divider-rule" />
 
-    <footer class="footer">
-      <p>&copy; {year} Enter the Limelight.</p>
-      <p class="footer-emails">
-        <a href="mailto:contact@enterthelimelight.com">contact@enterthelimelight.com</a>
-        <span class="footer-email-sep" aria-hidden="true">·</span>
-        <a href="mailto:support@enterthelimelight.com">support@enterthelimelight.com</a>
-      </p>
-    </footer>
+    <section class="section section-playbill">
+      <div class="container">
+        <InkwellPlaybill />
+      </div>
+    </section>
+
+    <hr class="divider-rule" />
+
+    <section class="section section-founder">
+      <div class="container founder">
+        <p class="eyebrow">From the studio</p>
+        <h2 class="founder-heading">
+          One person, building tools for the books they wish existed.
+        </h2>
+        <p class="founder-body">
+          Inkwell is the writing app I needed when I was just starting out — and
+          the one I still want now that I'm not. The Limelight studio is where
+          that work happens, in the open, one chapter at a time.
+        </p>
+        <p class="founder-cta">
+          <a href="/about">Read the founder's note &rarr;</a>
+        </p>
+      </div>
+    </section>
+
+    {
+      latestPosts.length > 0 && (
+        <>
+          <hr class="divider-rule" />
+          <section class="section section-journal">
+            <div class="container journal-section">
+              <header class="journal-section-head">
+                <p class="eyebrow">From the journal</p>
+                <h2 class="journal-section-title">Letters from the studio</h2>
+                <a class="journal-section-more" href="/journal">
+                  All posts &rarr;
+                </a>
+              </header>
+              <div class="journal-section-list">
+                {latestPosts.map((post) => (
+                  <JournalCard
+                    href={`/journal/${post.slug}`}
+                    title={post.data.title}
+                    description={post.data.description}
+                    pubDate={post.data.pubDate}
+                    tags={post.data.tags}
+                  />
+                ))}
+              </div>
+            </div>
+          </section>
+        </>
+      )
+    }
+
+    <hr class="divider-rule" />
+
+    <section class="section section-subscribe">
+      <div class="container">
+        <SubscribeCard />
+      </div>
+    </section>
   </main>
 </Base>
 
 <style>
-  .page {
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 4rem 1.5rem 2rem;
-    gap: 3rem;
-    text-align: center;
+  .home {
+    padding-bottom: 1rem;
   }
 
   .hero {
+    padding: clamp(4rem, 12vw, 7rem) 0 clamp(2rem, 6vw, 4rem);
+  }
+
+  .hero-inner {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 1.5rem;
-    max-width: 36rem;
+    text-align: center;
+    gap: 1rem;
   }
 
-  .brand {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.65rem;
-    text-decoration: none;
-    color: var(--color-ink);
+  .hero-eyebrow {
+    margin-top: 1rem;
   }
 
-  .brand-mark {
-    height: 1.75rem;
-    width: 1.75rem;
+  .hero-display {
+    margin-top: 0.5rem;
   }
 
-  .brand-name {
-    font-family: var(--font-serif);
-    font-size: 1.4rem;
-    letter-spacing: -0.01em;
-  }
-
-  .tagline {
-    margin: 0;
-    color: rgba(139, 69, 19, 0.85);
-    font-size: 0.95rem;
-    line-height: 1.6;
-    max-width: 30rem;
-  }
-
-  .lede {
-    margin: 0;
-    font-family: var(--font-serif);
-    font-weight: 400;
-    font-size: clamp(2rem, 5vw, 3rem);
-    line-height: 1.1;
-    letter-spacing: -0.01em;
-    color: var(--color-ink);
-  }
-
-  .lede em {
+  .hero-display em {
     font-style: italic;
-    color: var(--color-walnut);
+    color: var(--color-blood-glow);
   }
 
-  .card {
-    width: 100%;
-    max-width: 30rem;
-    padding: 2.25rem 1.75rem;
-    border: 1px solid rgba(212, 195, 168, 0.7);
-    background: var(--color-white-soft);
-    border-radius: 1.25rem;
-    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.5) inset, 0 8px 32px rgba(44, 36, 31, 0.06);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.75rem;
+  .hero-lede {
+    margin-top: 0.5rem;
   }
 
-  .card-eyebrow {
-    margin: 0;
-    font-size: 0.7rem;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    color: rgba(139, 69, 19, 0.75);
-  }
-
-  .card-title {
-    margin: 0;
-    font-family: var(--font-serif);
-    font-weight: 400;
-    font-size: 2rem;
-    letter-spacing: -0.01em;
-    color: var(--color-ink);
-  }
-
-  .card-body {
-    margin: 0;
-    color: rgba(139, 69, 19, 0.95);
-    font-size: 0.95rem;
-    line-height: 1.65;
-    max-width: 26rem;
-  }
-
-  .card-cta {
-    margin-top: 0.75rem;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.7rem 1.6rem;
-    background: var(--color-ink);
-    color: var(--color-parchment);
-    border-radius: 9999px;
-    font-size: 0.95rem;
-    font-weight: 500;
-    text-decoration: none;
-    transition: background-color 160ms ease;
-  }
-
-  .card-cta:hover,
-  .card-cta:focus-visible {
-    background: var(--color-walnut);
-    outline: none;
-  }
-
-  .more {
-    margin: 0;
-    color: rgba(139, 69, 19, 0.7);
-    font-size: 0.85rem;
-    letter-spacing: 0.04em;
-    font-style: italic;
-  }
-
-  .footer {
-    margin-top: auto;
-    padding-top: 2rem;
-    color: rgba(139, 69, 19, 0.7);
-    font-size: 0.8rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
-  }
-
-  .footer a {
-    color: inherit;
-    text-decoration: none;
-    border-bottom: 1px solid rgba(139, 69, 19, 0.3);
-  }
-
-  .footer a:hover {
-    color: var(--color-ink);
-    border-bottom-color: var(--color-ink);
-  }
-
-  .footer-emails {
+  .hero-actions {
     display: flex;
     flex-wrap: wrap;
-    align-items: center;
     justify-content: center;
-    gap: 0.35rem 0.5rem;
-    max-width: 100%;
+    gap: 0.85rem;
+    margin-top: 1.75rem;
   }
 
-  .footer-email-sep {
-    user-select: none;
-    opacity: 0.55;
+  .founder {
+    text-align: center;
+    max-width: 38rem;
+    margin: 0 auto;
+  }
+
+  .founder-heading {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: clamp(1.65rem, 3.5vw, 2.4rem);
+    line-height: 1.2;
+    margin: 1rem 0;
+    color: var(--color-cream);
+  }
+
+  .founder-body {
+    color: var(--color-cream-dim);
+    margin: 0 auto;
+    max-width: 32rem;
+  }
+
+  .founder-cta {
+    margin-top: 1.5rem;
+    font-family: var(--font-sans);
+    font-size: 0.82rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .founder-cta a {
+    border-bottom: 0;
+    color: var(--color-gold-bright);
+  }
+
+  .journal-section-head {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: end;
+    gap: 0.75rem 1.5rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .journal-section-title {
+    grid-column: 1 / -1;
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: clamp(1.65rem, 3vw, 2.25rem);
+    line-height: 1.15;
+    margin: 0.35rem 0 0;
+    color: var(--color-cream);
+  }
+
+  .journal-section-more {
+    grid-row: 1;
+    grid-column: 2;
+    align-self: start;
+    font-family: var(--font-sans);
+    font-size: 0.78rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-gold);
+    border-bottom: 0;
+  }
+
+  .journal-section-list > :first-child {
+    border-top: 1px solid var(--rule-gold-strong);
+  }
+
+  @media (max-width: 540px) {
+    .journal-section-head {
+      grid-template-columns: 1fr;
+    }
+    .journal-section-more {
+      grid-column: 1;
+    }
   }
 </style>

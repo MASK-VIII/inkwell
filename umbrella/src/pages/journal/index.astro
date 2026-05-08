@@ -1,0 +1,104 @@
+---
+import { getCollection } from 'astro:content'
+import Base from '../../layouts/Base.astro'
+import JournalCard from '../../components/JournalCard.astro'
+import SubscribeCard from '../../components/SubscribeCard.astro'
+
+const posts = (await getCollection('journal', ({ data }) => !data.draft)).sort(
+  (a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf(),
+)
+---
+
+<Base
+  title="Journal — Enter the Limelight"
+  description="Letters from a small writing studio: notes on craft, the build of Inkwell, and the books we are betting on."
+>
+  <main>
+    <header class="journal-head">
+      <div class="container journal-head-inner">
+        <p class="eyebrow">The Limelight Journal</p>
+        <h1 class="display journal-head-title">
+          Letters from the studio.
+        </h1>
+        <p class="lede journal-head-lede">
+          Notes on craft, the build of <a href="/inkwell">Inkwell</a>, and the
+          books we're betting on. Written in the open, sent occasionally.
+        </p>
+      </div>
+    </header>
+
+    <section class="container journal-subscribe">
+      <SubscribeCard
+        eyebrow="Read by email"
+        heading="Get new posts in your inbox"
+        blurb="The same posts you'll find here, delivered when they go up. No tracking, no upsells."
+        compact
+      />
+    </section>
+
+    <hr class="divider-rule" />
+
+    <section class="container journal-list">
+      {
+        posts.length === 0 && (
+          <p class="journal-empty">
+            The first letter is being set in type. Check back soon.
+          </p>
+        )
+      }
+      {
+        posts.map((post) => (
+          <JournalCard
+            href={`/journal/${post.slug}`}
+            title={post.data.title}
+            description={post.data.description}
+            pubDate={post.data.pubDate}
+            tags={post.data.tags}
+          />
+        ))
+      }
+    </section>
+  </main>
+</Base>
+
+<style>
+  .journal-head {
+    padding: clamp(2.5rem, 7vw, 4.5rem) 0 clamp(1rem, 3vw, 2rem);
+  }
+
+  .journal-head-inner {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .journal-head-title {
+    font-size: clamp(2.4rem, 6vw, 3.75rem);
+  }
+
+  .journal-head-lede {
+    margin-top: 0.5rem;
+  }
+
+  .journal-subscribe {
+    padding: 1.5rem 1.5rem 0;
+  }
+
+  .journal-list {
+    padding-bottom: 3rem;
+  }
+
+  .journal-list > article:first-child {
+    border-top: 1px solid var(--rule-gold-strong);
+  }
+
+  .journal-empty {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: var(--color-cream-dim);
+    font-style: italic;
+    font-family: var(--font-serif);
+  }
+</style>

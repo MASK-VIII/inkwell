@@ -1,0 +1,225 @@
+---
+interface Props {
+  href?: string
+  ctaLabel?: string
+  eyebrow?: string
+  title?: string
+  blurb?: string
+  bullets?: readonly string[]
+  screenshotSrc?: string
+  screenshotAlt?: string
+}
+
+const {
+  href = 'https://inkwell.enterthelimelight.com',
+  ctaLabel = 'Open Inkwell',
+  eyebrow = 'The Limelight Presents',
+  title = 'Inkwell',
+  blurb = 'Built for your first novel — and every manuscript after. Chapter-first writing, offline-by-default, with publishing-ready exports when you are ready to share the work.',
+  bullets = [
+    'Chapter-first editor that respects how books are actually shaped',
+    'Print-ready PDF and EPUB exports tuned for KDP and major retailers',
+    'Yours, offline-first — no account required to start writing',
+  ],
+  screenshotSrc = '/marketing/writing-page-dark.png',
+  screenshotAlt = 'Inkwell writing workspace — chapter list, manuscript canvas, and editorial toolbars',
+} = Astro.props as Props
+---
+
+<section class="playbill" aria-labelledby="playbill-title">
+  <div class="playbill-frame">
+    <span class="playbill-corner playbill-corner-tl" aria-hidden="true"></span>
+    <span class="playbill-corner playbill-corner-tr" aria-hidden="true"></span>
+    <span class="playbill-corner playbill-corner-bl" aria-hidden="true"></span>
+    <span class="playbill-corner playbill-corner-br" aria-hidden="true"></span>
+
+    <p class="playbill-eyebrow display-caps">{eyebrow}</p>
+    <h2 id="playbill-title" class="playbill-title">{title}</h2>
+
+    <figure class="playbill-stage">
+      <img
+        src={screenshotSrc}
+        alt={screenshotAlt}
+        class="playbill-stage-img"
+        width="1280"
+        height="800"
+        loading="lazy"
+        decoding="async"
+      />
+      <span class="playbill-stage-glow" aria-hidden="true"></span>
+    </figure>
+
+    <p class="playbill-blurb">{blurb}</p>
+
+    <ul class="playbill-bullets">
+      {bullets.map((b) => <li>{b}</li>)}
+    </ul>
+
+    <a class="btn btn-primary playbill-cta" href={href}>
+      {ctaLabel}
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <line x1="5" y1="12" x2="19" y2="12"></line>
+        <polyline points="12 5 19 12 12 19"></polyline>
+      </svg>
+    </a>
+  </div>
+</section>
+
+<style>
+  .playbill {
+    display: flex;
+    justify-content: center;
+  }
+
+  .playbill-frame {
+    position: relative;
+    width: 100%;
+    max-width: 44rem;
+    padding: clamp(2rem, 5vw, 3.25rem) clamp(1.5rem, 4vw, 2.75rem);
+    background:
+      radial-gradient(ellipse at top, rgba(160, 27, 42, 0.18), transparent 65%),
+      var(--color-stage-elevated);
+    border: 1px solid var(--color-gold-dim);
+    border-radius: var(--radius-lg);
+    box-shadow:
+      var(--shadow-stage),
+      0 0 0 1px rgba(201, 168, 106, 0.08) inset;
+    text-align: center;
+  }
+
+  .playbill-corner {
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    border: 1px solid var(--color-gold);
+  }
+
+  .playbill-corner-tl {
+    top: 12px;
+    left: 12px;
+    border-right: 0;
+    border-bottom: 0;
+  }
+  .playbill-corner-tr {
+    top: 12px;
+    right: 12px;
+    border-left: 0;
+    border-bottom: 0;
+  }
+  .playbill-corner-bl {
+    bottom: 12px;
+    left: 12px;
+    border-right: 0;
+    border-top: 0;
+  }
+  .playbill-corner-br {
+    bottom: 12px;
+    right: 12px;
+    border-left: 0;
+    border-top: 0;
+  }
+
+  .playbill-eyebrow {
+    color: var(--color-gold);
+    font-size: 0.7rem;
+    letter-spacing: 0.32em;
+    margin-bottom: 0.85rem;
+  }
+
+  .playbill-title {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: clamp(2.5rem, 6vw, 3.75rem);
+    line-height: 1;
+    margin: 0 0 1.5rem;
+    color: var(--color-cream);
+    letter-spacing: -0.005em;
+  }
+
+  /* The "stage" — the Inkwell workspace inside the dark Limelight frame.
+   * Screenshot is positioned slightly high (top center) to mirror the
+   * Inkwell marketing page's `objectPosition: 50% 16%`. The pre-load
+   * background matches the screenshot's stage so there is no light flash. */
+  .playbill-stage {
+    position: relative;
+    margin: 0 auto 1.75rem;
+    max-width: 32rem;
+    aspect-ratio: 16 / 10;
+    border: 1px solid var(--rule-gold-strong);
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: linear-gradient(180deg, #1a1612 0%, #0d0a09 100%);
+    box-shadow:
+      0 0 0 1px rgba(13, 10, 9, 0.55) inset,
+      0 18px 40px rgba(0, 0, 0, 0.45);
+  }
+
+  .playbill-stage-img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: 50% 16%;
+  }
+
+  .playbill-stage-glow {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(
+      ellipse at top,
+      rgba(255, 230, 180, 0.18),
+      transparent 60%
+    );
+    mix-blend-mode: screen;
+  }
+
+  .playbill-blurb {
+    margin: 0 auto 1.25rem;
+    max-width: 32rem;
+    color: var(--color-cream-dim);
+    font-size: 1rem;
+    line-height: 1.65;
+  }
+
+  .playbill-bullets {
+    list-style: none;
+    margin: 0 auto 2rem;
+    padding: 0;
+    max-width: 28rem;
+    text-align: left;
+  }
+
+  .playbill-bullets li {
+    position: relative;
+    padding: 0.4rem 0 0.4rem 1.5rem;
+    color: var(--color-cream-dim);
+    font-size: 0.95rem;
+    line-height: 1.5;
+  }
+
+  .playbill-bullets li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.95rem;
+    width: 0.55rem;
+    height: 1px;
+    background: var(--color-gold);
+  }
+
+  .playbill-cta {
+    margin: 0 auto;
+  }
+</style>

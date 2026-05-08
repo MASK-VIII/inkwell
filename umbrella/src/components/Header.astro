@@ -1,0 +1,123 @@
+---
+import BrandMark from './BrandMark.astro'
+
+const path = Astro.url.pathname.replace(/\/$/, '') || '/'
+
+const links = [
+  { href: '/', label: 'Home' },
+  { href: '/inkwell', label: 'Inkwell' },
+  { href: '/journal', label: 'Journal' },
+  { href: '/about', label: 'About' },
+] as const
+
+const isActive = (href: string) => {
+  if (href === '/') return path === '/'
+  return path === href || path.startsWith(href + '/')
+}
+---
+
+<header class="site-header">
+  <div class="container site-header-row">
+    <a class="site-header-brand" href="/" aria-label="Enter the Limelight">
+      <BrandMark size={26} />
+    </a>
+    <nav class="site-nav" aria-label="Primary">
+      <ul>
+        {
+          links.map((link) => (
+            <li>
+              <a
+                href={link.href}
+                class:list={['site-nav-link', isActive(link.href) && 'is-active']}
+                aria-current={isActive(link.href) ? 'page' : undefined}
+              >
+                {link.label}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<style>
+  .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    backdrop-filter: blur(10px);
+    background: linear-gradient(
+      180deg,
+      rgba(13, 10, 9, 0.92),
+      rgba(13, 10, 9, 0.78)
+    );
+    border-bottom: 1px solid var(--rule-gold);
+  }
+
+  .site-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    padding: 0.85rem 1.5rem;
+    flex-wrap: wrap;
+  }
+
+  .site-header-brand {
+    border-bottom: 0;
+    color: var(--color-cream);
+  }
+
+  .site-header-brand:hover,
+  .site-header-brand:focus-visible {
+    color: var(--color-cream);
+  }
+
+  .site-nav ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+  }
+
+  .site-nav-link {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.45rem 0.9rem;
+    font-family: var(--font-sans);
+    font-size: 0.82rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-cream-dim);
+    border: 1px solid transparent;
+    border-radius: 9999px;
+    transition: color 160ms ease, border-color 160ms ease, background-color 160ms ease;
+  }
+
+  .site-nav-link:hover,
+  .site-nav-link:focus-visible {
+    color: var(--color-cream);
+    border-color: var(--rule-gold);
+    background: rgba(201, 168, 106, 0.06);
+  }
+
+  .site-nav-link.is-active {
+    color: var(--color-gold-bright);
+    border-color: var(--rule-gold);
+  }
+
+  @media (max-width: 540px) {
+    .site-header-row {
+      justify-content: center;
+      text-align: center;
+    }
+    .site-nav ul {
+      justify-content: center;
+    }
+  }
+</style>

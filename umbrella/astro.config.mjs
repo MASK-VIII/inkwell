@@ -1,4 +1,6 @@
 import { defineConfig } from 'astro/config'
+import mdx from '@astrojs/mdx'
+import sitemap from '@astrojs/sitemap'
 
 export default defineConfig({
   site: 'https://enterthelimelight.com',
@@ -6,4 +8,5 @@ export default defineConfig({
   build: {
     assets: 'assets',
   },
+  integrations: [mdx(), sitemap()],
 })
