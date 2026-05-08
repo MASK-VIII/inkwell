@@ -7,7 +7,7 @@ export function HeroSection({ darkMode = false }: { darkMode?: boolean }) {
         className="absolute inset-0 -z-10 bg-gradient-to-b from-parchment via-parchment to-white/60 dark:from-panel-dark dark:via-panel-dark dark:to-panel-dark/70"
         aria-hidden
       />
-      <div className="mx-auto grid max-w-6xl items-center gap-14 px-5 py-20 sm:px-8 sm:py-28 lg:grid-cols-[1.05fr_1fr] lg:gap-16">
+      <div className="mx-auto grid max-w-6xl items-center gap-12 px-5 py-16 sm:gap-14 sm:px-8 sm:py-28 lg:grid-cols-[1.05fr_1fr] lg:gap-16">
         <div className="flex flex-col gap-7">
           <p className="text-xs font-medium uppercase tracking-[0.18em] text-walnut/75 dark:text-ink-dark/60">
             Inkwell &nbsp;&middot;&nbsp; in beta

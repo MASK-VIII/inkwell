@@ -16,7 +16,7 @@ export function MarketingNav({ showAnchors = true, darkMode, onToggleDarkMode }:
   useThemeShine(brandRef)
 
   return (
-    <header className="sticky top-0 z-30 border-b border-dust/60 bg-parchment/90 backdrop-blur-sm dark:border-border-dark/80 dark:bg-panel-dark/70">
+    <header className="sticky top-0 z-30 border-b border-dust/60 bg-parchment/90 pt-[env(safe-area-inset-top,0px)] backdrop-blur-sm dark:border-border-dark/80 dark:bg-panel-dark/70">
       <nav className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-5 py-4 sm:px-8">
         <a
           ref={brandRef}
