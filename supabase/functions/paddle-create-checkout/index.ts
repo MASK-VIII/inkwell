@@ -93,13 +93,10 @@ Deno.serve(async (req) => {
     return await handlePaddleCreateCheckout(req)
   } catch (e) {
     console.error('paddle-create-checkout: unhandled', e)
-    return new Response(
-      JSON.stringify({
-        error: 'internal_error',
-        detail: e instanceof Error ? e.message : String(e),
-      }),
-      { status: 500, headers: { ...corsHeaders(req.headers.get('Origin')), 'Content-Type': 'application/json' } },
-    )
+    return new Response(JSON.stringify({ error: 'internal_error' }), {
+      status: 500,
+      headers: { ...corsHeaders(req.headers.get('Origin')), 'Content-Type': 'application/json' },
+    })
   }
 })
 

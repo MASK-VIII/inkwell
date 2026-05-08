@@ -374,8 +374,10 @@ Deno.serve(async (req) => {
   if (isPaidSuccess(eventType)) {
     if (!inkwellUserId) {
       console.warn('paddle-webhook: no inkwell_user_id in custom_data (required for paid events)')
+      // 5xx: misconfiguration must not look like success to monitors; Paddle Billing retries failed
+      // notification deliveries (see https://developer.paddle.com/webhooks/respond-to-webhooks).
       return new Response(JSON.stringify({ ok: false, error: 'missing_inkwell_user_id' }), {
-        status: 200,
+        status: 500,
         headers: { 'Content-Type': 'application/json' },
       })
     }
@@ -384,7 +386,7 @@ Deno.serve(async (req) => {
     if (!tier) {
       console.warn('paddle-webhook: could not map price to tier', { eventType, priceId })
       return new Response(JSON.stringify({ ok: false, error: 'unknown_price', priceId }), {
-        status: 200,
+        status: 500,
         headers: { 'Content-Type': 'application/json' },
       })
     }

@@ -24,6 +24,8 @@ type BuyTile = {
   price: string
   compareAtPrice?: string
   badge?: string
+  /** Shown under the price (e.g. One-time, Early access); separate from the featured corner pill. */
+  priceNote?: string
   forWhom: string
   bullets: string[]
   cta: { label: string; href: string }
@@ -45,10 +47,11 @@ const TILES: BuyTile[] = [
     price: INKWELL_DISPLAY_PRICE_BASIC,
     badge: 'One-time',
     forWhom:
-      'For your first finish line\u2014or any book you want backed up in the cloud with an ebook export.',
+      'Everything you need to get your first ebook on the market.',
     bullets: [
       `Cloud library sync & backup across your devices (up to ${CLOUD_LIMIT_BASIC_DISPLAY} compressed backup)`,
       'EPUB export',
+      '30-day refund if Inkwell is not the right fit',
       'Lifetime app updates—included with your one-time purchase',
       'Full chapter-first writing workspace',
       'Offline-first; unlimited local storage on each device',
@@ -62,12 +65,14 @@ const TILES: BuyTile[] = [
     price: INKWELL_DISPLAY_PRICE_PRO,
     compareAtPrice: INKWELL_DISPLAY_PRICE_PRO_LIST,
     badge: 'Best value',
+    priceNote: 'Early access',
     forWhom:
       'For authors who want every export format, advanced layout control, and a toolchain that keeps up with a serious publishing workflow.',
     bullets: [
       `Everything in Basic, including higher backup space (up to ${CLOUD_LIMIT_PRO_DISPLAY})`,
       'Full export suite (PDF / DOCX / Markdown / plain text)',
       'Advanced formatting + presets',
+      '30-day refund if Inkwell is not the right fit',
       'Priority email support',
     ],
     cta: { label: `Get Pro (${INKWELL_DISPLAY_PRICE_PRO})`, href: BUY_HREF.pro },
@@ -92,39 +97,47 @@ function BuyTileCard({ tile }: { tile: BuyTile }) {
         </div>
       : null}
 
-      <div className="flex items-start justify-between gap-4">
-        <div>
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+        <div className="min-w-0 flex-1">
           <h2 className="font-serif text-2xl leading-tight text-ink dark:text-ink-dark">{tile.name}</h2>
-          <p className="mt-2 text-sm text-walnut/85 dark:text-ink-dark/78">{tile.forWhom}</p>
+          <p className="mt-2 text-sm leading-relaxed text-walnut/85 dark:text-ink-dark/78">{tile.forWhom}</p>
         </div>
-        <div className="text-right">
-          <div className="flex items-baseline justify-end gap-2">
+        <div className="shrink-0 text-right sm:min-w-[7.5rem]">
+          <div className="flex flex-wrap items-baseline justify-end gap-2">
             {tile.compareAtPrice ?
-              <p className="font-serif text-base text-walnut/55 line-through decoration-walnut/40 dark:text-ink-dark/50 dark:decoration-ink-dark/35">
+              <p
+                className="font-serif text-lg leading-none text-walnut/60 line-through decoration-walnut/45 dark:text-ink-dark/55 dark:decoration-ink-dark/40"
+                aria-label={`Previously ${tile.compareAtPrice}`}
+              >
                 {tile.compareAtPrice}
               </p>
             : null}
-            <p className="font-serif text-2xl text-ink dark:text-ink-dark">
+            <p className="font-serif text-3xl leading-none tracking-tight text-ink tabular-nums dark:text-accent-warm sm:text-4xl">
               {tile.price}
-              <span className="ml-1 text-xs font-medium uppercase tracking-[0.18em] text-walnut/65 dark:text-ink-dark/55">
+              <span className="ml-1 align-top text-xs font-semibold uppercase tracking-[0.14em] text-walnut/75 dark:text-cream/80">
                 USD
               </span>
             </p>
           </div>
           {tile.badge && !tile.featured ?
-            <p className="mt-1 text-[0.7rem] font-medium uppercase tracking-widest text-walnut/70 dark:text-ink-dark/60">
+            <p className="mt-2 text-xs font-semibold uppercase tracking-[0.14em] text-walnut/80 dark:text-cream/88">
               {tile.badge}
+            </p>
+          : null}
+          {tile.priceNote ?
+            <p className="mt-2 text-xs font-semibold uppercase tracking-[0.14em] text-walnut/80 dark:text-cream/88">
+              {tile.priceNote}
             </p>
           : null}
         </div>
       </div>
 
-      <ul className="mt-6 space-y-2 text-sm text-walnut/90 dark:text-ink-dark/82">
+      <ul className="mt-6 space-y-2.5 text-sm leading-snug text-walnut/90 dark:text-ink-dark/82">
         {tile.bullets.map((b) => (
-          <li key={b} className="flex gap-2">
+          <li key={b} className="flex gap-2.5">
             <span
               aria-hidden
-              className="mt-[0.4rem] h-1.5 w-1.5 shrink-0 rounded-full bg-walnut/45 dark:bg-cream/35"
+              className="mt-[0.4rem] h-1.5 w-1.5 shrink-0 rounded-full bg-walnut/50 dark:bg-accent-warm/70"
             />
             <span>{b}</span>
           </li>
@@ -132,13 +145,15 @@ function BuyTileCard({ tile }: { tile: BuyTile }) {
       </ul>
 
       {tile.finePrint ?
-        <p className="mt-5 text-xs text-walnut/70 dark:text-ink-dark/60">{tile.finePrint}</p>
+        <p className="mt-5 text-xs leading-relaxed text-walnut/75 dark:text-ink-dark/68">{tile.finePrint}</p>
       : null}
+
+      <div className="min-h-4 flex-1" aria-hidden />
 
       <div className="mt-auto pt-7">
         <a
           href={tile.cta.href}
-          className="inline-flex w-full items-center justify-center rounded-full bg-ink px-6 py-3 text-sm font-medium text-parchment shadow-sm transition hover:bg-walnut focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-walnut dark:bg-accent-warm dark:text-panel-dark dark:hover:bg-cream"
+          className="inline-flex w-full items-center justify-center rounded-full bg-ink px-6 py-3.5 text-sm font-semibold text-parchment shadow-sm transition hover:bg-walnut focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-walnut dark:bg-accent-warm dark:text-panel-dark dark:hover:bg-cream"
         >
           {tile.cta.label}
         </a>
@@ -163,8 +178,8 @@ const REASSURANCE_ITEMS: ReassuranceItem[] = [
   {
     icon: ShieldCheck,
     title: '30-day refund',
-    body: 'Not the right fit? Email us within 30 days for a full refund.',
-    href: '/legal/refund',
+    body: 'Not the right fit? Email us within 30 days of purchase for a full refund.',
+    href: '/refund',
   },
   {
     icon: Globe,

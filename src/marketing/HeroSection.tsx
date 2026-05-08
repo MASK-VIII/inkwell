@@ -33,7 +33,15 @@ export function HeroSection({ darkMode = false }: { darkMode?: boolean }) {
             </a>
           </div>
           <p className="text-xs text-walnut/65 dark:text-ink-dark/68">
-            Free is local-only. Basic adds cloud backup + EPUB. Pro adds full exports. Paid tiers include lifetime updates.
+            Free is local-only. Basic adds cloud backup + EPUB. Pro adds full exports. Paid tiers include lifetime updates
+            and a 30-day refund if Inkwell is not the right fit (
+            <a
+              href="/refund"
+              className="font-medium text-ink underline decoration-walnut/35 underline-offset-2 hover:decoration-walnut/55 dark:text-ink-dark dark:decoration-cream/35 dark:hover:decoration-cream/55"
+            >
+              details
+            </a>
+            ).
           </p>
         </div>
 

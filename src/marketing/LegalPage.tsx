@@ -1,6 +1,7 @@
 import { useEffect, type ReactNode } from 'react'
 import { MarketingFooter } from './MarketingFooter'
 import { MarketingNav } from './MarketingNav'
+import { CLOUD_LIMIT_BASIC_DISPLAY, CLOUD_LIMIT_PRO_DISPLAY } from './pricingCopy'
 import { useMarketingDarkMode } from './useMarketingDarkMode'
 
 type Props = {
@@ -55,25 +56,30 @@ export function PrivacyPage() {
     <LegalPage
       title="Privacy"
       pageTitle={'Privacy \u2014 Inkwell'}
-      lastUpdated="Last updated: this is a beta placeholder."
+      lastUpdated="Last updated: May 7, 2026"
     >
       <p>
-        This is a placeholder privacy policy for Inkwell while the product is in beta. A full,
-        legally reviewed version will replace this before paid plans launch.
+        This policy describes how Inkwell handles information today while the product is in beta.
+        We may update it as features evolve; the date at the top reflects the latest revision.
       </p>
 
       <h2>What Inkwell stores</h2>
       <p>
-        Inkwell saves your manuscripts, notes, and settings to your device first. If you sign in
-        and enable cloud sync, an encrypted copy of your library can also be stored in your
-        Inkwell account so it travels between devices and survives a lost browser profile.
+        Inkwell saves your manuscripts, notes, and settings on your device first (for example in
+        your browser or desktop app storage). If you sign in and turn on cloud sync, your library is
+        packaged and uploaded over HTTPS to private cloud storage tied to your account, under paths
+        scoped to your user id, so it can sync across devices and outlive a single browser profile.
+        Transport uses TLS; files at rest are protected by our hosting provider’s storage practices.
+        Inkwell does not provide end-to-end encryption where only you hold the keys unless we ship
+        that feature explicitly.
       </p>
 
       <h2>Account information</h2>
       <p>
-        If you create an account, we record an email address for sign-in and a password hash that
-        Inkwell never sees in plain text. We may also keep basic billing metadata when paid plans
-        launch (handled by our payment processor; full card details are not stored by Inkwell).
+        If you create an account, we rely on our authentication provider to store sign-in identifiers
+        (such as email) and credential material appropriately; Inkwell does not receive your
+        password in plain text. When paid tiers are available, billing may be handled by our
+        payment processor; Inkwell does not store full card numbers.
       </p>
 
       <h2>What we do not do</h2>
@@ -100,23 +106,33 @@ export function RefundPage() {
     <LegalPage
       title="Refund policy"
       pageTitle={'Refunds \u2014 Inkwell'}
-      lastUpdated="Last updated: this is a beta placeholder."
+      lastUpdated="Last updated: May 7, 2026"
     >
       <p>
-        This is a placeholder refund policy for Inkwell while the product is in beta. A full,
-        legally reviewed version will replace this before paid purchases launch.
+        This refund policy applies while Inkwell is in beta and may be updated as checkout and paid
+        tiers roll out. The date at the top reflects the latest revision.
       </p>
 
-      <h2>Before you buy</h2>
+      <h2>Before you purchase</h2>
       <p>
-        Inkwell is digital software. Please review the feature list and beta status on the site
-        before purchasing a paid tier.
+        Inkwell is digital software. When paid checkout is available, please review the feature list
+        and beta status on the site before completing a purchase.
+      </p>
+
+      <h2>30-day refund window</h2>
+      <p>
+        For qualifying one-time purchases of Basic or Pro, you may request a{' '}
+        <strong>full refund within 30 days</strong> of the date of purchase. Refunds apply to the
+        software license only; they do not cover third-party fees or charges outside Paddle’s
+        control. If checkout is not yet available, this window starts from the date your payment
+        completes once purchases go live.
       </p>
 
       <h2>How to request a refund</h2>
       <p>
         Email <a href="mailto:support@enterthelimelight.com">support@enterthelimelight.com</a> from the address used for
-        your purchase and include your receipt or transaction reference.
+        your purchase and include your receipt or transaction reference. Please contact us within the
+        30-day window above.
         Paid checkout may be processed by our reseller (Paddle); where Paddle handles payment
         support for your order, their process may apply in addition to this policy.
       </p>
@@ -135,11 +151,11 @@ export function TermsPage() {
     <LegalPage
       title="Terms of use"
       pageTitle={'Terms \u2014 Inkwell'}
-      lastUpdated="Last updated: this is a beta placeholder."
+      lastUpdated="Last updated: May 7, 2026"
     >
       <p>
-        This is a placeholder terms of use document for Inkwell during the beta. A full version
-        will replace this before paid plans launch.
+        These terms apply while Inkwell is in beta. We may update them as the product matures; the
+        date at the top reflects the latest revision.
       </p>
 
       <h2>Beta status</h2>
@@ -163,9 +179,10 @@ export function TermsPage() {
       <h2>Cloud storage</h2>
       <p>
         Paid tiers that include cloud library backup are subject to per-tier limits on the size of your compressed
-        library backup (currently 2 GB on Basic and 20 GB on Pro). Local writing on your device is not capped by these
-        limits. If you exceed your tier limit, cloud sync uploads may pause until you free space or upgrade; we may
-        adjust limits or fair-use policies with notice as the product matures.
+        library backup (currently {CLOUD_LIMIT_BASIC_DISPLAY} on Basic and {CLOUD_LIMIT_PRO_DISPLAY} on Pro). Local
+        writing on your device is not capped by these limits. If you exceed your tier limit, cloud sync uploads may
+        pause until you free space or upgrade; we may adjust limits or fair-use policies with notice as the product
+        matures.
       </p>
 
       <h2>Contact</h2>

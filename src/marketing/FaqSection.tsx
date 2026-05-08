@@ -1,3 +1,5 @@
+import { CLOUD_LIMIT_BASIC_DISPLAY, CLOUD_LIMIT_PRO_DISPLAY } from './pricingCopy'
+
 type Qa = {
   q: string
   a: string
@@ -15,11 +17,11 @@ const FAQ: Qa[] = [
   },
   {
     q: 'What is locked on Free?',
-    a: 'EPUB export and cloud library backup (Basic up to 2 GB compressed backup, Pro up to 20 GB). Free is local-only storage; Basic unlocks cloud sync and EPUB, and Pro unlocks the full export suite.',
+    a: `EPUB export and cloud library backup (Basic up to ${CLOUD_LIMIT_BASIC_DISPLAY} compressed backup, Pro up to ${CLOUD_LIMIT_PRO_DISPLAY}). Free is local-only storage; Basic unlocks cloud sync and EPUB, and Pro unlocks the full export suite.`,
   },
   {
     q: 'What does Basic unlock?',
-    a: 'Cloud library sync and backup across your devices when you sign in (up to 2 GB compressed backup), plus EPUB export—the simplest finish line if you are publishing digitally. Like Pro, it is a one-time purchase and includes lifetime app updates.',
+    a: `Cloud library sync and backup across your devices when you sign in (up to ${CLOUD_LIMIT_BASIC_DISPLAY} compressed backup), plus EPUB export—the simplest finish line if you are publishing digitally. Like Pro, it is a one-time purchase and includes lifetime app updates.`,
   },
   {
     q: 'Do Basic and Pro get the same app updates?',
@@ -30,8 +32,13 @@ const FAQ: Qa[] = [
     a: 'Because Inkwell is built by one developer. Paid exports keep the lights on and the updates coming.',
   },
   {
+    q: 'What is your refund policy?',
+    a:
+      'Basic and Pro are one-time purchases with a 30-day refund window: email support from the address used at checkout, with your receipt or transaction reference, and we will issue a full refund within that window if Inkwell is not the right fit. Details and Paddle/reseller terms are on the Refund policy page in the site footer.',
+  },
+  {
     q: 'Where is my work stored?',
-    a: 'On Free, your library lives only on your device. Basic and Pro can optionally keep an encrypted cloud backup that travels across devices when you sign in, subject to per-tier backup size limits (2 GB Basic, 20 GB Pro, measured as compressed backup size).',
+    a: `On Free, your library lives only on your device. With Basic or Pro, you can optionally sync a packaged library backup to private cloud storage tied to your account (TLS in transit), subject to per-tier limits (${CLOUD_LIMIT_BASIC_DISPLAY} Basic, ${CLOUD_LIMIT_PRO_DISPLAY} Pro, measured as compressed backup size).`,
   },
   {
     q: 'Do I need an internet connection?',
