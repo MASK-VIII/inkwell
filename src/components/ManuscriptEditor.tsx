@@ -115,6 +115,20 @@ function ManuscriptEditorInner({
 
   const shellRef = useRef<HTMLDivElement | null>(null)
   const floatClusterRef = useRef<HTMLDivElement | null>(null)
+  const chapterTitleRef = useRef<HTMLTextAreaElement | null>(null)
+
+  /**
+   * Chapter title is a `<textarea>` (not `<input>`) so long names wrap onto multiple visual
+   * lines instead of getting clipped. We mirror the textarea height to its scroll content so
+   * the field grows downward as the title wraps, with no internal scrollbar.
+   */
+  useLayoutEffect(() => {
+    if (!showChapterTitleOnPage) return
+    const el = chapterTitleRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }, [chapterTitle, showChapterTitleOnPage, embedded, formatSplitMode])
 
   const [floatPos, setFloatPos] = useState<{ x: number; y: number } | null>(null)
   const [statsPinned, setStatsPinned] = useState(true)
@@ -485,13 +499,21 @@ function ManuscriptEditorInner({
             <label className="sr-only" htmlFor={`inkwell-chapter-title-${manuscriptId}`}>
               Chapter title
             </label>
-            <input
+            <textarea
+              ref={chapterTitleRef}
               id={`inkwell-chapter-title-${manuscriptId}`}
-              type="text"
+              rows={1}
               value={chapterTitle ?? ''}
-              onChange={(e) => onChapterTitleChange(e.target.value)}
+              onChange={(e) => onChapterTitleChange(e.target.value.replace(/[\r\n]+/g, ' '))}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  editor?.commands.focus('start')
+                }
+              }}
               placeholder="Chapter title"
-              className="w-full bg-transparent text-center font-serif text-2xl font-semibold tracking-tight text-ink placeholder:text-ink/35 focus:outline-none focus-visible:ring-2 focus-visible:ring-walnut/40 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment dark:text-ink-dark dark:placeholder:text-ink-dark/35 dark:focus-visible:ring-cream/50 dark:focus-visible:ring-offset-panel-dark sm:text-4xl sm:leading-tight"
+              spellCheck={false}
+              className="block w-full resize-none overflow-hidden break-words bg-transparent text-center font-serif text-2xl font-semibold leading-tight tracking-tight text-ink placeholder:text-ink/35 focus:outline-none focus-visible:ring-2 focus-visible:ring-walnut/40 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment dark:text-ink-dark dark:placeholder:text-ink-dark/35 dark:focus-visible:ring-cream/50 dark:focus-visible:ring-offset-panel-dark sm:text-4xl sm:leading-tight"
             />
           </div>
         ) : null}
