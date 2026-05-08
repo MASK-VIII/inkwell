@@ -1,6 +1,10 @@
+import { Download } from 'lucide-react'
+import { getInkwellDesktopDownloadUrl } from '../lib/marketing/desktopDownloadUrl'
 import { MarketingScreenshot } from './MarketingScreenshot'
 
 export function HeroSection({ darkMode = false }: { darkMode?: boolean }) {
+  const desktopDownloadUrl = getInkwellDesktopDownloadUrl()
+
   return (
     <section className="relative overflow-hidden">
       <div
@@ -45,7 +49,20 @@ export function HeroSection({ darkMode = false }: { darkMode?: boolean }) {
           </p>
         </div>
 
-        <div className="lg:pl-4">
+        <div className="flex flex-col gap-5 lg:gap-6 lg:pl-4">
+          {desktopDownloadUrl ?
+            <div className="flex justify-center lg:justify-end">
+              <a
+                href={desktopDownloadUrl}
+                download
+                rel="noopener noreferrer"
+                className="inline-flex w-full max-w-sm items-center justify-center gap-2 rounded-2xl border border-walnut/35 bg-white/70 px-6 py-3.5 text-base font-semibold text-ink shadow-sm backdrop-blur-sm transition hover:border-walnut/55 hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-walnut sm:w-auto lg:max-w-none dark:border-border-dark dark:bg-panel-dark/75 dark:text-ink-dark dark:hover:border-accent-warm/45 dark:hover:bg-panel-dark/90 dark:focus-visible:outline-cream/50"
+              >
+                <Download className="h-5 w-5 shrink-0" aria-hidden />
+                Download app
+              </a>
+            </div>
+          : null}
           <MarketingScreenshot
             src={darkMode ? '/marketing/chapter-in-progress-dark.png' : '/marketing/chapter-in-progress-light.png'}
             alt="Inkwell editor with chapter list and an open chapter in the manuscript"

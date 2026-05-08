@@ -1,4 +1,9 @@
+import { Download } from 'lucide-react'
+import { getInkwellDesktopDownloadUrl } from '../lib/marketing/desktopDownloadUrl'
+
 export function CtaSection() {
+  const desktopDownloadUrl = getInkwellDesktopDownloadUrl()
+
   return (
     <section className="border-t border-dust/60 bg-gradient-to-b from-white/40 via-parchment to-parchment dark:border-border-dark/80 dark:from-panel-dark/30 dark:via-panel-dark dark:to-panel-dark">
       <div className="mx-auto max-w-4xl px-5 py-24 text-center sm:px-8">
@@ -15,6 +20,17 @@ export function CtaSection() {
           >
             Start writing free
           </a>
+          {desktopDownloadUrl ?
+            <a
+              href={desktopDownloadUrl}
+              download
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-2 rounded-full border border-walnut/30 px-6 py-3 text-base font-medium text-ink transition hover:border-walnut/60 hover:bg-white/60 dark:border-border-dark dark:text-ink-dark dark:hover:border-accent-warm/45 dark:hover:bg-panel-dark/60"
+            >
+              <Download className="h-4 w-4 shrink-0" aria-hidden />
+              Download app
+            </a>
+          : null}
           <a
             href="/app?checkout=basic#signin"
             className="inline-flex items-center justify-center rounded-full border border-walnut/30 px-6 py-3 text-base font-medium text-ink transition hover:border-walnut/60 hover:bg-white/60 dark:border-border-dark dark:text-ink-dark dark:hover:border-accent-warm/45 dark:hover:bg-panel-dark/60"

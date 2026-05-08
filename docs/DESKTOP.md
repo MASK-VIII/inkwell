@@ -108,6 +108,22 @@ Use a **matrix** over OS so native binaries are produced on real hosts:
 
 The repository includes `.github/workflows/desktop.yml` as a minimal unsigned matrix build; tighten secrets and signing steps when you are ready to ship.
 
+## Marketing download URL (website + Vercel)
+
+The NSIS installer for Windows is **`Inkwell Setup <version>.exe`** (from `productName` + `version` in `package.json`). This is **not** `win-unpacked/Inkwell.exe` (that is the unpacked app beside the installer).
+
+1. Run **`npm run build:desktop`** and find **`Inkwell Setup … .exe`** next to the `win-unpacked` folder (see `package.json` → `build.directories.output`).
+2. Print the HTTPS value for **`VITE_INKWELL_DESKTOP_DOWNLOAD_URL`** (GitHub **latest** release asset URL from `git remote` + current version):
+
+   ```bash
+   npm run print:desktop-download-url
+   ```
+
+3. **One-time:** On GitHub, create a **Release** and attach that `.exe` under **Assets** using the **exact** filename the script printed (including spaces).
+4. Paste the printed URL into **Vercel → Project → Settings → Environment Variables** as `VITE_INKWELL_DESKTOP_DOWNLOAD_URL` (enable **Production**, and **Preview** if you want the button on preview deploys), then **redeploy**. Use the same value in `.env.local` for local marketing builds.
+
+The link works only after that asset exists on the repo’s latest release.
+
 ## App icon (electron-builder)
 
 `package.json` → `build.icon` references `build/icon.png`. When you change `public/favicon.svg`, run `npm run generate:brand-icons` to regenerate that PNG plus `public/apple-touch-icon.png` before cutting a desktop build.
@@ -119,5 +135,6 @@ The repository includes `.github/workflows/desktop.yml` as a minimal unsigned ma
 | `npm run dev:desktop` | Vite (desktop `base`) + Electron against localhost |
 | `npm run build:desktop` | Typecheck, Vite production build with `INKWELL_DESKTOP=1`, then `electron-builder` |
 | `npm run generate:brand-icons` | Rasterize `public/favicon.svg` → `build/icon.png` (512) and `public/apple-touch-icon.png` (180) |
+| `npm run print:desktop-download-url` | Print `VITE_INKWELL_DESKTOP_DOWNLOAD_URL` for the Windows NSIS installer (GitHub Releases **latest** asset pattern) |
 
-Installers land in `release/` (see `package.json` → `build.directories.output`).
+Installers land in `package.json` → `build.directories.output` (often next to `win-unpacked/`).

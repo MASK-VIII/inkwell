@@ -1,5 +1,6 @@
 import { Download, Moon, ShoppingBag, Sun } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
+import { getInkwellDesktopDownloadUrl } from '../lib/marketing/desktopDownloadUrl'
 import { InkwellEmblem } from './InkwellEmblem'
 import { InkwellProfileMenu, type InkwellProfileMenuProps } from './InkwellProfileMenu'
 import { InkwellWordmark } from './InkwellWordmark'
@@ -56,13 +57,6 @@ const inputClassName =
 
 const labelClassName = 'text-sm font-medium text-ink/70 dark:text-ink-dark/65'
 
-function desktopDownloadHref(): string | null {
-  const raw = import.meta.env.VITE_INKWELL_DESKTOP_DOWNLOAD_URL
-  if (typeof raw !== 'string') return null
-  const t = raw.trim()
-  return t.length ? t : null
-}
-
 export function SignInScreen({
   darkMode,
   onToggleTheme,
@@ -97,7 +91,7 @@ export function SignInScreen({
     const path = base.endsWith('/') ? base.slice(0, -1) || '/' : base
     window.location.assign(path === '/' ? '/' : `${path}/`)
   }, [isDesktopShell])
-  const desktopDownloadUrl = desktopDownloadHref()
+  const desktopDownloadUrl = getInkwellDesktopDownloadUrl()
   const showDesktopDownload = !isDesktopShell && desktopDownloadUrl != null
 
   const onContinue = useCallback(() => {

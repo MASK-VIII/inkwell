@@ -14,6 +14,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "generate:brand-icons": "node scripts/generate-brand-icons.mjs",
+    "print:desktop-download-url": "node scripts/print-desktop-download-url.mjs",
     "optimize:brand-svg": "svgo public/favicon.svg public/brand/mark-on-light-bg.svg public/brand/candidates/01-well-donut.svg public/brand/candidates/02-ripple.svg public/brand/candidates/03-book-gutter-ink.svg public/brand/candidates/04-bifolium-classic.svg public/brand/candidates/05-ink-monogram.svg"
   },
   "dependencies": {

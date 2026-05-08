@@ -1,5 +1,9 @@
+import { getInkwellDesktopDownloadUrl } from '../lib/marketing/desktopDownloadUrl'
+
 export function MarketingFooter() {
   const year = new Date().getFullYear()
+  const desktopDownloadUrl = getInkwellDesktopDownloadUrl()
+
   return (
     <footer className="border-t border-dust/60 bg-parchment dark:border-border-dark/80 dark:bg-panel-dark">
       <div className="mx-auto max-w-6xl px-5 py-12 sm:px-8">
@@ -48,6 +52,18 @@ export function MarketingFooter() {
                   Start free (no signup)
                 </a>
               </li>
+              {desktopDownloadUrl ?
+                <li>
+                  <a
+                    className="rounded-sm transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-walnut/35 dark:hover:text-cream dark:focus-visible:ring-cream/40"
+                    href={desktopDownloadUrl}
+                    download
+                    rel="noopener noreferrer"
+                  >
+                    Download desktop app
+                  </a>
+                </li>
+              : null}
             </ul>
           </nav>
 
