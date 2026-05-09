@@ -1,5 +1,5 @@
 import { User } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
 
 export type InkwellProfileMenuProps = {
   userEmail: string | null
@@ -19,7 +19,7 @@ export type InkwellProfileMenuProps = {
   onRequestExclusiveOpen?: () => void
 }
 
-export function InkwellProfileMenu({
+function InkwellProfileMenuInner({
   userEmail,
   cloudSyncConfigured,
   onSyncNow,
@@ -58,7 +58,7 @@ export function InkwellProfileMenu({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') close()
     }
-    document.addEventListener('pointerdown', onDoc)
+    document.addEventListener('pointerdown', onDoc, { passive: true })
     window.addEventListener('keydown', onKey)
     return () => {
       document.removeEventListener('pointerdown', onDoc)
@@ -66,10 +66,10 @@ export function InkwellProfileMenu({
     }
   }, [open, close])
 
-  const toggle = () => {
+  const toggle = useCallback(() => {
     onRequestExclusiveOpen?.()
     setOpen(!open)
-  }
+  }, [onRequestExclusiveOpen, setOpen, open])
 
   const align = menuAlign === 'left' ? 'left-0' : 'right-0'
   const itemClass =
@@ -191,3 +191,5 @@ export function InkwellProfileMenu({
     </div>
   )
 }
+
+export const InkwellProfileMenu = memo(InkwellProfileMenuInner)

@@ -3118,6 +3118,43 @@ export default function App() {
     ],
   )
   const inkwellLibrarySync = useInkwellLibrarySync(librarySyncOptions)
+
+  const profileMenuSyncNow = useCallback(() => {
+    if (requireEntitlement('basic')) inkwellLibrarySync.syncNow()
+  }, [requireEntitlement, inkwellLibrarySync.syncNow])
+
+  const profileMenuSignOutCloud = useCallback(() => {
+    void inkwellLibrarySync.signOutCloudOnly()
+  }, [inkwellLibrarySync.signOutCloudOnly])
+
+  const profileMenuGoToAccountFromSync = useCallback(() => {
+    syncPersistedState()
+    navigateRoute('account')
+  }, [syncPersistedState, navigateRoute])
+
+  const profileMenuGoToBookshelfFromSync = useCallback(() => {
+    syncPersistedState()
+    navigateRoute('bookshelf')
+  }, [syncPersistedState, navigateRoute])
+
+  const profileMenuCloseBookToolsExclusive = useCallback(() => {
+    setBookToolsOpen(false)
+  }, [])
+
+  const profileMenuShelfRequestExclusiveOpen = useCallback(() => {
+    setNewProjectMenuOpen(false)
+    setShelfNewImportSubmenuOpen(false)
+    setShelfHelpMenuOpen(false)
+  }, [])
+
+  const profileMenuOnGoToSignInProp = useMemo(
+    () =>
+      isInkwellCloudSyncConfigured() && !inkwellLibrarySync.userEmail ?
+        profileMenuGoToCloudSignIn
+      : undefined,
+    [inkwellLibrarySync.userEmail, profileMenuGoToCloudSignIn],
+  )
+
   const [accountCloudMeter, setAccountCloudMeter] = useState<{
     loading: boolean
     zipBytes: number | null
@@ -3683,32 +3720,16 @@ export default function App() {
                   <InkwellProfileMenu
                     userEmail={inkwellLibrarySync.userEmail}
                     cloudSyncConfigured={isInkwellCloudSyncConfigured()}
-                    onGoToSignIn={
-                      isInkwellCloudSyncConfigured() && !inkwellLibrarySync.userEmail ?
-                        profileMenuGoToCloudSignIn
-                      : undefined
-                    }
-                    onSyncNow={() => {
-                      if (requireEntitlement('basic')) inkwellLibrarySync.syncNow()
-                    }}
-                    onSignOutCloud={() => void inkwellLibrarySync.signOutCloudOnly()}
+                    onGoToSignIn={profileMenuOnGoToSignInProp}
+                    onSyncNow={profileMenuSyncNow}
+                    onSignOutCloud={profileMenuSignOutCloud}
                     onAppSignOut={onBookshelfSignOut}
                     showLibraryHubLink
-                    onGoToAccount={() => {
-                      syncPersistedState()
-                      navigateRoute('account')
-                    }}
-                    onGoToLibraryHub={() => {
-                      syncPersistedState()
-                      navigateRoute('bookshelf')
-                    }}
+                    onGoToAccount={profileMenuGoToAccountFromSync}
+                    onGoToLibraryHub={profileMenuGoToBookshelfFromSync}
                     menuOpen={shelfAccountMenuOpen}
                     onMenuOpenChange={setShelfAccountMenuOpen}
-                    onRequestExclusiveOpen={() => {
-                      setNewProjectMenuOpen(false)
-                      setShelfNewImportSubmenuOpen(false)
-                      setShelfHelpMenuOpen(false)
-                    }}
+                    onRequestExclusiveOpen={profileMenuShelfRequestExclusiveOpen}
                   />
                 </div>
               </div>
@@ -4923,26 +4944,14 @@ export default function App() {
                     <InkwellProfileMenu
                       userEmail={inkwellLibrarySync.userEmail}
                       cloudSyncConfigured={isInkwellCloudSyncConfigured()}
-                      onGoToSignIn={
-                        isInkwellCloudSyncConfigured() && !inkwellLibrarySync.userEmail ?
-                          profileMenuGoToCloudSignIn
-                        : undefined
-                      }
-                      onSyncNow={() => {
-                        if (requireEntitlement('basic')) inkwellLibrarySync.syncNow()
-                      }}
-                      onSignOutCloud={() => void inkwellLibrarySync.signOutCloudOnly()}
+                      onGoToSignIn={profileMenuOnGoToSignInProp}
+                      onSyncNow={profileMenuSyncNow}
+                      onSignOutCloud={profileMenuSignOutCloud}
                       onAppSignOut={onBookshelfSignOut}
                       showLibraryHubLink
-                      onGoToAccount={() => {
-                        syncPersistedState()
-                        navigateRoute('account')
-                      }}
-                      onGoToLibraryHub={() => {
-                        syncPersistedState()
-                        navigateRoute('bookshelf')
-                      }}
-                      onRequestExclusiveOpen={() => setBookToolsOpen(false)}
+                      onGoToAccount={profileMenuGoToAccountFromSync}
+                      onGoToLibraryHub={profileMenuGoToBookshelfFromSync}
+                      onRequestExclusiveOpen={profileMenuCloseBookToolsExclusive}
                     />
                   </>
                 )}

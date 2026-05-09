@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "node scripts/generate-changelog.mjs && vite",
     "dev:desktop": "concurrently -k \"cross-env INKWELL_DESKTOP=1 vite\" \"wait-on http://localhost:5173 && cross-env INKWELL_DESKTOP=1 electron electron/main.cjs\"",
+    "dev:desktop:debug": "concurrently -k \"cross-env INKWELL_DESKTOP=1 vite\" \"wait-on http://localhost:5173 && cross-env INKWELL_DESKTOP=1 INKWELL_ELECTRON_DEVTOOLS=1 electron electron/main.cjs\"",
     "build": "node scripts/generate-changelog.mjs && tsc -b && vite build",
     "build:desktop": "npm run generate:brand-icons && tsc -b && cross-env INKWELL_DESKTOP=1 vite build && electron-builder",
     "lint": "eslint .",

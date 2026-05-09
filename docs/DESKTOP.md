@@ -22,6 +22,8 @@ This document records how the desktop shell is wired, why those choices were mad
 
 1. **Production:** Electron registers a privileged scheme **`inkwell`** and `protocol.handle('inkwell', …)` serves files from the Vite `dist/` directory with safe path containment (`path.relative` guard). The window loads **`inkwell://app/index.html`**, so the app origin is stable and same-origin rules match a normal web deployment.
 2. **Development:** Electron loads **`http://localhost:5173`** — the same origin as **`npm run dev`** in the browser — so local projects and Supabase session storage match. Workers and HMR behave like browser dev.
+
+**Desktop dev performance:** by default, **`npm run dev:desktop`** does **not** auto-open Chromium DevTools (they add a lot of main-thread overhead while typing and using menus). Use **`npm run dev:desktop:debug`** or set **`INKWELL_ELECTRON_DEVTOOLS=1`** on the Electron process when you need the detached DevTools window.
 3. **Vite `base`:** when `INKWELL_DESKTOP=1`, `vite.config.ts` sets `base: './'` so generated asset URLs resolve under `inkwell://app/…` instead of absolute `/…` paths meant for static hosting at domain root.
 
 Entry: `electron/main.cjs`, preload: `electron/preload.cjs`. Renderer integration lives in `src/App.tsx` (menu + pending file open) behind `window.inkwellDesktop` (see `src/inkwell-desktop.d.ts`).

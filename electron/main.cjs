@@ -335,6 +335,8 @@ function createWindow() {
     minWidth: 900,
     minHeight: 600,
     show: false,
+    /** Reduces initial flash; matches app dark chrome (see `color-scheme` / theme tokens). */
+    backgroundColor: '#0f1113',
     ...(windowIcon ? { icon: windowIcon } : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
@@ -342,6 +344,8 @@ function createWindow() {
       sandbox: true,
       nodeIntegration: false,
       webviewTag: false,
+      /** Keep timers/animations smoother when the window is briefly backgrounded (e.g. menus, dialogs). */
+      backgroundThrottling: false,
     },
   })
 
@@ -371,7 +375,10 @@ function createWindow() {
   if (isDev) {
     pendingAuthDeepLink = null
     void mainWindow.loadURL(VITE_DEV_URL)
-    mainWindow.webContents.openDevTools({ mode: 'detach' })
+    // Detached DevTools add noticeable overhead; opt in with INKWELL_ELECTRON_DEVTOOLS=1 (see docs/DESKTOP.md).
+    if (process.env.INKWELL_ELECTRON_DEVTOOLS === '1') {
+      mainWindow.webContents.openDevTools({ mode: 'detach' })
+    }
   } else {
     let startUrl = 'inkwell://app/index.html'
     if (pendingAuthDeepLink && isLikelySupabaseAuthCallbackUrl(pendingAuthDeepLink)) {
