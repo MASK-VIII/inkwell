@@ -135,8 +135,9 @@ The link works only after that asset exists on the repo’s latest release.
 | Command | Purpose |
 |---------|---------|
 | `npm run dev:desktop` | Vite (desktop `base`) + Electron against localhost |
-| `npm run build:desktop` | Typecheck, Vite production build with `INKWELL_DESKTOP=1`, then `electron-builder` |
+| `npm run build:desktop` | Typecheck, Vite production build with `INKWELL_DESKTOP=1`, then `electron-builder` (writes installers under `release/`) |
+| `npm run build:desktop:install` | Same as above, then launches the Windows NSIS installer or opens the macOS `.dmg` |
 | `npm run generate:brand-icons` | Rasterize `public/favicon.svg` → `build/icon.png` (512) and `public/apple-touch-icon.png` (180) |
 | `npm run print:desktop-download-url` | Print `VITE_INKWELL_DESKTOP_DOWNLOAD_URL` for the Windows NSIS installer (GitHub Releases **latest** asset pattern) |
 
-Installers land in `package.json` → `build.directories.output` (often next to `win-unpacked/`).
+Installers land in **`release/`** (`package.json` → `build.directories.output`), next to `win-unpacked/` or the macOS `.dmg`. Running **`npm run build:desktop` does not install the app** — use **`npm run build:desktop:install`** or double-click the **`Inkwell Setup … .exe`** file in `release/`.

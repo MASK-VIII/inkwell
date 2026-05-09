@@ -24,6 +24,9 @@ release-build/
 ebuild-out/
 inkwell-pack/
 
+# Last electron-builder temp output (dev helper)
+.inkwell-last-pack-dir
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

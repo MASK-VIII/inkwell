@@ -11,7 +11,11 @@
     "dev:desktop": "concurrently -k \"cross-env INKWELL_DESKTOP=1 vite\" \"wait-on http://localhost:5173 && cross-env INKWELL_DESKTOP=1 electron electron/main.cjs\"",
     "dev:desktop:debug": "concurrently -k \"cross-env INKWELL_DESKTOP=1 vite\" \"wait-on http://localhost:5173 && cross-env INKWELL_DESKTOP=1 INKWELL_ELECTRON_DEVTOOLS=1 electron electron/main.cjs\"",
     "build": "node scripts/generate-changelog.mjs && tsc -b && vite build",
-    "build:desktop": "npm run generate:brand-icons && tsc -b && cross-env INKWELL_DESKTOP=1 vite build && electron-builder",
+    "prebuild:desktop": "node scripts/prepare-desktop-build.mjs",
+    "build:desktop": "npm run generate:brand-icons && tsc -b && cross-env INKWELL_DESKTOP=1 vite build && node scripts/run-desktop-pack.mjs",
+    "build:desktop:install": "npm run build:desktop && node scripts/launch-desktop-installer.mjs",
+    "desktop:open-release": "explorer release",
+    "desktop:run-unpacked": "node scripts/run-unpacked-inkwell.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "generate:brand-icons": "node scripts/generate-brand-icons.mjs",
@@ -97,7 +101,7 @@
     "icon": "build/icon.png",
     "productName": "Inkwell",
     "directories": {
-      "output": "C:\\\\Users\\\\stevey\\\\AppData\\\\Local\\\\Temp\\\\inkwell-ebuild-out"
+      "output": "release"
     },
     "files": [
       "dist/**/*",
@@ -134,6 +138,10 @@
       }
     ],
     "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
+      "runAfterFinish": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "installerIcon": "build/icon.ico",
