@@ -20,7 +20,7 @@ export function HeroSection({ darkMode = false }: { darkMode?: boolean }) {
             Draft. Format. Publish.
           </h1>
           <p className="max-w-xl text-lg leading-relaxed text-walnut/90 dark:text-ink-dark/82">
-            Draft in a calm, type-led workspace; refine layout when you are ready; export when the manuscript is finished—the same arc whether it is your first book or your fifth. Chapters, revisions, and notes stay together all the way through. Start writing locally for free with no sign-up—open the app and go. EPUB and the full print-oriented export suite unlock on paid tiers (see pricing).
+            Draft in a calm, type-led workspace; refine layout when you are ready; export when the manuscript is finished—the same arc whether it is your first book or your fifth. Built for offline novel writing and self-publishing: EPUB for Kindle and other stores on Basic, print-ready PDF and DOCX on Pro. Chapters, revisions, and notes stay together all the way through. Start writing locally for free with no sign-up—open the app and go. Paid tiers unlock exports (see pricing).
           </p>
           <div className="flex flex-wrap items-center gap-4 pt-2">
             <a

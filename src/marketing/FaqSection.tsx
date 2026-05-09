@@ -54,6 +54,11 @@ const FAQ: Qa[] = [
     q: 'Do I need an internet connection?',
     a: 'No. Inkwell works fully offline. Cloud backup is optional on Basic and Pro; it runs in the background when you are online.',
   },
+  {
+    q: 'Can I use Inkwell for self-publishing on Kindle?',
+    a:
+      'Yes. Export your manuscript as EPUB on Basic (or stay on Free until you are ready to buy a tier). EPUB is the usual starting point for Kindle Direct Publishing and many other ebook stores—you finish and refine in Inkwell, then upload the file where you sell. Pro adds PDF and DOCX when you need print interiors or other workflows; Basic is enough if your next step is digital publishing with EPUB.',
+  },
 ]
 
 export function FaqSection() {

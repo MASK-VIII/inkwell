@@ -242,8 +242,11 @@ export function BuyPage() {
   useMarketingPageHead({
     title: 'Buy Inkwell \u2014 Basic or Pro',
     canonicalPath: '/buy',
+    ogTitle: 'Buy Inkwell — Basic or Pro (one-time)',
+    metaDescription:
+      `Purchase Inkwell Basic or Pro: secure Paddle checkout, lifetime app updates, EPUB on Basic and PDF/DOCX on Pro. Cloud backup up to ${CLOUD_LIMIT_BASIC_DISPLAY} (Basic) or ${CLOUD_LIMIT_PRO_DISPLAY} (Pro).`,
     ogDescription:
-      `Buy Inkwell: choose Basic for cloud sync (${CLOUD_LIMIT_BASIC_DISPLAY} backup) and EPUB, or Pro for the full export suite and ${CLOUD_LIMIT_PRO_DISPLAY} backup. One-time purchases include lifetime app updates on both tiers.`,
+      `Buy Inkwell: Basic includes cloud sync (${CLOUD_LIMIT_BASIC_DISPLAY} backup) and EPUB; Pro adds the full export suite and ${CLOUD_LIMIT_PRO_DISPLAY} backup. One-time license, 30-day refund window.`,
   })
 
   return (

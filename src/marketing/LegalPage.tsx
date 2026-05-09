@@ -1,26 +1,39 @@
-import { useEffect, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
 import { MarketingFooter } from './MarketingFooter'
 import { MarketingNav } from './MarketingNav'
 import { CLOUD_LIMIT_BASIC_DISPLAY, CLOUD_LIMIT_PRO_DISPLAY } from './pricingCopy'
 import { useMarketingDarkMode } from './useMarketingDarkMode'
+import { useMarketingPageHead } from './useMarketingPageHead'
 
 type Props = {
   title: string
   /** Plain document title used for the browser tab. */
   pageTitle: string
+  /** Canonical path on the marketing host (e.g. `/privacy`). */
+  canonicalPath: string
+  metaDescription: string
+  ogDescription: string
   lastUpdated: string
   children: ReactNode
 }
 
-export function LegalPage({ title, pageTitle, lastUpdated, children }: Props) {
+export function LegalPage({
+  title,
+  pageTitle,
+  canonicalPath,
+  metaDescription,
+  ogDescription,
+  lastUpdated,
+  children,
+}: Props) {
   const { darkMode, toggle } = useMarketingDarkMode()
 
-  useEffect(() => {
-    document.title = pageTitle
-    return () => {
-      document.title = 'Inkwell'
-    }
-  }, [pageTitle])
+  useMarketingPageHead({
+    title: pageTitle,
+    canonicalPath,
+    metaDescription,
+    ogDescription,
+  })
 
   return (
     <main className="min-h-screen bg-parchment text-ink antialiased dark:bg-panel-dark dark:text-ink-dark">
@@ -56,11 +69,14 @@ export function PrivacyPage() {
     <LegalPage
       title="Privacy"
       pageTitle={'Privacy \u2014 Inkwell'}
+      canonicalPath="/privacy"
+      metaDescription="Inkwell privacy policy: how we handle manuscripts, account data, cloud sync, and payments during early access and beyond. We do not sell your data or train AI on your writing."
+      ogDescription="Read how Inkwell treats local manuscripts vs optional cloud backup, what auth and billing providers see, and what we do not do with your work."
       lastUpdated="Last updated: May 7, 2026"
     >
       <p>
-        This policy describes how Inkwell handles information today while the product is in beta.
-        We may update it as features evolve; the date at the top reflects the latest revision.
+        This policy describes how Inkwell handles information during early access and after general
+        availability. We may update it as features evolve; the date at the top reflects the latest revision.
       </p>
 
       <h2>What Inkwell stores</h2>
@@ -78,8 +94,8 @@ export function PrivacyPage() {
       <p>
         If you create an account, we rely on our authentication provider to store sign-in identifiers
         (such as email) and credential material appropriately; Inkwell does not receive your
-        password in plain text. When paid tiers are available, billing may be handled by our
-        payment processor; Inkwell does not store full card numbers.
+        password in plain text. For paid tiers, billing is handled by our payment processor; Inkwell
+        does not store full card numbers.
       </p>
 
       <h2>What we do not do</h2>
@@ -106,17 +122,21 @@ export function RefundPage() {
     <LegalPage
       title="Refund policy"
       pageTitle={'Refunds \u2014 Inkwell'}
+      canonicalPath="/refund"
+      metaDescription="Inkwell refund policy: 30-day full refund on qualifying Basic and Pro purchases. How to request a refund and how Paddle checkout fits in."
+      ogDescription="Basic and Pro include a 30-day refund window for qualifying one-time purchases. Email support with your receipt; reseller (Paddle) steps may apply."
       lastUpdated="Last updated: May 7, 2026"
     >
       <p>
-        This refund policy applies while Inkwell is in beta and may be updated as checkout and paid
-        tiers roll out. The date at the top reflects the latest revision.
+        This refund policy applies during Inkwell’s early access period and stays the same after
+        general availability—unless we post an update here (the date above shows the latest
+        revision).
       </p>
 
       <h2>Before you purchase</h2>
       <p>
-        Inkwell is digital software. When paid checkout is available, please review the feature list
-        and beta status on the site before completing a purchase.
+        Inkwell is digital software. Please review the feature list and early-access messaging on the
+        site before completing a purchase so you know what Basic and Pro unlock.
       </p>
 
       <h2>30-day refund window</h2>
@@ -124,8 +144,7 @@ export function RefundPage() {
         For qualifying one-time purchases of Basic or Pro, you may request a{' '}
         <strong>full refund within 30 days</strong> of the date of purchase. Refunds apply to the
         software license only; they do not cover third-party fees or charges outside Paddle’s
-        control. If checkout is not yet available, this window starts from the date your payment
-        completes once purchases go live.
+        control.
       </p>
 
       <h2>How to request a refund</h2>
@@ -151,17 +170,20 @@ export function TermsPage() {
     <LegalPage
       title="Terms of use"
       pageTitle={'Terms \u2014 Inkwell'}
+      canonicalPath="/terms"
+      metaDescription="Inkwell terms of use: your rights to your manuscripts, acceptable use, cloud backup limits, and how the product may change during early access and beyond."
+      ogDescription="Terms covering early access, content ownership, acceptable use, and cloud backup limits on Basic and Pro as Inkwell grows."
       lastUpdated="Last updated: May 7, 2026"
     >
       <p>
-        These terms apply while Inkwell is in beta. We may update them as the product matures; the
-        date at the top reflects the latest revision.
+        These terms apply during Inkwell’s early access period and after general availability. We may
+        update them as the product matures; the date at the top reflects the latest revision.
       </p>
 
-      <h2>Beta status</h2>
+      <h2>Early access</h2>
       <p>
-        Inkwell is in active beta. Features may change, and there may be occasional bugs. Please
-        keep your own backups while we polish the edges.
+        Inkwell is shipping under an early access label while we iterate quickly. Features may change,
+        and there may be occasional bugs. Please keep your own backups while we polish the edges.
       </p>
 
       <h2>Your work, your rights</h2>

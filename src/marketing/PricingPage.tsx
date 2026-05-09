@@ -16,8 +16,11 @@ export function PricingPage() {
   useMarketingPageHead({
     title: 'Pricing \u2014 Inkwell',
     canonicalPath: '/pricing',
+    ogTitle: 'Inkwell pricing — Basic, Pro, and free local writing',
+    metaDescription:
+      'Inkwell pricing: free offline novel writing; Basic adds cloud backup and EPUB; Pro adds PDF, DOCX, and the full export suite. One-time purchases, lifetime updates.',
     ogDescription:
-      'Inkwell pricing: start free and local-first, then add Basic for cloud sync and EPUB or Pro for the full export suite.',
+      'Compare Inkwell Basic vs Pro: local-first free tier, cloud sync and EPUB on Basic, full print and ebook exports on Pro. Pick the tier that matches your publishing workflow.',
   })
 
   return (

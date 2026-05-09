@@ -1,17 +1,26 @@
-import { useEffect } from 'react'
+import { useMemo } from 'react'
 import { MarketingFooter } from './MarketingFooter'
 import { MarketingNav } from './MarketingNav'
 import { useMarketingDarkMode } from './useMarketingDarkMode'
+import { useMarketingPageHead } from './useMarketingPageHead'
 
 export function NotFoundPage() {
   const { darkMode, toggle } = useMarketingDarkMode()
 
-  useEffect(() => {
-    document.title = 'Page not found \u2014 Inkwell'
-    return () => {
-      document.title = 'Inkwell'
-    }
+  const canonicalPath = useMemo(() => {
+    if (typeof window === 'undefined') return '/'
+    const { pathname, search } = window.location
+    return `${pathname}${search}` || '/'
   }, [])
+
+  useMarketingPageHead({
+    title: 'Page not found \u2014 Inkwell',
+    canonicalPath,
+    metaDescription: 'This Inkwell page could not be found. Return to the homepage or open the app to keep writing.',
+    ogDescription:
+      'The page you requested is not on this site. Head back to the Inkwell homepage or launch the writing app.',
+    robots: 'noindex, nofollow',
+  })
 
   return (
     <main className="flex min-h-screen flex-col bg-parchment text-ink antialiased dark:bg-panel-dark dark:text-ink-dark">
