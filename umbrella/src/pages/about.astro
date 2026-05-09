@@ -1,11 +1,6 @@
 ---
 import Base from '../layouts/Base.astro'
 import SubscribeCard from '../components/SubscribeCard.astro'
-
-const elsewhere = [
-  { label: 'GitHub', href: 'https://github.com/MASK-VIII' },
-  { label: 'Email', href: 'mailto:contact@enterthelimelight.com' },
-] as const
 ---
 
 <Base
@@ -60,21 +55,6 @@ const elsewhere = [
           </p>
           <p class="about-sign">— Steven</p>
         </div>
-      </section>
-
-      <section class="about-elsewhere container">
-        <p class="eyebrow">Elsewhere</p>
-        <ul class="about-elsewhere-list">
-          {
-            elsewhere.map((item) => (
-              <li>
-                <a href={item.href} rel="me noopener" target="_blank">
-                  {item.label}
-                </a>
-              </li>
-            ))
-          }
-        </ul>
       </section>
 
       <hr class="divider-rule" />
@@ -189,37 +169,4 @@ const elsewhere = [
     color: var(--color-gold-bright);
   }
 
-  .about-elsewhere {
-    text-align: center;
-    margin-bottom: 1.5rem;
-  }
-
-  .about-elsewhere-list {
-    list-style: none;
-    margin: 0.75rem 0 0;
-    padding: 0;
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 0.75rem;
-  }
-
-  .about-elsewhere-list a {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.55rem 1.25rem;
-    border: 1px solid var(--color-gold-dim);
-    border-radius: 9999px;
-    color: var(--color-gold-bright);
-    font-family: var(--font-sans);
-    font-size: 0.85rem;
-    letter-spacing: 0.06em;
-  }
-
-  .about-elsewhere-list a:hover,
-  .about-elsewhere-list a:focus-visible {
-    color: var(--color-cream);
-    border-color: var(--color-gold);
-    background: rgba(201, 168, 106, 0.08);
-  }
 </style>

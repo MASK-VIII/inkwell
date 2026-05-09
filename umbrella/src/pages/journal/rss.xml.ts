@@ -10,7 +10,7 @@ export async function GET(context: APIContext) {
   return rss({
     title: 'The Limelight Journal',
     description:
-      'Letters from a small writing studio: notes on craft, the build of Inkwell, and the books we are betting on.',
+      'Letters from the Limelight: notes on craft, the build of Inkwell, and the books we are betting on.',
     site: context.site ?? 'https://enterthelimelight.com',
     items: posts.map((post) => ({
       title: post.data.title,
