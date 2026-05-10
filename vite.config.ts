@@ -20,6 +20,7 @@ function gitHubOwnerRepoForDownloadLink(): string {
     const url = execFileSync('git', ['remote', 'get-url', 'origin'], {
       cwd: packageRoot,
       encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
     }).trim()
     const m =
       url.match(/git@github\.com:([^/]+)\/([^/.]+)/i) ?? url.match(/github\.com[:/]([^/]+)\/([^/.]+)/i)
@@ -38,8 +39,14 @@ const productName = pkg.build?.productName ?? 'Inkwell'
 const appVersion = String(pkg.version ?? '0.0.0')
 const installerFilename = `${productName} Setup ${appVersion}.exe`
 const ownerRepo = gitHubOwnerRepoForDownloadLink()
+/** Vercel production fetches the `.exe` into `public/downloads/`; same-origin avoids anonymous GitHub 404 on private repos. */
+const vercelProductionWeb =
+  process.env.VERCEL === '1' && process.env.VERCEL_ENV === 'production' && !desktop
 /** GitHub Releases “latest” asset URL; matches `npm run print:desktop-download-url`. */
-const inkwellDesktopDownloadDefault = `https://github.com/${ownerRepo}/releases/latest/download/${encodeURIComponent(installerFilename)}`
+const inkwellDesktopDownloadDefault =
+  vercelProductionWeb ?
+    '/downloads/Inkwell-Setup-latest.exe'
+  : `https://github.com/${ownerRepo}/releases/latest/download/${encodeURIComponent(installerFilename)}`
 
 // https://vite.dev/config/
 // Desktop (Electron production) loads from a custom origin (`inkwell://app/`) so asset

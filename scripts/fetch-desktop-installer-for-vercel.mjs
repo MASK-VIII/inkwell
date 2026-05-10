@@ -171,7 +171,7 @@ async function main() {
   const maxAttempts = 22
   const delayMs = 18_000
 
-  /** @type {{ assets?: { name?: string; url?: string }[] } | null} */
+  /** @type {{ assets?: { name?: string; url?: string }[]; tag_name?: string } | null} */
   let release = null
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -204,11 +204,31 @@ async function main() {
           `set Vercel secret INKWELL_GITHUB_RELEASE_TOKEN exactly (no quotes/spaces), redeploy Production.`,
       )
     }
+    if (res.status === 404 && attempt === maxAttempts) {
+      break
+    }
     throw new Error(`GitHub releases/tags/${tag} failed: ${res.status} ${msg}`)
   }
 
   if (!release?.assets?.length) {
-    throw new Error(`Release ${tag} has no assets`)
+    const latestUrl = `https://api.github.com/repos/${owner}/${repo}/releases/latest`
+    console.warn(`[fetch-desktop-installer] trying fallback GET /releases/latest (tag ${tag} unavailable)`)
+    const { res: lr, data: latestData } = await githubJson(latestUrl, token)
+    if (lr.status === 200 && latestData && typeof latestData === 'object' && Array.isArray(latestData.assets)) {
+      release = latestData
+    } else if (lr.status === 401 || lr.status === 403) {
+      const msg =
+        typeof latestData === 'object' && latestData && 'message' in latestData ?
+          String(latestData.message)
+        : String(lr.status)
+      throw new Error(`GitHub API ${lr.status} (${msg}) on /releases/latest.`)
+    }
+  }
+
+  if (!release?.assets?.length) {
+    throw new Error(
+      `No release assets for ${tag} and /releases/latest had no usable assets — run **Release desktop (Windows)** on GitHub.`,
+    )
   }
 
   const { asset, hint } = pickInstallerAsset(release.assets, assetName, version)
