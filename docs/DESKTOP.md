@@ -110,15 +110,60 @@ Use a **matrix** over OS so native binaries are produced on real hosts:
 
 The repository includes `.github/workflows/desktop.yml` as a minimal unsigned matrix build; tighten secrets and signing steps when you are ready to ship.
 
+## Supabase installer hosting (start here if the bucket already exists)
+
+Use this when the GitHub repo is **private** (anonymous `/releases/latest/download/…` returns **404**) but you still want a **public HTTPS** link for the marketing site.
+
+You already created a Storage **bucket**. Finish setup in this order:
+
+1. **Make the bucket public**  
+   Supabase Dashboard → **Storage** → your bucket → **Configuration** (or bucket menu) → enable **Public bucket** so objects under `/object/public/…` are readable without a login.
+
+2. **Tell Actions your bucket id (variable or secret)**  
+   GitHub repo → **Settings** → **Secrets and variables** → **Actions**  
+   - **Variables** → **New repository variable**: Name **`INKWELL_DESKTOP_BUCKET`**, value = bucket id **exactly** as in Supabase (case-sensitive), **or**  
+   - **Secrets** → **New repository secret** with the **same name** if you prefer (the workflow accepts either; variable wins if both are set).
+
+3. **Create two GitHub Actions secrets (never commit these)**  
+   Same settings page → tab **Secrets** → **New repository secret**  
+   - **`SUPABASE_URL`** — project API URL, e.g. `https://abcdefghijklmnop.supabase.co` (no trailing slash). Same host as **Project Settings → API** in Supabase.  
+   - **`SUPABASE_SERVICE_ROLE_KEY`** — **service_role** key from the same page. **CI-only.** Do not put this in the web app or Vercel.
+
+4. **Cut a desktop release (CI builds and uploads)**  
+   Bump **`version`** in `package.json`, commit, push **`master`**, then either:  
+   - **Actions** → **Release desktop (Windows)** → **Run workflow**, or  
+   - Push tag **`v<version>`** matching `package.json` (e.g. `v0.8.0` for `0.8.0`).  
+
+   The workflow builds **`release/Inkwell Setup <version>.exe`**, then uploads to your bucket (when the variable is set):  
+   - **`Inkwell-Setup-<version>.exe`** (versioned)  
+   - **`Inkwell-Setup-latest.exe`** (overwritten each release — use this for a stable marketing URL)
+
+5. **Point the website at the stable URL**  
+   In the workflow log, find the line **Public installer URL**. It looks like:  
+   `https://<project>.supabase.co/storage/v1/object/public/<bucket>/Inkwell-Setup-latest.exe`  
+
+   Set **Vercel** (Production) environment variable:  
+   **`VITE_INKWELL_DESKTOP_DOWNLOAD_URL`** = that exact URL.  
+   Redeploy (or push any commit that triggers a production build). Locally, put the same line in **`.env.local`** for testing.
+
+6. **Sanity check**  
+   Paste the URL in a **private/incognito** browser window — it should **download** the `.exe`, not HTML. If you get XML/JSON errors, the bucket is not public or the path is wrong.
+
+If **`INKWELL_DESKTOP_BUCKET`** is unset (neither variable nor secret), the workflow **skips** Supabase upload and only publishes to **GitHub Releases** (unchanged behavior). The job log will show a **Skipping Supabase upload** notice.
+
 ## Marketing download URL (website + Vercel)
 
 The NSIS installer for Windows is **`Inkwell Setup <version>.exe`** (from `productName` + `version` in `package.json`). This is **not** `win-unpacked/Inkwell.exe` (that is the unpacked app beside the installer).
 
 The web app bakes a default download URL from **`package.json` version** at build time (`vite.config.ts` → GitHub `releases/latest/download/…`). After you bump version, **redeploy the website** (e.g. push to the branch Vercel builds) so the marketing link matches the uploaded asset name.
 
+**Which GitHub repo?** At build time, `vite.config.ts` resolves **`Owner/repo` from `git remote origin`** (same as `npm run print:desktop-download-url`). If your URL 404s, check **`git remote -v`** matches the repo in the browser (e.g. after an org rename). In CI without a full clone, set **`VITE_INKWELL_GITHUB_OWNER_REPO=Owner/inkwell`**.
+
+**Private repositories:** Unauthenticated visitors often get GitHub’s generic **404** page on `/releases/latest/download/…` (no login prompt). For a public “Download app” button, either **host the `.exe` on a public URL** and set **`VITE_INKWELL_DESKTOP_DOWNLOAD_URL`**, or **make the repo public**, or accept that only logged-in collaborators can download from GitHub Releases.
+
 ### Automated publishing (recommended)
 
-Workflow **[`.github/workflows/release-desktop.yml`](../.github/workflows/release-desktop.yml)** builds Windows in CI and uploads the NSIS installer to **GitHub Releases** as **Latest**.
+Workflow **[`.github/workflows/release-desktop.yml`](../.github/workflows/release-desktop.yml)** builds Windows in CI and uploads the NSIS installer to **GitHub Releases** as **Latest**. If **`INKWELL_DESKTOP_BUCKET`** is set (Actions variable or secret) and Supabase secrets are present, it also uploads **`Inkwell-Setup-latest.exe`** to that **public** bucket for **`VITE_INKWELL_DESKTOP_DOWNLOAD_URL`**.
 
 **One-time — GitHub Actions permissions**
 
