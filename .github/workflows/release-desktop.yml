@@ -63,7 +63,9 @@ jobs:
 
       # Optional: public bucket — see docs/DESKTOP.md § Supabase installer hosting
       # Bucket id: repository Variable INKWELL_DESKTOP_BUCKET and/or secret INKWELL_DESKTOP_BUCKET (variable wins).
+      # continue-on-error: Supabase free-tier max object size often blocks ~120MB NSIS (curl exit 22); GitHub Release still publishes.
       - name: Upload installer to Supabase Storage (public bucket)
+        continue-on-error: true
         shell: bash
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}

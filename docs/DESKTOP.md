@@ -194,7 +194,7 @@ The web app bakes a default download URL from **`package.json` version** at buil
 
 ### Automated publishing (recommended)
 
-Workflow **[`.github/workflows/release-desktop.yml`](../.github/workflows/release-desktop.yml)** builds Windows in CI and uploads the NSIS installer to **GitHub Releases** as **Latest**. If **`INKWELL_DESKTOP_BUCKET`** is set (Actions variable or secret) and Supabase secrets are present, it also uploads **`Inkwell-Setup-latest.exe`** to that **public** bucket for **`VITE_INKWELL_DESKTOP_DOWNLOAD_URL`**.
+Workflow **[`.github/workflows/release-desktop.yml`](../.github/workflows/release-desktop.yml)** builds Windows in CI and uploads the NSIS installer to **GitHub Releases** as **Latest**. If **`INKWELL_DESKTOP_BUCKET`** is set (Actions variable or secret) and Supabase secrets are present, it **attempts** to upload **`Inkwell-Setup-latest.exe`** to that bucket — failures there (**e.g. object size limits**, `curl` exit **22**) **do not** block **Publish GitHub Release** (Vercel’s fetch uses GitHub only).
 
 **One-time — GitHub Actions permissions**
 
