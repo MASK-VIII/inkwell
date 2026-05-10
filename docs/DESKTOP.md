@@ -119,17 +119,21 @@ You already created a Storage **bucket**. Finish setup in this order:
 1. **Make the bucket public**  
    Supabase Dashboard → **Storage** → your bucket → **Configuration** (or bucket menu) → enable **Public bucket** so objects under `/object/public/…` are readable without a login.
 
-2. **Tell Actions your bucket id (variable or secret)**  
+2. **Raise the bucket upload size limit**  
+   Supabase Storage defaults are often **~50 MB per object**. Windows NSIS installers are commonly **100–200 MB** (your log may show ~124 MB). Dashboard → **Storage** → **`desktop-installers`** (or your bucket) → **Edit bucket** → set **file size limit** to at least **250 MB** (512 MB is fine).  
+   If GitHub Actions returns **`413 Payload too large`** / `The object exceeded the maximum allowed size`, this limit is too low — increase it, save, then **re-run** the workflow.
+
+3. **Tell Actions your bucket id (variable or secret)**  
    GitHub repo → **Settings** → **Secrets and variables** → **Actions**  
    - **Variables** → **New repository variable**: Name **`INKWELL_DESKTOP_BUCKET`**, value = bucket id **exactly** as in Supabase (case-sensitive), **or**  
    - **Secrets** → **New repository secret** with the **same name** if you prefer (the workflow accepts either; variable wins if both are set).
 
-3. **Create two GitHub Actions secrets (never commit these)**  
+4. **Create two GitHub Actions secrets (never commit these)**  
    Same settings page → tab **Secrets** → **New repository secret**  
    - **`SUPABASE_URL`** — project API URL, e.g. `https://abcdefghijklmnop.supabase.co` (no trailing slash). Same host as **Project Settings → API** in Supabase.  
    - **`SUPABASE_SERVICE_ROLE_KEY`** — **service_role** key from the same page. **CI-only.** Do not put this in the web app or Vercel.
 
-4. **Cut a desktop release (CI builds and uploads)**  
+5. **Cut a desktop release (CI builds and uploads)**  
    Bump **`version`** in `package.json`, commit, push **`master`**, then either:  
    - **Actions** → **Release desktop (Windows)** → **Run workflow**, or  
    - Push tag **`v<version>`** matching `package.json` (e.g. `v0.8.0` for `0.8.0`).  
@@ -138,7 +142,7 @@ You already created a Storage **bucket**. Finish setup in this order:
    - **`Inkwell-Setup-<version>.exe`** (versioned)  
    - **`Inkwell-Setup-latest.exe`** (overwritten each release — use this for a stable marketing URL)
 
-5. **Point the website at the stable URL**  
+6. **Point the website at the stable URL**  
    In the workflow log, find the line **Public installer URL**. It looks like:  
    `https://<project>.supabase.co/storage/v1/object/public/<bucket>/Inkwell-Setup-latest.exe`  
 
@@ -146,7 +150,7 @@ You already created a Storage **bucket**. Finish setup in this order:
    **`VITE_INKWELL_DESKTOP_DOWNLOAD_URL`** = that exact URL.  
    Redeploy (or push any commit that triggers a production build). Locally, put the same line in **`.env.local`** for testing.
 
-6. **Sanity check**  
+7. **Sanity check**  
    Paste the URL in a **private/incognito** browser window — it should **download** the `.exe`, not HTML. If you get XML/JSON errors, the bucket is not public or the path is wrong.
 
 If **`INKWELL_DESKTOP_BUCKET`** is unset (neither variable nor secret), the workflow **skips** Supabase upload and only publishes to **GitHub Releases** (unchanged behavior). The job log will show a **Skipping Supabase upload** notice.
