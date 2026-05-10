@@ -61,47 +61,6 @@ jobs:
           fi
           ls -la "$F"
 
-      # Optional: public bucket — see docs/DESKTOP.md § Supabase installer hosting
-      # Bucket id: repository Variable INKWELL_DESKTOP_BUCKET and/or secret INKWELL_DESKTOP_BUCKET (variable wins).
-      # continue-on-error: Supabase free-tier max object size often blocks ~120MB NSIS (curl exit 22); GitHub Release still publishes.
-      - name: Upload installer to Supabase Storage (public bucket)
-        continue-on-error: true
-        shell: bash
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SERVICE_ROLE: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          BUCKET_VAR: ${{ vars.INKWELL_DESKTOP_BUCKET }}
-          BUCKET_SECRET: ${{ secrets.INKWELL_DESKTOP_BUCKET }}
-          VERSION: ${{ steps.pkg.outputs.version }}
-        run: |
-          set -euo pipefail
-          BUCKET="${BUCKET_VAR:-${BUCKET_SECRET:-}}"
-          if [ -z "$BUCKET" ]; then
-            echo "::notice::Skipping Supabase upload — add repository **Variable** or **Secret** named INKWELL_DESKTOP_BUCKET (your Storage bucket id)."
-            exit 0
-          fi
-          if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SERVICE_ROLE:-}" ]; then
-            echo "::error::Supabase upload requested (INKWELL_DESKTOP_BUCKET is set) but SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY secrets are missing."
-            exit 1
-          fi
-          BASE="${SUPABASE_URL%/}"
-          SRC="release/Inkwell Setup ${VERSION}.exe"
-          upload() {
-            local dest="$1"
-            curl --fail-with-body -sS -X POST \
-              "${BASE}/storage/v1/object/${BUCKET}/${dest}" \
-              -H "Authorization: Bearer ${SERVICE_ROLE}" \
-              -H "apikey: ${SERVICE_ROLE}" \
-              -H "Content-Type: application/octet-stream" \
-              -H "x-upsert: true" \
-              --data-binary @"${SRC}"
-          }
-          upload "Inkwell-Setup-${VERSION}.exe"
-          upload "Inkwell-Setup-latest.exe"
-          PUB="${BASE}/storage/v1/object/public/${BUCKET}/Inkwell-Setup-latest.exe"
-          echo "DESKTOP_INSTALLER_PUBLIC_URL=${PUB}" >> "$GITHUB_ENV"
-          echo "::notice::Public installer URL (set VITE_INKWELL_DESKTOP_DOWNLOAD_URL to this): ${PUB}"
-
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:

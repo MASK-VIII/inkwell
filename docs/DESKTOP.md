@@ -137,50 +137,9 @@ Preview deployments **skip** the fetch by default (avoids downloading ~120 MB pe
 
 Make the repository **public**. Anonymous **`/releases/latest/download/…`** works with no PAT and no fetch step. Clear **`VITE_INKWELL_DESKTOP_DOWNLOAD_URL`** on Vercel to use the default URL from **`vite.config.ts`** (same shape as **`npm run print:desktop-download-url`**).
 
-## Supabase installer hosting (optional; requires adequate bucket size limit)
+### Optional: host the installer URL elsewhere (e.g. Storage CDN)
 
-Use this when you prefer a **Supabase Storage** URL instead of Vercel or GitHub for the marketing button. Free tiers often cap object size (~**50 MB**); NSIS installers are commonly **100–200 MB**, so you may need a **paid** quota increase.
-
-You already created a Storage **bucket**. Finish setup in this order:
-
-1. **Make the bucket public**  
-   Supabase Dashboard → **Storage** → your bucket → **Configuration** (or bucket menu) → enable **Public bucket** so objects under `/object/public/…` are readable without a login.
-
-2. **Raise the bucket upload size limit**  
-   Supabase Storage defaults are often **~50 MB per object**. Windows NSIS installers are commonly **100–200 MB** (your log may show ~124 MB). Dashboard → **Storage** → **`desktop-installers`** (or your bucket) → **Edit bucket** → set **file size limit** to at least **250 MB** (512 MB is fine).  
-   If GitHub Actions returns **`413 Payload too large`** / `The object exceeded the maximum allowed size`, this limit is too low — increase it, save, then **re-run** the workflow.
-
-3. **Tell Actions your bucket id (variable or secret)**  
-   GitHub repo → **Settings** → **Secrets and variables** → **Actions**  
-   - **Variables** → **New repository variable**: Name **`INKWELL_DESKTOP_BUCKET`**, value = bucket id **exactly** as in Supabase (case-sensitive), **or**  
-   - **Secrets** → **New repository secret** with the **same name** if you prefer (the workflow accepts either; variable wins if both are set).
-
-4. **Create two GitHub Actions secrets (never commit these)**  
-   Same settings page → tab **Secrets** → **New repository secret**  
-   - **`SUPABASE_URL`** — project API URL, e.g. `https://abcdefghijklmnop.supabase.co` (no trailing slash). Same host as **Project Settings → API** in Supabase.  
-   - **`SUPABASE_SERVICE_ROLE_KEY`** — **service_role** key from the same page. **CI-only.** Do not put this in the web app or Vercel.
-
-5. **Cut a desktop release (CI builds and uploads)**  
-   Bump **`version`** in `package.json`, commit, push **`master`**, then either:  
-   - **Actions** → **Release desktop (Windows)** → **Run workflow**, or  
-   - Push tag **`v<version>`** matching `package.json` (e.g. `v0.8.0` for `0.8.0`).  
-
-   The workflow builds **`release/Inkwell Setup <version>.exe`**, then uploads to your bucket (when the variable is set):  
-   - **`Inkwell-Setup-<version>.exe`** (versioned)  
-   - **`Inkwell-Setup-latest.exe`** (overwritten each release — use this for a stable marketing URL)
-
-6. **Point the website at the stable URL**  
-   In the workflow log, find the line **Public installer URL**. It looks like:  
-   `https://<project>.supabase.co/storage/v1/object/public/<bucket>/Inkwell-Setup-latest.exe`  
-
-   Set **Vercel** (Production) environment variable:  
-   **`VITE_INKWELL_DESKTOP_DOWNLOAD_URL`** = that exact URL.  
-   Redeploy (or push any commit that triggers a production build). Locally, put the same line in **`.env.local`** for testing.
-
-7. **Sanity check**  
-   Paste the URL in a **private/incognito** browser window — it should **download** the `.exe`, not HTML. If you get XML/JSON errors, the bucket is not public or the path is wrong.
-
-If **`INKWELL_DESKTOP_BUCKET`** is unset (neither variable nor secret), the workflow **skips** Supabase upload and only publishes to **GitHub Releases** (unchanged behavior). The job log will show a **Skipping Supabase upload** notice.
+You can set **`VITE_INKWELL_DESKTOP_DOWNLOAD_URL`** to any **HTTPS** URL that serves the NSIS file (Supabase Storage, R2, etc.). Free Storage tiers often cap object size below a typical Electron installer (~**120 MB**). This repo’s **[`.github/workflows/release-desktop.yml`](../.github/workflows/release-desktop.yml)** publishes **only** to **GitHub Releases**; there is **no** automated Storage upload step. If you previously added GitHub Actions secrets **`SUPABASE_URL`**, **`SUPABASE_SERVICE_ROLE_KEY`**, or variable **`INKWELL_DESKTOP_BUCKET`** only for installer uploads, you can delete them to reduce clutter.
 
 ## Marketing download URL (website + Vercel)
 
@@ -190,11 +149,11 @@ The web app bakes a default download URL from **`package.json` version** at buil
 
 **Which GitHub repo?** At build time, `vite.config.ts` resolves **`Owner/repo` from `git remote origin`** (same as `npm run print:desktop-download-url`). If your URL 404s, check **`git remote -v`** matches the repo in the browser (e.g. after an org rename). In CI without a full clone, set **`VITE_INKWELL_GITHUB_OWNER_REPO=Owner/inkwell`**.
 
-**Private repositories:** Unauthenticated visitors often get GitHub’s generic **404** page on `/releases/latest/download/…` (no login prompt). For a public “Download app” button, prefer **Vercel same-origin fetch** (above), **`VITE_INKWELL_DESKTOP_DOWNLOAD_URL`** to Supabase or another HTTPS host, or **make the repo public**.
+**Private repositories:** Unauthenticated visitors often get GitHub’s generic **404** page on `/releases/latest/download/…` (no login prompt). For a public “Download app” button, prefer **Vercel same-origin fetch** (above), **`VITE_INKWELL_DESKTOP_DOWNLOAD_URL`** to any public HTTPS binary URL, or **make the repo public**.
 
 ### Automated publishing (recommended)
 
-Workflow **[`.github/workflows/release-desktop.yml`](../.github/workflows/release-desktop.yml)** builds Windows in CI and uploads the NSIS installer to **GitHub Releases** as **Latest**. If **`INKWELL_DESKTOP_BUCKET`** is set (Actions variable or secret) and Supabase secrets are present, it **attempts** to upload **`Inkwell-Setup-latest.exe`** to that bucket — failures there (**e.g. object size limits**, `curl` exit **22**) **do not** block **Publish GitHub Release** (Vercel’s fetch uses GitHub only).
+Workflow **[`.github/workflows/release-desktop.yml`](../.github/workflows/release-desktop.yml)** builds Windows in CI and uploads **`Inkwell Setup <version>.exe`** to **GitHub Releases** as **Latest** (source for **Vercel**’s optional fetch step above).
 
 **One-time — GitHub Actions permissions**
 
