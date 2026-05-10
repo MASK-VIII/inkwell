@@ -32,6 +32,7 @@ function gitHubOwnerRepoFromOrigin() {
     const url = execFileSync('git', ['remote', 'get-url', 'origin'], {
       cwd: root,
       encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
     }).trim()
     const m =
       url.match(/git@github\.com:([^/]+)\/([^/.]+)/i) ?? url.match(/github\.com[:/]([^/]+)\/([^/.]+)/i)
@@ -73,6 +74,42 @@ async function githubJson(url, token) {
     data = text
   }
   return { res, data }
+}
+
+function normalizeInstallerFilename(s) {
+  return s.replace(/\s+/g, ' ').trim()
+}
+
+/**
+ * @param {{ name?: string; url?: string }[]} assets
+ * @returns {{ asset: { name?: string; url?: string } | null; hint: string }}
+ */
+function pickInstallerAsset(assets, expectedName, semver) {
+  const exes = assets.filter((a) => a?.name && /\.exe$/i.test(a.name))
+  const namesForHint =
+    exes.length ? exes.map((a) => JSON.stringify(a.name)).join(', ')
+    : assets.map((a) => JSON.stringify(a.name)).filter(Boolean).join(', ') || '(none)'
+
+  if (!exes.length) {
+    return { asset: null, hint: `No .exe in release assets. Saw: ${namesForHint}` }
+  }
+
+  let hit = exes.find((a) => a.name === expectedName)
+  if (hit) return { asset: hit, hint: '' }
+
+  hit = exes.find((a) => normalizeInstallerFilename(a.name ?? '') === normalizeInstallerFilename(expectedName))
+  if (hit) return { asset: hit, hint: '' }
+
+  hit = exes.find((a) => (a.name ?? '').toLowerCase() === expectedName.toLowerCase())
+  if (hit) return { asset: hit, hint: '' }
+
+  const versionHits = exes.filter((a) => (a.name ?? '').includes(semver) && /setup/i.test(a.name ?? ''))
+  if (versionHits.length === 1) return { asset: versionHits[0], hint: '' }
+
+  return {
+    asset: null,
+    hint: `Expected ${JSON.stringify(expectedName)}. Available .exe: ${exes.map((a) => JSON.stringify(a.name)).join(', ')}`,
+  }
 }
 
 async function downloadAsset(apiAssetUrl, token, destFile) {
@@ -140,6 +177,13 @@ async function main() {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const { res, data } = await githubJson(releasesTagUrl, token)
     if (res.status === 200 && data && typeof data === 'object' && Array.isArray(data.assets)) {
+      if (data.assets.length === 0 && attempt < maxAttempts) {
+        console.warn(
+          `[fetch-desktop-installer] release ${tag} exists but has no assets yet (attempt ${attempt}/${maxAttempts}); retrying in ${delayMs / 1000}s…`,
+        )
+        await sleep(delayMs)
+        continue
+      }
       release = data
       break
     }
@@ -167,13 +211,17 @@ async function main() {
     throw new Error(`Release ${tag} has no assets`)
   }
 
-  const asset = release.assets.find((a) => a?.name === assetName)
+  const { asset, hint } = pickInstallerAsset(release.assets, assetName, version)
   if (!asset?.url) {
-    throw new Error(`Release ${tag} has no asset named "${assetName}"`)
+    throw new Error(
+      `${hint} — Run GitHub Actions **Release desktop (Windows)** until **Publish GitHub Release** succeeds, ` +
+        `or attach ${JSON.stringify(assetName)} under ${tag} on GitHub.`,
+    )
   }
 
   await mkdir(destDir, { recursive: true })
-  console.log(`[fetch-desktop-installer] downloading ${assetName} → public/downloads/Inkwell-Setup-latest.exe`)
+  const picked = asset.name ?? assetName
+  console.log(`[fetch-desktop-installer] downloading ${JSON.stringify(picked)} → public/downloads/Inkwell-Setup-latest.exe`)
   await downloadAsset(asset.url, token, destFile)
   console.log('[fetch-desktop-installer] done')
 }
