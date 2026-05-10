@@ -100,6 +100,7 @@ import {
   isProjectNotePinned,
   pinProjectNote,
   clearProjectChildPins,
+  convertProjectNoteMasterToBook,
   purgeChildNoteFromProjectShelfLists,
   registerNoteAttachedUnderMaster,
   removeChildNoteFromAllProjectPins,
@@ -108,6 +109,7 @@ import {
   listProjectHistory,
   loadProjectSnapshot,
   clearProjectHistory,
+  getPinnedChildNoteIdsForProject,
   getTabSessionProjectId,
   loadProjectIndex,
   readOpenProjectIdFromLocation,
@@ -1279,12 +1281,15 @@ export default function App() {
   )
 
   const openProject = useCallback(
-    (id: string) => {
+    (id: string, opts?: { chapterId?: number | null }) => {
       syncPersistedState()
       const p = loadProject(id)
       if (!p) return
       setProject(p)
-      setCurrentId(resolveResumeChapterId(p))
+      const forced = opts?.chapterId
+      const nextId =
+        forced != null && p.chapters.some((c) => c.id === forced) ? forced : resolveResumeChapterId(p)
+      setCurrentId(nextId)
       setEbookEditOpen(false)
       navigateRoute('write')
       const force = listProjectHistory(p.id).length === 0
@@ -1292,6 +1297,38 @@ export default function App() {
       if (entry) bumpHistory()
     },
     [bumpHistory, navigateRoute, syncPersistedState],
+  )
+
+  const goToChapterFromEditor = useCallback(
+    (chapterId: number) => {
+      const p = projectRef.current
+      if (!p.chapters.some((c) => c.id === chapterId)) return
+      flushSync(() => setCurrentId(chapterId))
+      navigateRoute('write')
+    },
+    [navigateRoute],
+  )
+
+  const navigateChapterFromStickyPopout = useCallback(
+    (chapterId: number) => {
+      const nid = stickyNotePopoutId
+      if (!nid) return
+      syncPersistedState()
+      const note = loadProject(nid)
+      const parentId = note?.linkedBookId?.trim()
+      if (!parentId) {
+        openProject(nid, { chapterId })
+        setStickyNotePopoutId(null)
+        setBookToolsOpen(false)
+        return
+      }
+      const parent = loadProject(parentId)
+      if (!parent) return
+      openProject(parent.id, { chapterId })
+      setStickyNotePopoutId(null)
+      setBookToolsOpen(false)
+    },
+    [stickyNotePopoutId, syncPersistedState, openProject],
   )
 
   useEffect(() => {
@@ -1957,14 +1994,18 @@ export default function App() {
   const createManuscript = () => {
     clearPersistIdleTimer()
     let newId = 0
-    setProject((prev) => {
-      newId = nextManuscriptId(prev.chapters)
-      const next: Manuscript = {
-        id: newId,
-        title: `Untitled Chapter ${newId}`,
-        content: defaultDoc(),
-      }
-      return saveProject({ ...prev, chapters: [next, ...prev.chapters] })
+    // Flush so the updater runs before `setCurrentId`; otherwise React 18 batches and `newId`
+    // stays 0, so selection doesn't match any chapter → empty editor ("Create a chapter to begin").
+    flushSync(() => {
+      setProject((prev) => {
+        newId = nextManuscriptId(prev.chapters)
+        const next: Manuscript = {
+          id: newId,
+          title: `Chapter ${newId}`,
+          content: defaultDoc(),
+        }
+        return saveProject({ ...prev, chapters: [...prev.chapters, next] })
+      })
     })
     setCurrentId(newId)
     recordHistorySoon('Auto')
@@ -2637,6 +2678,54 @@ export default function App() {
     },
     [collapseBookCardIfNoLinkedNotes, project.id, showToast, undoDeleteProject],
   )
+
+  const convertProjectHubToBook = useCallback(() => {
+    if (project.kind !== 'note' || project.linkedBookId?.trim()) return
+    const pinned = getPinnedChildNoteIdsForProject(project.id)
+    const detail =
+      pinned.length === 0 ?
+        'The master note becomes this book’s chapters.'
+      : `The master note becomes the first chapter(s), then ${pinned.length} stickied note${pinned.length === 1 ? '' : 's'} become further chapters in sticky order. Those stickied notes will be merged and removed from the library. Linked notes that are not stickied stay as separate notes.`
+    if (
+      !window.confirm(
+        ['Convert this project into a book?', '', detail].join('\n'),
+      )
+    ) {
+      return
+    }
+    const entry = pushProjectHistorySnapshot(projectRef.current, {
+      label: 'Before convert to book',
+      force: true,
+    })
+    if (entry) bumpHistory()
+    const res = convertProjectNoteMasterToBook(project.id)
+    if (!res.ok) {
+      showToast(
+        res.reason === 'pinned_child_missing' ?
+          'A stickied note is missing or out of date. Fix sticky notes and try again.'
+        : 'Could not convert this project.',
+      )
+      return
+    }
+    flushSync(() => {
+      setProject(res.project)
+      setCurrentId(resolveResumeChapterId(res.project))
+    })
+    setEditorEpoch((e) => e + 1)
+    recordHistorySoon('Auto')
+    setShelfUiTick((n) => n + 1)
+    setBookToolsOpen(false)
+    navigateRoute('write')
+    showToast('Converted to book')
+  }, [
+    bumpHistory,
+    navigateRoute,
+    project.id,
+    project.kind,
+    project.linkedBookId,
+    recordHistorySoon,
+    showToast,
+  ])
 
   const spawnBookOnShelf = useCallback(() => {
     syncPersistedState()
@@ -5082,8 +5171,9 @@ export default function App() {
                           showChapterTitleOnPage
                           mentionItems={mentionItems}
                           getWikilinkCandidates={() => wikilinkItemsRef.current}
-                          onNoteMentionClick={openLinkedNotePopout}
-                          onWikilinkClick={openLinkedNotePopout}
+                          onLinkedNoteOpenPopout={openLinkedNotePopout}
+                          onLinkedNoteOpenMain={openProject}
+                          onGoToChapter={goToChapterFromEditor}
                           totalBookWords={liveTotalBookWords}
                           statsBookLabel={isNote ? 'Entire note' : 'Entire book'}
                           statsScopeLabel={isNote ? 'Note' : 'Chapter'}
@@ -5184,8 +5274,9 @@ export default function App() {
                   showChapterTitleOnPage
                   mentionItems={mentionItems}
                   getWikilinkCandidates={() => wikilinkItemsRef.current}
-                  onNoteMentionClick={openLinkedNotePopout}
-                  onWikilinkClick={openLinkedNotePopout}
+                  onLinkedNoteOpenPopout={openLinkedNotePopout}
+                  onLinkedNoteOpenMain={openProject}
+                  onGoToChapter={goToChapterFromEditor}
                   totalBookWords={liveTotalBookWords}
                   statsBookLabel={isNote ? 'Entire note' : 'Entire book'}
                   statsScopeLabel={isNote ? 'Note' : 'Chapter'}
@@ -5276,6 +5367,9 @@ export default function App() {
             linkedNotesForBook={linkedNotesForBookPanel}
             onPopoutLinkedNote={openLinkedNotePopout}
             onDeleteLinkedNote={deleteShelfLinkedChildNote}
+            onConvertProjectToBook={
+              project.kind === 'note' && !project.linkedBookId?.trim() ? convertProjectHubToBook : undefined
+            }
             notesProjectMaster={notesProjectMaster}
             onOpenProjectInMain={(id) => {
               syncPersistedState()
@@ -5337,6 +5431,7 @@ export default function App() {
                 setStickyNotePopoutId(null)
                 setBookToolsOpen(false)
               }}
+              onNavigateToChapter={navigateChapterFromStickyPopout}
             />
           ) : null}
 

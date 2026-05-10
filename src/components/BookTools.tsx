@@ -1,4 +1,4 @@
-import { ExternalLink, Trash2, X } from 'lucide-react'
+import { BookOpen, ExternalLink, Trash2, X } from 'lucide-react'
 import {
   memo,
   useCallback,
@@ -67,6 +67,8 @@ type Props = {
   onPopoutLinkedNote?: (noteId: string) => void
   /** Permanently delete a linked child note or a non-current master note (same as shelf). */
   onDeleteLinkedNote?: (noteId: string) => void
+  /** Standalone project hub only: merge master + stickied notes into one book. */
+  onConvertProjectToBook?: () => void
   /** Master workspace (book or note) for this project’s note list; shown first in the list. */
   notesProjectMaster?: NotesProjectMasterRow | null
   /** Open a book or note in the main editor (used for the master row). */
@@ -113,6 +115,7 @@ function BookToolsInner({
   linkedNotesForBook = [],
   onPopoutLinkedNote,
   onDeleteLinkedNote,
+  onConvertProjectToBook,
   notesProjectMaster = null,
   onOpenProjectInMain,
   assembly,
@@ -381,17 +384,29 @@ function BookToolsInner({
                 description="Notes attached to this book or master project."
                 defaultOpen={false}
               >
-              {onNewNoteForBook ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onNewNoteForBook()
-                  }}
-                  className="inkwell-hub-secondary w-full"
-                >
-                  {isNote ? 'New note in this project' : 'New note for this book'}
-                </button>
-              ) : null}
+              <div className="space-y-2">
+                {onNewNoteForBook ?
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onNewNoteForBook()
+                    }}
+                    className="inkwell-hub-secondary w-full"
+                  >
+                    {isNote ? 'New note in this project' : 'New note for this book'}
+                  </button>
+                : null}
+                {isNote && onConvertProjectToBook ?
+                  <button
+                    type="button"
+                    onClick={() => onConvertProjectToBook()}
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl border border-walnut/25 bg-parchment/80 px-4 py-2.5 text-sm font-semibold text-walnut transition-colors hover:bg-parchment dark:border-accent-warm/35 dark:bg-panel-dark/80 dark:text-accent-warm dark:hover:bg-panel-dark"
+                  >
+                    <BookOpen className="h-4 w-4 shrink-0" strokeWidth={2.25} aria-hidden />
+                    Convert to book…
+                  </button>
+                : null}
+              </div>
               <div className="space-y-3" data-inkwell-tour="book-tools-linked-notes">
                 {notesProjectMaster || linkedNotesForBook.length > 0 ? (
                   <ul className="space-y-2">

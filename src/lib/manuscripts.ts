@@ -1254,6 +1254,87 @@ export function createShelfProjectWithMasterNote(): InkwellProject {
   return updated
 }
 
+export type ConvertProjectNoteToBookResult =
+  | { ok: true; project: InkwellProject }
+  | { ok: false; reason: 'not_found' | 'not_eligible' | 'pinned_child_missing' }
+
+/**
+ * Turn a standalone Projects-hub note (`kind: note`, no `linkedBookId`) into a book.
+ * Master manuscripts become the opening chapters; each in-project **stickied** child note
+ * (see `getPinnedChildNoteIdsForProject`) becomes the next chapters in pin order.
+ * Merged child note projects are deleted; their own linked notes are re-parented to this id first.
+ * Linked notes that were not stickied stay attached as separate notes under the new book.
+ */
+export function convertProjectNoteMasterToBook(masterId: string): ConvertProjectNoteToBookResult {
+  const master = loadProject(masterId)
+  if (!master) return { ok: false, reason: 'not_found' }
+  if (master.kind !== 'note' || master.linkedBookId) return { ok: false, reason: 'not_eligible' }
+
+  const pinnedIds = getPinnedChildNoteIdsForProject(masterId)
+  const childSnapshots: { id: string; project: InkwellProject }[] = []
+  for (const id of pinnedIds) {
+    const p = loadProject(id)
+    if (!p || p.kind !== 'note' || p.linkedBookId !== masterId) {
+      return { ok: false, reason: 'pinned_child_missing' }
+    }
+    childSnapshots.push({ id, project: p })
+  }
+
+  const collected: Manuscript[] = []
+  const derivedMasterTitle = deriveNoteMetaTitle(master)
+
+  for (let i = 0; i < master.chapters.length; i++) {
+    const m = master.chapters[i]!
+    const title =
+      m.title.trim() ||
+      (i === 0 ? derivedMasterTitle : '') ||
+      `Section ${collected.length + 1}`
+    collected.push({ ...m, title })
+  }
+
+  for (const { id: childId, project: child } of childSnapshots) {
+    const derivedChildTitle = deriveNoteMetaTitle(child)
+    for (let i = 0; i < child.chapters.length; i++) {
+      const m = child.chapters[i]!
+      const title =
+        m.title.trim() ||
+        (i === 0 ? derivedChildTitle : '') ||
+        `Section ${collected.length + 1}`
+      collected.push({ ...m, title })
+    }
+
+    const grandchildren = listLinkedNotesForBook(childId)
+    for (const meta of grandchildren) {
+      const gp = loadProject(meta.id)
+      if (!gp || gp.kind !== 'note') continue
+      saveProject({ ...gp, linkedBookId: masterId })
+      registerNoteAttachedUnderMaster(masterId, meta.id)
+    }
+
+    removeChildNoteFromAllProjectPins(childId)
+    clearProjectChildPins(childId)
+    purgeChildNoteFromProjectShelfLists(masterId, childId)
+    deleteProject(childId)
+  }
+
+  clearProjectChildPins(masterId)
+
+  const bookTitle = master.book.title.trim() || derivedMasterTitle || 'Untitled book'
+  const chapters = collected.map((m, i) => ({ ...m, id: i + 1 }))
+
+  const bookProject: InkwellProject = {
+    ...master,
+    kind: 'book',
+    linkedBookId: null,
+    book: { ...master.book, title: bookTitle },
+    chapters,
+  }
+
+  const saved = saveProject(bookProject)
+  unpinProjectNote(masterId)
+  return { ok: true, project: saved }
+}
+
 /** Creates a new note linked under `parentId` without changing the active project. */
 export function createChildNoteProject(parentId: string): InkwellProject | null {
   const parent = loadProject(parentId)

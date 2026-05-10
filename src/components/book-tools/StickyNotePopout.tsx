@@ -32,6 +32,8 @@ type Props = {
   onOpenInMainEditor: (noteId: string) => void
   /** Open another linked note in this same sticky stack */
   onOpenSiblingInPopout: (noteId: string) => void
+  /** Jump to a book/note chapter in the main workspace (parent book when linked under one). */
+  onNavigateToChapter?: (chapterId: number) => void
 }
 
 const SAVE_DEBOUNCE_MS = 450
@@ -42,6 +44,7 @@ export function StickyNotePopout({
   onClose,
   onOpenInMainEditor,
   onOpenSiblingInPopout,
+  onNavigateToChapter,
 }: Props) {
   const [noteProject, setNoteProject] = useState<InkwellProject | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -285,8 +288,12 @@ export function StickyNotePopout({
             compactFooterStats
             mentionItems={mentionItems}
             getWikilinkCandidates={() => wikilinkItemsRef.current}
-            onNoteMentionClick={onOpenSiblingInPopout}
-            onWikilinkClick={onOpenSiblingInPopout}
+            onLinkedNoteOpenPopout={onOpenSiblingInPopout}
+            onLinkedNoteOpenMain={(nid) => {
+              flushSave()
+              onOpenInMainEditor(nid)
+            }}
+            onGoToChapter={onNavigateToChapter}
             totalBookWords={noteTotalWords}
             statsBookLabel="Entire note"
             statsScopeLabel="Note"

@@ -14,6 +14,7 @@ import {
 import { createManuscriptTipTapExtensions } from '../lib/tiptap/manuscriptExtensions'
 import type { MentionItem } from '../lib/tiptap/mentionUi'
 import { useIsMobileViewport } from '../hooks/useIsMobileViewport'
+import { InkwellEditorLinkMenu, inkwellSafeExternalHref, type InkwellEditorLinkMenuItem } from './InkwellEditorLinkMenu'
 import { MobileFormatSheet } from './MobileFormatSheet'
 import { ManuscriptToolbar } from './ManuscriptToolbar'
 
@@ -25,6 +26,17 @@ function mentionItemsEqual(a: MentionItem[], b: MentionItem[]): boolean {
     if ((a[i].noteProjectId ?? '') !== (b[i].noteProjectId ?? '')) return false
   }
   return true
+}
+
+function inkwellNoteLinkMenuItems(
+  noteId: string,
+  openPopout?: (id: string) => void,
+  openMain?: (id: string) => void,
+): InkwellEditorLinkMenuItem[] {
+  const items: InkwellEditorLinkMenuItem[] = []
+  if (openPopout) items.push({ label: 'Open in floating note', onSelect: () => openPopout(noteId) })
+  if (openMain) items.push({ label: 'Open in main workspace', onSelect: () => openMain(noteId) })
+  return items
 }
 
 type Props = {
@@ -58,10 +70,12 @@ type Props = {
   leftOverlay?: ReactNode
   /** `[[` wikilink picker targets (same shape as @mention items; `id` = note project id). */
   getWikilinkCandidates?: () => MentionItem[]
-  /** Click on @mention of a linked note (`noteProjectId`). */
-  onNoteMentionClick?: (noteProjectId: string) => void
-  /** Click on `[[wikilink]]` to a note project. */
-  onWikilinkClick?: (noteProjectId: string) => void
+  /** Linked note from @mention / [[wikilink]]: open floating editor (optional). */
+  onLinkedNoteOpenPopout?: (noteProjectId: string) => void
+  /** Linked note from @mention / [[wikilink]]: open as main workspace project (optional). */
+  onLinkedNoteOpenMain?: (noteProjectId: string) => void
+  /** `mention:ch-…` @mention: switch chapter in the current book/note project. */
+  onGoToChapter?: (chapterId: number) => void
 }
 
 function readCssSafeInsetBottomPx(): number {
@@ -115,8 +129,9 @@ function ManuscriptEditorInner({
   onOpenFindReplace,
   leftOverlay,
   getWikilinkCandidates,
-  onNoteMentionClick,
-  onWikilinkClick,
+  onLinkedNoteOpenPopout,
+  onLinkedNoteOpenMain,
+  onGoToChapter,
 }: Props) {
   const isMobile = useIsMobileViewport()
   const [mobileFormatOpen, setMobileFormatOpen] = useState(false)
@@ -144,6 +159,11 @@ function ManuscriptEditorInner({
 
   const [floatPos, setFloatPos] = useState<{ x: number; y: number } | null>(null)
   const [statsPinned, setStatsPinned] = useState(true)
+  const [followMenu, setFollowMenu] = useState<{
+    x: number
+    y: number
+    items: InkwellEditorLinkMenuItem[]
+  } | null>(null)
 
   /**
    * TipTap transactions can fire multiple times per keypress. Calling `editor.getJSON()` and
@@ -170,15 +190,27 @@ function ManuscriptEditorInner({
 
   const mentionItemsRef = useRef(mentionItems)
   const getWikilinkCandidatesRef = useRef(getWikilinkCandidates)
-  const onNoteMentionClickRef = useRef(onNoteMentionClick)
-  const onWikilinkClickRef = useRef(onWikilinkClick)
+  const onLinkedNoteOpenPopoutRef = useRef(onLinkedNoteOpenPopout)
+  const onLinkedNoteOpenMainRef = useRef(onLinkedNoteOpenMain)
+  const onGoToChapterRef = useRef(onGoToChapter)
 
   useLayoutEffect(() => {
     mentionItemsRef.current = mentionItems
     getWikilinkCandidatesRef.current = getWikilinkCandidates
-    onNoteMentionClickRef.current = onNoteMentionClick
-    onWikilinkClickRef.current = onWikilinkClick
-  }, [mentionItems, getWikilinkCandidates, onNoteMentionClick, onWikilinkClick])
+    onLinkedNoteOpenPopoutRef.current = onLinkedNoteOpenPopout
+    onLinkedNoteOpenMainRef.current = onLinkedNoteOpenMain
+    onGoToChapterRef.current = onGoToChapter
+  }, [
+    mentionItems,
+    getWikilinkCandidates,
+    onLinkedNoteOpenPopout,
+    onLinkedNoteOpenMain,
+    onGoToChapter,
+  ])
+
+  useEffect(() => {
+    setFollowMenu(null)
+  }, [manuscriptId])
 
   const dragMovedRef = useRef(false)
   const dragSessionRef = useRef<{
@@ -212,23 +244,74 @@ function ManuscriptEditorInner({
           click: (_view, event) => {
             const el = event.target as HTMLElement | null
             if (!el?.closest) return false
+            const pop = onLinkedNoteOpenPopoutRef.current
+            const main = onLinkedNoteOpenMainRef.current
+
             const mention = el.closest('.inkwell-mention[data-note-project-id]') as HTMLElement | null
             if (mention) {
               const id = mention.getAttribute('data-note-project-id')
-              if (id && onNoteMentionClickRef.current) {
+              const items = id ? inkwellNoteLinkMenuItems(id, pop, main) : []
+              if (items.length > 0) {
                 event.preventDefault()
                 event.stopPropagation()
-                onNoteMentionClickRef.current(id)
+                setFollowMenu({ x: event.clientX, y: event.clientY, items })
                 return true
               }
             }
             const wiki = el.closest('[data-inkwell-wikilink]') as HTMLElement | null
             if (wiki) {
               const id = wiki.getAttribute('data-project-id')
-              if (id && onWikilinkClickRef.current) {
+              const items = id ? inkwellNoteLinkMenuItems(id, pop, main) : []
+              if (items.length > 0) {
                 event.preventDefault()
                 event.stopPropagation()
-                onWikilinkClickRef.current(id)
+                setFollowMenu({ x: event.clientX, y: event.clientY, items })
+                return true
+              }
+            }
+
+            const mentionOnly = el.closest('.inkwell-mention[data-id]') as HTMLElement | null
+            if (mentionOnly && !mentionOnly.hasAttribute('data-note-project-id')) {
+              const rawId = mentionOnly.getAttribute('data-id') ?? ''
+              const chMatch = /^mention:ch-(\d+)$/.exec(rawId)
+              const goCh = onGoToChapterRef.current
+              if (chMatch && goCh) {
+                const chapterId = Number(chMatch[1])
+                event.preventDefault()
+                event.stopPropagation()
+                setFollowMenu({
+                  x: event.clientX,
+                  y: event.clientY,
+                  items: [{ label: 'Go to chapter', onSelect: () => goCh(chapterId) }],
+                })
+                return true
+              }
+            }
+
+            const anchor = el.closest('a[href]') as HTMLAnchorElement | null
+            if (anchor?.closest('.tiptap')) {
+              const href = anchor.getAttribute('href') ?? ''
+              const safe = inkwellSafeExternalHref(href)
+              if (safe) {
+                event.preventDefault()
+                event.stopPropagation()
+                setFollowMenu({
+                  x: event.clientX,
+                  y: event.clientY,
+                  items: [
+                    {
+                      label: 'Open link in new tab',
+                      onSelect: () => window.open(safe, '_blank', 'noopener,noreferrer'),
+                    },
+                    {
+                      label: 'Copy link',
+                      onSelect: () => {
+                        if (!navigator.clipboard) return
+                        void navigator.clipboard.writeText(safe).catch(() => {})
+                      },
+                    },
+                  ],
+                })
                 return true
               }
             }
@@ -561,6 +644,15 @@ function ManuscriptEditorInner({
           />
         </>
       : null}
+
+      {followMenu ?
+        <InkwellEditorLinkMenu
+          x={followMenu.x}
+          y={followMenu.y}
+          items={followMenu.items}
+          onClose={() => setFollowMenu(null)}
+        />
+      : null}
     </div>
   )
 }
@@ -585,7 +677,8 @@ export const ManuscriptEditor = memo(ManuscriptEditorInner, (prev, next) => {
     prev.onOpenFindReplace === next.onOpenFindReplace &&
     prev.leftOverlay === next.leftOverlay &&
     prev.getWikilinkCandidates === next.getWikilinkCandidates &&
-    prev.onNoteMentionClick === next.onNoteMentionClick &&
-    prev.onWikilinkClick === next.onWikilinkClick
+    prev.onLinkedNoteOpenPopout === next.onLinkedNoteOpenPopout &&
+    prev.onLinkedNoteOpenMain === next.onLinkedNoteOpenMain &&
+    prev.onGoToChapter === next.onGoToChapter
   )
 })
