@@ -1,0 +1,72 @@
+# Publish Windows NSIS installer to GitHub Releases (Latest) for marketing "Download app".
+# Requires: repo Settings → Actions → General → Workflow permissions → Read and write.
+name: Release desktop (Windows)
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+jobs:
+  publish-windows-installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Read package version
+        id: pkg
+        shell: bash
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Verify tag matches package.json (tag pushes only)
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: |
+          PKG_VER="${{ steps.pkg.outputs.version }}"
+          TAG="${GITHUB_REF_NAME}"
+          TAG_VER="${TAG#v}"
+          if [ "$PKG_VER" != "$TAG_VER" ]; then
+            echo "::error::Git tag '$TAG' (semver $TAG_VER) must equal package.json version '$PKG_VER'"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build desktop (NSIS)
+        run: npm run build:desktop
+
+      - name: Verify NSIS installer exists
+        shell: bash
+        run: |
+          F="release/Inkwell Setup ${{ steps.pkg.outputs.version }}.exe"
+          if [ ! -f "$F" ]; then
+            echo "::error::Missing $F — listing release/:"
+            ls -la release/ || true
+            exit 1
+          fi
+          ls -la "$F"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.pkg.outputs.version }}
+          name: Inkwell ${{ steps.pkg.outputs.version }}
+          make_latest: true
+          generate_release_notes: true
+          files: |
+            release/Inkwell Setup ${{ steps.pkg.outputs.version }}.exe

@@ -114,17 +114,48 @@ The repository includes `.github/workflows/desktop.yml` as a minimal unsigned ma
 
 The NSIS installer for Windows is **`Inkwell Setup <version>.exe`** (from `productName` + `version` in `package.json`). This is **not** `win-unpacked/Inkwell.exe` (that is the unpacked app beside the installer).
 
-1. Run **`npm run build:desktop`** and find **`Inkwell Setup … .exe`** next to the `win-unpacked` folder (see `package.json` → `build.directories.output`).
-2. Print the HTTPS value for **`VITE_INKWELL_DESKTOP_DOWNLOAD_URL`** (GitHub **latest** release asset URL from `git remote` + current version):
+The web app bakes a default download URL from **`package.json` version** at build time (`vite.config.ts` → GitHub `releases/latest/download/…`). After you bump version, **redeploy the website** (e.g. push to the branch Vercel builds) so the marketing link matches the uploaded asset name.
+
+### Automated publishing (recommended)
+
+Workflow **[`.github/workflows/release-desktop.yml`](../.github/workflows/release-desktop.yml)** builds Windows in CI and uploads the NSIS installer to **GitHub Releases** as **Latest**.
+
+**One-time — GitHub Actions permissions**
+
+1. Repo **Settings → Actions → General → Workflow permissions**.
+2. Select **Read and write permissions** (required so `GITHUB_TOKEN` can create releases and upload assets).
+3. Save.
+
+**Release routine**
+
+1. Bump **`version`** in `package.json` (semver, e.g. `0.8.0`).
+2. Commit and push to **`master`** (or your production branch) so **Vercel** runs **`npm run build`** and the site embeds the new download URL.
+3. Create and push an **annotated or lightweight tag** whose semver matches `package.json` **exactly** (leading `v` only):
 
    ```bash
-   npm run print:desktop-download-url
+   git tag v0.8.0   # must match package.json 0.8.0
+   git push origin v0.8.0
    ```
 
-3. **One-time:** On GitHub, create a **Release** and attach that `.exe` under **Assets** using the **exact** filename the script printed (including spaces).
-4. Paste the printed URL into **Vercel → Project → Settings → Environment Variables** as `VITE_INKWELL_DESKTOP_DOWNLOAD_URL` (enable **Production**, and **Preview** if you want the button on preview deploys), then **redeploy**. Use the same value in `.env.local` for local marketing builds.
+   The workflow verifies the tag matches `package.json`; then it runs **`npm run build:desktop`** on `windows-latest` and publishes **`release/Inkwell Setup <version>.exe`** to a GitHub Release.
 
-The link works only after that asset exists on the repo’s latest release.
+   Alternatively, run **Actions → Release desktop (Windows) → Run workflow** on `master` after bumping `package.json` (no git tag required for this path; the workflow creates/updates the release for `v<version>` at the current commit).
+
+4. Confirm the asset: open the URL from **`npm run print:desktop-download-url`** in a browser — it should download the `.exe`, not HTML.
+
+**Vercel**
+
+- Link the project to this repo and set **Production branch** to `master` (or whatever you use).
+- Enable **automatic deployments** on push so you never need a manual “Deploy” for step (2).
+- **`VITE_INKWELL_DESKTOP_DOWNLOAD_URL`** is optional: omit it to use the build-time default from `vite.config.ts`; set it only to override (CDN, fork, or different filename).
+
+### Manual publishing (fallback)
+
+1. Run **`npm run build:desktop`** and find **`Inkwell Setup … .exe`** under **`release/`** (see `package.json` → `build.directories.output`).
+2. **`npm run print:desktop-download-url`** prints the exact GitHub asset URL.
+3. Create a GitHub **Release** and upload that `.exe` under **Assets** using the **exact** filename (spaces matter).
+
+The public **`/releases/latest/download/…`** link works only after that asset exists on the repo’s **Latest** non-prerelease release.
 
 ## App icon (electron-builder)
 
@@ -139,5 +170,6 @@ The link works only after that asset exists on the repo’s latest release.
 | `npm run build:desktop:install` | Same as above, then launches the Windows NSIS installer or opens the macOS `.dmg` |
 | `npm run generate:brand-icons` | Rasterize `public/favicon.svg` → `build/icon.png` (512) and `public/apple-touch-icon.png` (180) |
 | `npm run print:desktop-download-url` | Print `VITE_INKWELL_DESKTOP_DOWNLOAD_URL` for the Windows NSIS installer (GitHub Releases **latest** asset pattern) |
+| GitHub Actions **Release desktop (Windows)** | On push `v*` or manual dispatch: CI builds NSIS and uploads `Inkwell Setup <version>.exe` to GitHub Releases (**Latest**); requires workflow **Read and write** permission |
 
 Installers land in **`release/`** (`package.json` → `build.directories.output`), next to `win-unpacked/` or the macOS `.dmg`. Running **`npm run build:desktop` does not install the app** — use **`npm run build:desktop:install`** or double-click the **`Inkwell Setup … .exe`** file in `release/`.
