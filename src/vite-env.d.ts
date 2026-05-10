@@ -14,6 +14,8 @@ interface ImportMetaEnv {
   readonly VITE_INKWELL_CLOUD_SYNC?: string
   /** HTTPS URL to the Windows desktop installer (e.g. GitHub Release asset). Shown on the sign-in screen in web builds when set. */
   readonly VITE_INKWELL_DESKTOP_DOWNLOAD_URL?: string
+  /** Optional `Owner/repo` for default GitHub latest-download URL when `git remote` is unavailable at build time. */
+  readonly VITE_INKWELL_GITHUB_OWNER_REPO?: string
   readonly VITE_SUPABASE_URL?: string
   /** Legacy name; same role as publishable key below. */
   readonly VITE_SUPABASE_ANON_KEY?: string

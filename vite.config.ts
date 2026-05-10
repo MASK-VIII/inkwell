@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -8,6 +9,27 @@ import { defineConfig } from 'vite'
 const desktop = process.env.INKWELL_DESKTOP === '1'
 
 const packageRoot = dirname(fileURLToPath(import.meta.url))
+
+/** Same idea as `scripts/print-desktop-download-url.mjs` — never hardcode org in the default URL. */
+function gitHubOwnerRepoForDownloadLink(): string {
+  const fromEnv = process.env.VITE_INKWELL_GITHUB_OWNER_REPO?.trim()
+  if (fromEnv && /^[\w.-]+\/[\w.-]+$/.test(fromEnv)) {
+    return fromEnv
+  }
+  try {
+    const url = execFileSync('git', ['remote', 'get-url', 'origin'], {
+      cwd: packageRoot,
+      encoding: 'utf8',
+    }).trim()
+    const m =
+      url.match(/git@github\.com:([^/]+)\/([^/.]+)/i) ?? url.match(/github\.com[:/]([^/]+)\/([^/.]+)/i)
+    if (m) return `${m[1]}/${m[2]}`
+  } catch {
+    // e.g. no .git, shallow clone without remote
+  }
+  return 'MASK-VIII/inkwell'
+}
+
 const pkg = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8')) as {
   version?: string
   build?: { productName?: string }
@@ -15,8 +37,9 @@ const pkg = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8')) 
 const productName = pkg.build?.productName ?? 'Inkwell'
 const appVersion = String(pkg.version ?? '0.0.0')
 const installerFilename = `${productName} Setup ${appVersion}.exe`
-/** Matches `npm run print:desktop-download-url` / GitHub Releases “latest” asset pattern. */
-const inkwellDesktopDownloadDefault = `https://github.com/MASK-VIII/inkwell/releases/latest/download/${encodeURIComponent(installerFilename)}`
+const ownerRepo = gitHubOwnerRepoForDownloadLink()
+/** GitHub Releases “latest” asset URL; matches `npm run print:desktop-download-url`. */
+const inkwellDesktopDownloadDefault = `https://github.com/${ownerRepo}/releases/latest/download/${encodeURIComponent(installerFilename)}`
 
 // https://vite.dev/config/
 // Desktop (Electron production) loads from a custom origin (`inkwell://app/`) so asset
