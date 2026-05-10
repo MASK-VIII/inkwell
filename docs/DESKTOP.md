@@ -119,7 +119,7 @@ When the repo stays **private**, anonymous **`/releases/latest/download/…`** s
 1. **[`.github/workflows/release-desktop.yml`](../.github/workflows/release-desktop.yml)** publishes **`Inkwell Setup <version>.exe`** to a GitHub Release tagged **`v<version>`** (unchanged).
 2. **`npm run build`** on Vercel runs [**`scripts/fetch-desktop-installer-for-vercel.mjs`**](../scripts/fetch-desktop-installer-for-vercel.mjs) **before** `vite build` when **`VERCEL=1`** and **`VERCEL_ENV=production`** (or when **`INKWELL_FETCH_DESKTOP_INSTALLER=1`** for local testing).
 3. The script polls GitHub until that release asset exists (desktop CI can take several minutes after you bump **`package.json`**), then writes **`public/downloads/Inkwell-Setup-latest.exe`** (gitignored).
-4. Vercel serves files from the build output **before** applying the SPA rewrite to **`index.html`**, so **`/downloads/Inkwell-Setup-latest.exe`** resolves to the binary, not HTML.
+4. Vercel should serve **`/downloads/Inkwell-Setup-latest.exe`** as a static file from the build output. If the installer was **not** fetched (missing PAT, failed CI, etc.), that URL may fall through to **`index.html`** — you would see the **marketing landing**, not an in-app 404, after routing fixes. Check the **production build log** for **`[fetch-desktop-installer] done`**.
 
 **Vercel configuration**
 

@@ -9,7 +9,8 @@
  * On the production Inkwell subdomain, unknown paths resolve to the same SPA bundle;
  * send those to `/` so visitors always see the landing page unless they are on
  * `/app`, `/pricing`, `/buy`, `/legal/{privacy,terms,refund}`, the legacy
- * `/privacy`, `/terms`, `/refund` aliases, or `/changelog` (Roadmap page).
+ * `/privacy`, `/terms`, `/refund` aliases, `/changelog` (Roadmap page), or `/downloads/*`
+ * (Windows installer — static file when deployed; if the SPA loads instead, treat as landing).
  */
 
 export type MarketingView =
@@ -54,6 +55,7 @@ export function classifyMarketingPath(pathname: string): MarketingView {
   if (normalized === '/legal/terms' || normalized === '/terms') return 'terms'
   if (normalized === '/legal/refund' || normalized === '/refund') return 'refund'
   if (normalized === '/changelog') return 'changelog'
+  if (normalized === '/downloads' || normalized.startsWith('/downloads/')) return 'landing'
   return 'not_found'
 }
 
