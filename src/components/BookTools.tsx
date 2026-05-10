@@ -303,7 +303,7 @@ function BookToolsInner({
         aria-modal="true"
         aria-labelledby="book-tools-title"
         data-inkwell-tour="book-tools-drawer"
-        className={`inkwell-drawer-panel fixed right-0 top-0 z-[101] flex h-full w-full max-w-md flex-col border-l border-dust bg-white shadow-2xl dark:border-border-dark dark:bg-panel-dark${drawerPanelMotionLive ? ' inkwell-panel-motion--live' : ''}`}
+        className={`inkwell-drawer-panel fixed right-0 top-0 z-[101] flex h-full w-full max-w-md flex-col border-l border-dust bg-panel-light-strong shadow-2xl dark:border-border-dark dark:bg-panel-dark${drawerPanelMotionLive ? ' inkwell-panel-motion--live' : ''}`}
         style={{ transform: visible ? 'translateX(0)' : 'translateX(110%)' }}
         onTransitionEnd={onDrawerPanelTransitionEnd}
       >
@@ -413,7 +413,7 @@ function BookToolsInner({
                     {notesProjectMaster ? (
                       <li key={`master-${notesProjectMaster.id}`}>
                         {notesProjectMaster.missing ? (
-                          <div className="rounded-2xl border border-dashed border-dust/80 bg-white/50 px-4 py-3 text-left text-sm text-ink/70 dark:border-border-dark dark:bg-panel-dark/50 dark:text-ink-dark/70">
+                          <div className="rounded-2xl border border-dashed border-dust/80 bg-panel-light-muted/72 px-4 py-3 text-left text-sm text-ink-muted dark:border-border-dark dark:bg-panel-dark/50 dark:text-ink-dark/70">
                             <span className="text-[11px] font-semibold uppercase tracking-wide text-walnut dark:text-accent-warm">
                               Master
                             </span>
@@ -436,7 +436,7 @@ function BookToolsInner({
                             </span>
                           </a>
                         ) : (
-                          <div className="group flex overflow-hidden rounded-2xl border-2 border-walnut/35 bg-white/70 transition-colors duration-150 hover:border-walnut/55 hover:bg-white dark:border-accent-warm/40 dark:bg-panel-dark/70 dark:hover:border-accent-warm/60 dark:hover:bg-panel-dark/90">
+                          <div className="group flex overflow-hidden rounded-2xl border-2 border-walnut/35 bg-panel-light/88 transition-colors duration-150 hover:border-walnut/55 hover:bg-panel-light-strong dark:border-accent-warm/40 dark:bg-panel-dark/70 dark:hover:border-accent-warm/60 dark:hover:bg-panel-dark/90">
                             <a
                               href={buildInkwellUrlForProject(notesProjectMaster.id)}
                               onClick={(e) => {
@@ -497,7 +497,7 @@ function BookToolsInner({
                     ) : null}
                     {linkedNotesForBook.map((n) => (
                       <li key={n.id}>
-                        <div className="group flex overflow-hidden rounded-2xl border border-dust bg-white/70 transition-colors duration-150 hover:border-walnut/40 hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:hover:border-accent-warm/45 dark:hover:bg-panel-dark/90">
+                        <div className="group flex overflow-hidden rounded-2xl border border-dust bg-panel-light/88 transition-colors duration-150 hover:border-walnut/40 hover:bg-panel-light-strong dark:border-border-dark dark:bg-panel-dark/70 dark:hover:border-accent-warm/45 dark:hover:bg-panel-dark/90">
                           <a
                             href={buildInkwellUrlForProject(n.id)}
                             onClick={(e) => {
@@ -554,7 +554,7 @@ function BookToolsInner({
                   </ul>
                 ) : null}
                 {linkedNotesForBook.length === 0 ? (
-                  <p className="rounded-2xl border border-dashed border-dust/80 bg-white/50 px-4 py-3 text-sm text-ink/55 dark:border-border-dark dark:bg-panel-dark/50 dark:text-ink-dark/55">
+                  <p className="rounded-2xl border border-dashed border-dust/80 bg-panel-light-muted/72 px-4 py-3 text-sm text-ink-muted dark:border-border-dark dark:bg-panel-dark/50 dark:text-ink-dark/55">
                     {notesProjectMaster && !notesProjectMaster.isCurrent ? (
                       <>
                         No other notes in this project yet. Use the button above or drag notes onto the master on the
@@ -589,7 +589,7 @@ function BookToolsInner({
                   <li key={`${row.sourceProjectId}-${row.chapterId}`}>
                     <button
                       type="button"
-                      className="w-full rounded-2xl border border-dust bg-white/70 px-4 py-3 text-left transition-colors hover:border-walnut/40 hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:hover:border-accent-warm/45 dark:hover:bg-panel-dark/90"
+                      className="w-full rounded-2xl border border-dust bg-panel-light/88 px-4 py-3 text-left transition-colors hover:border-walnut/40 hover:bg-panel-light-strong dark:border-border-dark dark:bg-panel-dark/70 dark:hover:border-accent-warm/45 dark:hover:bg-panel-dark/90"
                       onClick={() => {
                         onOpenBacklinkSource?.(row.sourceProjectId)
                         onClose()
@@ -677,7 +677,7 @@ function BookToolsInner({
                       type="button"
                       disabled={coverBusy}
                       onClick={() => coverInputRef.current?.click()}
-                      className="rounded-2xl border border-dust bg-white px-3 py-2 text-xs font-semibold text-ink shadow-sm transition-colors hover:bg-dust/20 disabled:opacity-60 dark:border-border-dark dark:bg-panel-dark dark:text-ink-dark dark:hover:bg-border-dark/40"
+                      className="rounded-2xl border border-dust bg-panel-light-strong px-3 py-2 text-xs font-semibold text-ink shadow-sm transition-colors hover:bg-dust/20 disabled:opacity-60 dark:border-border-dark dark:bg-panel-dark dark:text-ink-dark dark:hover:bg-border-dark/40"
                     >
                       {coverBusy ? 'Processing…' : draftBook.coverImageDataUrl ? 'Replace image…' : 'Upload image…'}
                     </button>
@@ -885,7 +885,7 @@ function BookToolsInner({
                     {seriesBible.map((row) => (
                       <li
                         key={row.id}
-                        className="flex items-start justify-between gap-2 rounded-xl border border-dust/80 bg-white/60 px-3 py-2 text-sm dark:border-border-dark dark:bg-panel-dark/60"
+                        className="flex items-start justify-between gap-2 rounded-xl border border-dust/80 bg-panel-light-muted/82 px-3 py-2 text-sm dark:border-border-dark dark:bg-panel-dark/60"
                       >
                         <div className="min-w-0">
                           <span className="font-medium text-ink dark:text-ink-dark">{row.name}</span>
@@ -911,7 +911,7 @@ function BookToolsInner({
                 )}
                 <button
                   type="button"
-                  className="w-full rounded-xl border border-dashed border-dust py-2 text-sm font-semibold text-ink/80 hover:bg-white/50 dark:border-border-dark dark:text-ink-dark/80 dark:hover:bg-panel-dark/80"
+                  className="w-full rounded-xl border border-dashed border-dust py-2 text-sm font-semibold text-ink-muted hover:bg-panel-light-muted/65 dark:border-border-dark dark:text-ink-dark/80 dark:hover:bg-panel-dark/80"
                   onClick={() => {
                     const id =
                       typeof crypto !== 'undefined' && 'randomUUID' in crypto ?
@@ -1071,7 +1071,7 @@ function BookToolsInner({
                       onImportDocx(f)
                     }}
                   />
-                  <span className="inkwell-hub-dropzone bg-white/40 dark:bg-panel-dark/40">Import DOCX…</span>
+                  <span className="inkwell-hub-dropzone bg-panel-light-muted/55 dark:bg-panel-dark/40">Import DOCX…</span>
                 </label>
                 {onExportTxt ? (
                   <button
@@ -1134,7 +1134,7 @@ function BookToolsInner({
                         onImportProjectArchive(f)
                       }}
                     />
-                    <span className="inkwell-hub-dropzone bg-white/40 dark:bg-panel-dark/40">Import backup (.zip)</span>
+                    <span className="inkwell-hub-dropzone bg-panel-light-muted/55 dark:bg-panel-dark/40">Import backup (.zip)</span>
                   </label>
                 ) : null}
                 <div className="text-xs text-ink/60 dark:text-ink-dark/60">

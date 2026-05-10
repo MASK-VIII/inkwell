@@ -1214,7 +1214,7 @@ export function ManuscriptToolbar({
   return (
     <>
     <div
-      className={`relative z-[70] flex flex-nowrap items-center gap-2 border-b border-dust bg-white/50 dark:border-border-dark dark:bg-panel-dark/50 ${shellPad}`}
+      className={`relative z-[70] flex flex-nowrap items-center gap-2 border-b border-dust bg-panel-light-muted/72 dark:border-border-dark dark:bg-panel-dark/50 ${shellPad}`}
     >
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-2" data-inkwell-tour="editor-toolbar-bar">
@@ -1275,7 +1275,7 @@ export function ManuscriptToolbar({
           {minimalBar && onOpenFindReplace ? (
             <button
               type="button"
-              className="flex h-9 shrink-0 items-center gap-2 rounded-2xl border border-dust bg-white/80 px-2.5 text-sm font-medium text-ink transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/80 dark:text-ink-dark dark:hover:bg-panel-dark sm:h-10 sm:px-3"
+              className="flex h-9 shrink-0 items-center gap-2 rounded-2xl border border-dust bg-panel-light-strong/85 px-2.5 text-sm font-medium text-ink transition-colors hover:bg-panel-light-strong dark:border-border-dark dark:bg-panel-dark/80 dark:text-ink-dark dark:hover:bg-panel-dark sm:h-10 sm:px-3"
               title="Find and replace across all sections"
               aria-label="Find and replace across all sections"
               onClick={() => onOpenFindReplace()}
@@ -1331,7 +1331,7 @@ export function ManuscriptToolbar({
                 }
               }}
               placeholder="https://…"
-              className="rounded-xl border border-dust bg-white px-3 py-2 text-sm text-ink focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:text-ink-dark dark:focus:border-cream"
+              className="rounded-xl border border-dust bg-panel-light-strong px-3 py-2 text-sm text-ink focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:text-ink-dark dark:focus:border-cream"
               autoFocus
             />
             <div className="flex flex-wrap gap-2">
@@ -1362,7 +1362,7 @@ export function ManuscriptToolbar({
               onChange={(e) => setCommentDraft(e.target.value)}
               rows={3}
               placeholder="Note to self or editor…"
-              className="resize-y rounded-xl border border-dust bg-white px-3 py-2 text-sm text-ink focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:text-ink-dark dark:focus:border-cream"
+              className="resize-y rounded-xl border border-dust bg-panel-light-strong px-3 py-2 text-sm text-ink focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:text-ink-dark dark:focus:border-cream"
               autoFocus
             />
             <div className="flex flex-wrap gap-2">
@@ -1392,7 +1392,7 @@ export function ManuscriptToolbar({
               value={footnoteDraft}
               onChange={(e) => setFootnoteDraft(e.target.value)}
               rows={3}
-              className="resize-y rounded-xl border border-dust bg-white px-3 py-2 text-sm text-ink focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:text-ink-dark dark:focus:border-cream"
+              className="resize-y rounded-xl border border-dust bg-panel-light-strong px-3 py-2 text-sm text-ink focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:text-ink-dark dark:focus:border-cream"
               autoFocus
             />
             <div className="flex flex-wrap gap-2">

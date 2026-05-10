@@ -31,7 +31,7 @@ export function HeroSection({ darkMode = false }: { darkMode?: boolean }) {
             </a>
             <a
               href="#pricing"
-              className="inline-flex items-center justify-center rounded-full border border-walnut/30 px-6 py-3 text-base font-medium text-ink transition hover:border-walnut/60 hover:bg-white/60 dark:border-border-dark dark:text-ink-dark dark:hover:border-accent-warm/45 dark:hover:bg-panel-dark/60"
+              className="inline-flex items-center justify-center rounded-full border border-walnut/30 px-6 py-3 text-base font-medium text-ink transition hover:border-walnut/60 hover:bg-panel-light-muted/70 dark:border-border-dark dark:text-ink-dark dark:hover:border-accent-warm/45 dark:hover:bg-panel-dark/60"
             >
               See pricing
             </a>
@@ -54,9 +54,9 @@ export function HeroSection({ darkMode = false }: { darkMode?: boolean }) {
             <div className="flex justify-center lg:justify-end">
               <a
                 href={desktopDownloadUrl}
-                download
+                target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex w-full max-w-sm items-center justify-center gap-2 rounded-2xl border border-walnut/35 bg-white/70 px-6 py-3.5 text-base font-semibold text-ink shadow-sm backdrop-blur-sm transition hover:border-walnut/55 hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-walnut sm:w-auto lg:max-w-none dark:border-border-dark dark:bg-panel-dark/75 dark:text-ink-dark dark:hover:border-accent-warm/45 dark:hover:bg-panel-dark/90 dark:focus-visible:outline-cream/50"
+                className="inline-flex w-full max-w-sm items-center justify-center gap-2 rounded-2xl border border-walnut/35 bg-panel-light/88 px-6 py-3.5 text-base font-semibold text-ink shadow-sm backdrop-blur-sm transition hover:border-walnut/55 hover:bg-panel-light-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-walnut sm:w-auto lg:max-w-none dark:border-border-dark dark:bg-panel-dark/75 dark:text-ink-dark dark:hover:border-accent-warm/45 dark:hover:bg-panel-dark/90 dark:focus-visible:outline-cream/50"
               >
                 <Download className="h-5 w-5 shrink-0" aria-hidden />
                 Download app

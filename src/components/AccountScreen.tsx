@@ -146,9 +146,9 @@ export function AccountScreen({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-parchment text-ink transition-colors dark:bg-panel-dark dark:text-ink-dark">
-      <header className="inkwell-chrome-header sticky top-0 z-50 border-b border-dust bg-white/90 backdrop-blur-md dark:border-border-dark dark:bg-panel-dark/90">
+      <header className="inkwell-chrome-header sticky top-0 z-50 border-b border-dust bg-panel-light-strong/92 backdrop-blur-md dark:border-border-dark dark:bg-panel-dark/90">
         <div className="flex w-full min-h-[3.25rem] items-stretch sm:min-h-[3.5rem]">
-          <div className="inkwell-theme-bridge flex min-w-0 flex-1 items-center justify-start gap-2 bg-white/70 py-2 pl-3 sm:gap-3 sm:py-3 sm:pl-5 dark:bg-panel-dark/70">
+          <div className="inkwell-theme-bridge flex min-w-0 flex-1 items-center justify-start gap-2 bg-panel-light/88 py-2 pl-3 sm:gap-3 sm:py-3 sm:pl-5 dark:bg-panel-dark/70">
             <button
               type="button"
               onClick={headerExit}
@@ -162,7 +162,7 @@ export function AccountScreen({
               ref={brandRef}
               type="button"
               onClick={headerExit}
-              className="inkwell-header-brand group inline-flex w-fit max-w-full min-w-0 items-center gap-2 rounded-2xl px-2 py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-walnut/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream/50 dark:focus-visible:ring-offset-panel-dark sm:gap-3"
+              className="inkwell-header-brand group inline-flex w-fit max-w-full min-w-0 items-center gap-2 rounded-2xl px-2 py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-walnut/40 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment dark:focus-visible:ring-cream/50 dark:focus-visible:ring-offset-panel-dark sm:gap-3"
               aria-label={brandTitle}
               title={brandTitle}
             >
@@ -244,7 +244,7 @@ export function AccountScreen({
           )
         })() : null}
 
-        <section className="rounded-2xl border border-dust/80 bg-white/80 p-5 shadow-sm dark:border-border-dark dark:bg-panel-dark/70">
+        <section className="rounded-2xl border border-dust/80 bg-panel-light-strong/85 p-5 shadow-sm dark:border-border-dark dark:bg-panel-dark/70">
           <h2 className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
             Sign-in
           </h2>
@@ -265,7 +265,7 @@ export function AccountScreen({
         </section>
 
         {cloudSyncConfigured && licensing ?
-          <section className="rounded-2xl border border-dust/80 bg-white/80 p-5 shadow-sm dark:border-border-dark dark:bg-panel-dark/70">
+          <section className="rounded-2xl border border-dust/80 bg-panel-light-strong/85 p-5 shadow-sm dark:border-border-dark dark:bg-panel-dark/70">
             <h2 className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
               Your plan
             </h2>
@@ -298,7 +298,7 @@ export function AccountScreen({
               }
             </p>
             {!licensing.loading && (licensing.tier === 'basic' || licensing.tier === 'pro') ?
-              <div className="mt-3 rounded-xl border border-dust/70 bg-white/55 px-3 py-2 text-xs leading-relaxed text-ink/65 dark:border-border-dark dark:bg-panel-dark/55 dark:text-ink-dark/65">
+              <div className="mt-3 rounded-xl border border-dust/70 bg-panel-light-muted/82 px-3 py-2 text-xs leading-relaxed text-ink-muted dark:text-ink-dark/65 dark:border-border-dark dark:bg-panel-dark/55 dark:text-ink-dark/65">
                 {licensing.status === 'offline_cached' ?
                   <>
                     <p className="font-semibold text-ink dark:text-ink-dark">You’re offline</p>
@@ -344,7 +344,7 @@ export function AccountScreen({
           </section>
         : null}
 
-        <section className="rounded-2xl border border-dust/80 bg-white/80 p-5 shadow-sm dark:border-border-dark dark:bg-panel-dark/70">
+        <section className="rounded-2xl border border-dust/80 bg-panel-light-strong/85 p-5 shadow-sm dark:border-border-dark dark:bg-panel-dark/70">
           <h2 className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
             Using Inkwell on a new device?
           </h2>
@@ -354,7 +354,7 @@ export function AccountScreen({
         </section>
 
         {cloudSyncConfigured ?
-          <section className="rounded-2xl border border-dust/80 bg-white/80 p-5 shadow-sm dark:border-border-dark dark:bg-panel-dark/70">
+          <section className="rounded-2xl border border-dust/80 bg-panel-light-strong/85 p-5 shadow-sm dark:border-border-dark dark:bg-panel-dark/70">
             <h2 className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
               Cloud library sync
             </h2>
@@ -374,7 +374,7 @@ export function AccountScreen({
                     cloudBackupMeter.zipBytes != null &&
                     cloudBackupMeter.zipBytes / cloudBackupMeter.limitBytes >= 0.9 ?
                     'border-amber-500/60 bg-amber-50/80 dark:border-amber-600/45 dark:bg-amber-950/35'
-                  : 'border-dust/70 bg-white/55 dark:border-border-dark dark:bg-panel-dark/55',
+                  : 'border-dust/70 bg-panel-light-muted/82 dark:border-border-dark dark:bg-panel-dark/55',
                 ].join(' ')}
               >
                 <h3 className="text-[11px] font-semibold uppercase tracking-widest text-walnut/85 dark:text-accent-warm/90">
@@ -484,14 +484,14 @@ export function AccountScreen({
             </div>
           </section>
         : (
-          <section className="rounded-2xl border border-dust/60 bg-white/60 p-5 text-sm text-ink/75 dark:border-border-dark dark:bg-panel-dark/50 dark:text-ink-dark/75">
+          <section className="rounded-2xl border border-dust/60 bg-panel-light-muted/80 p-5 text-sm text-ink-muted dark:text-ink-dark/75 dark:border-border-dark dark:bg-panel-dark/50 dark:text-ink-dark/75">
             Cloud sync is not enabled in this build.
           </section>
         )}
 
         <InstallToHomeScreen />
 
-        <section className="rounded-2xl border border-dust/80 bg-white/80 p-5 shadow-sm dark:border-border-dark dark:bg-panel-dark/70">
+        <section className="rounded-2xl border border-dust/80 bg-panel-light-strong/85 p-5 shadow-sm dark:border-border-dark dark:bg-panel-dark/70">
           <h2 className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
             Session
           </h2>
@@ -502,7 +502,7 @@ export function AccountScreen({
           <button
             type="button"
             onClick={onAppSignOut}
-            className="mt-4 w-full rounded-2xl bg-red-600/95 px-4 py-3 text-sm font-semibold text-white outline-none transition-colors hover:bg-red-700 focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:bg-red-700 dark:hover:bg-red-600 dark:focus-visible:ring-offset-panel-dark sm:w-auto"
+            className="mt-4 w-full rounded-2xl bg-red-600/95 px-4 py-3 text-sm font-semibold text-white outline-none transition-colors hover:bg-red-700 focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment dark:bg-red-700 dark:hover:bg-red-600 dark:focus-visible:ring-offset-panel-dark sm:w-auto"
           >
             Sign out
           </button>

@@ -512,7 +512,7 @@ export function MobileFormatSheet({ open, editor, onClose, onOpenFindReplace }: 
               </label>
               <select
                 id="inkwell-mobile-scene-break"
-                className="min-w-0 flex-1 rounded-xl border border-dust bg-white px-2 py-2 text-sm text-ink dark:border-border-dark dark:bg-panel-dark dark:text-ink-dark"
+                className="min-w-0 flex-1 rounded-xl border border-dust bg-panel-light-strong px-2 py-2 text-sm text-ink dark:border-border-dark dark:bg-panel-dark dark:text-ink-dark"
                 defaultValue=""
                 aria-label="Insert scene break"
                 onChange={(e) => {
@@ -554,7 +554,7 @@ export function MobileFormatSheet({ open, editor, onClose, onOpenFindReplace }: 
                     }
                   }}
                   placeholder="https://…"
-                  className="mb-2 w-full rounded-xl border border-dust bg-white px-3 py-2 text-sm text-ink focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:text-ink-dark dark:focus:border-cream"
+                  className="mb-2 w-full rounded-xl border border-dust bg-panel-light-strong px-3 py-2 text-sm text-ink focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:text-ink-dark dark:focus:border-cream"
                   autoFocus
                 />
                 <div className="flex flex-wrap gap-2">
@@ -590,7 +590,7 @@ export function MobileFormatSheet({ open, editor, onClose, onOpenFindReplace }: 
                   value={footnoteDraft}
                   onChange={(e) => setFootnoteDraft(e.target.value)}
                   rows={3}
-                  className="mb-2 w-full resize-y rounded-xl border border-dust bg-white px-3 py-2 text-sm text-ink focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:text-ink-dark dark:focus:border-cream"
+                  className="mb-2 w-full resize-y rounded-xl border border-dust bg-panel-light-strong px-3 py-2 text-sm text-ink focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:text-ink-dark dark:focus:border-cream"
                   placeholder="Footnote content…"
                 />
                 <button

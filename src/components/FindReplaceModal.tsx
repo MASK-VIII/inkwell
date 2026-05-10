@@ -43,7 +43,7 @@ export function FindReplaceModal({ open, onClose, chapters, onApply }: Props) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="find-replace-title"
-        className="fixed left-1/2 top-24 z-[201] w-[min(26rem,calc(100vw-2rem))] -translate-x-1/2 rounded-2xl border border-dust bg-white p-5 shadow-2xl dark:border-border-dark dark:bg-panel-dark"
+        className="fixed left-1/2 top-24 z-[201] w-[min(26rem,calc(100vw-2rem))] -translate-x-1/2 rounded-2xl border border-dust bg-panel-light-strong p-5 shadow-2xl dark:border-border-dark dark:bg-panel-dark"
       >
         <div className="mb-4 flex items-center justify-between">
           <h2 id="find-replace-title" className="font-serif text-lg font-semibold text-ink dark:text-ink-dark">

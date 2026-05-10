@@ -74,7 +74,7 @@ function TrustRow() {
       {items.map((it) => (
         <div
           key={it.label}
-          className="rounded-xl border border-dust/70 bg-white/40 px-4 py-3 text-sm text-walnut/85 dark:border-border-dark dark:bg-panel-dark/50 dark:text-ink-dark/78"
+          className="rounded-xl border border-dust/70 bg-panel-light-muted/62 px-4 py-3 text-sm text-walnut/85 dark:border-border-dark dark:bg-panel-dark/50 dark:text-ink-dark/78"
         >
           <p className="text-xs font-medium uppercase tracking-widest text-walnut/70 dark:text-ink-dark/60">{it.label}</p>
           <p className="mt-1">{it.detail}</p>
@@ -98,7 +98,7 @@ function PlanCard({
       className={[
         'relative flex h-full flex-col rounded-2xl border p-6 shadow-[0_1px_0_rgba(255,255,255,0.55)_inset] transition',
         subtle ?
-          'border-dust/60 bg-white/35 hover:border-dust/90 hover:bg-white/45 dark:border-border-dark/70 dark:bg-panel-dark/45 dark:hover:bg-panel-dark/55'
+          'border-dust/60 bg-panel-light-muted/52 hover:border-dust/90 hover:bg-panel-light-muted/68 dark:border-border-dark/70 dark:bg-panel-dark/45 dark:hover:bg-panel-dark/55'
         : 'border-dust/70 bg-parchment/70 hover:border-walnut/40 hover:bg-parchment dark:border-border-dark dark:bg-panel-dark/60 dark:hover:border-accent-warm/40 dark:hover:bg-panel-dark/75',
         featured ?
           'ring-2 ring-walnut/20 dark:ring-cream/20'

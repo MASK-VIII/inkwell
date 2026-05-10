@@ -18,6 +18,12 @@
   --color-border-dark: #2a2f34;
   --color-ink-dark: #f7e7c2;
   --color-accent-warm: #d9a441;
+  /* Light chrome: parchment-tinted panels (avoid cool white on parchment) */
+  --color-panel-light: color-mix(in srgb, var(--color-parchment) 52%, white);
+  --color-panel-light-strong: color-mix(in srgb, var(--color-parchment) 30%, white);
+  --color-panel-light-muted: color-mix(in srgb, var(--color-parchment) 68%, white);
+  /* Secondary body/chrome copy on light backgrounds */
+  --color-ink-muted: color-mix(in srgb, var(--color-ink) 72%, #52483f);
 }
 
 html,
@@ -37,7 +43,36 @@ body,
 /* Base canvas so theme toggles always interpolate a visible wash (not “instant” behind opaque UI). */
 html {
   background-color: var(--color-parchment);
+  background-image:
+    radial-gradient(
+      ellipse 118% 78% at 50% -20%,
+      color-mix(in srgb, white 82%, var(--color-parchment)),
+      transparent 54%
+    ),
+    radial-gradient(
+      ellipse 92% 56% at 50% 103%,
+      color-mix(in srgb, var(--color-dust) 20%, transparent),
+      transparent 54%
+    );
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  background-attachment: fixed;
   -webkit-text-size-adjust: 100%;
+}
+
+html.dark {
+  background-color: var(--color-panel-dark);
+  background-image:
+    radial-gradient(
+      ellipse 110% 70% at 50% -24%,
+      color-mix(in srgb, var(--color-cream) 14%, transparent),
+      transparent 58%
+    ),
+    radial-gradient(
+      ellipse 100% 52% at 50% 106%,
+      color-mix(in srgb, var(--color-cream) 7%, transparent),
+      transparent 46%
+    );
 }
 
 body {
@@ -137,7 +172,6 @@ html[data-inkwell-play-animations='false'] {
 
 .dark {
   color-scheme: dark;
-  background-color: var(--color-panel-dark);
   scrollbar-color: color-mix(in srgb, var(--color-accent-warm) 55%, transparent)
     color-mix(in srgb, var(--color-border-dark) 80%, transparent);
 }
@@ -412,15 +446,15 @@ select {
 @layer components {
   /* Shared header rail, drawer close, and compact chrome */
   .inkwell-btn-icon {
-    @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-ink transition-colors outline-none hover:bg-dust/30 focus-visible:ring-2 focus-visible:ring-walnut/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:text-ink-dark dark:hover:bg-border-dark/50 dark:focus-visible:ring-cream/50 dark:focus-visible:ring-offset-panel-dark;
+    @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-ink transition-colors outline-none hover:bg-dust/30 focus-visible:ring-2 focus-visible:ring-walnut/40 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment dark:text-ink-dark dark:hover:bg-border-dark/50 dark:focus-visible:ring-cream/50 dark:focus-visible:ring-offset-panel-dark;
   }
 
   .inkwell-btn-icon-sm {
-    @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl text-ink transition-colors outline-none hover:bg-dust/40 focus-visible:ring-2 focus-visible:ring-walnut/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:text-ink-dark dark:hover:bg-border-dark/50 dark:focus-visible:ring-cream/50 dark:focus-visible:ring-offset-panel-dark;
+    @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl text-ink transition-colors outline-none hover:bg-dust/40 focus-visible:ring-2 focus-visible:ring-walnut/40 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment dark:text-ink-dark dark:hover:bg-border-dark/50 dark:focus-visible:ring-cream/50 dark:focus-visible:ring-offset-panel-dark;
   }
 
   .inkwell-btn-icon-xs {
-    @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl text-ink transition-colors outline-none hover:bg-dust/40 focus-visible:ring-2 focus-visible:ring-walnut/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:text-ink-dark dark:hover:bg-border-dark/50 dark:focus-visible:ring-cream/50 dark:focus-visible:ring-offset-panel-dark;
+    @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl text-ink transition-colors outline-none hover:bg-dust/40 focus-visible:ring-2 focus-visible:ring-walnut/40 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment dark:text-ink-dark dark:hover:bg-border-dark/50 dark:focus-visible:ring-cream/50 dark:focus-visible:ring-offset-panel-dark;
   }
 
   /* ~44px minimum tap targets on coarse pointers (phones); desktop hover mice unchanged. */
@@ -435,11 +469,11 @@ select {
   }
 
   .inkwell-btn-chapter-new-sm {
-    @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-ink text-parchment outline-none transition-transform hover:scale-105 hover:bg-walnut focus-visible:ring-2 focus-visible:ring-walnut/45 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:bg-cream dark:text-ink dark:hover:bg-accent-warm dark:focus-visible:ring-cream/55 dark:focus-visible:ring-offset-panel-dark;
+    @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-ink text-parchment outline-none transition-transform hover:scale-105 hover:bg-walnut focus-visible:ring-2 focus-visible:ring-walnut/45 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment dark:bg-cream dark:text-ink dark:hover:bg-accent-warm dark:focus-visible:ring-cream/55 dark:focus-visible:ring-offset-panel-dark;
   }
 
   .inkwell-btn-chapter-new-xs {
-    @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl bg-ink text-parchment outline-none transition-transform hover:scale-105 hover:bg-walnut focus-visible:ring-2 focus-visible:ring-walnut/45 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:bg-cream dark:text-ink dark:hover:bg-accent-warm dark:focus-visible:ring-cream/55 dark:focus-visible:ring-offset-panel-dark;
+    @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl bg-ink text-parchment outline-none transition-transform hover:scale-105 hover:bg-walnut focus-visible:ring-2 focus-visible:ring-walnut/45 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment dark:bg-cream dark:text-ink dark:hover:bg-accent-warm dark:focus-visible:ring-cream/55 dark:focus-visible:ring-offset-panel-dark;
   }
 
   .inkwell-hub-primary {
@@ -447,11 +481,11 @@ select {
   }
 
   .inkwell-hub-secondary {
-    @apply rounded-2xl border border-dust bg-white/80 px-5 py-3 text-sm font-semibold text-ink outline-none transition-colors hover:bg-white focus-visible:ring-2 focus-visible:ring-walnut/35 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment/80 dark:border-border-dark dark:bg-panel-dark/80 dark:text-ink-dark dark:hover:bg-panel-dark dark:focus-visible:ring-cream/45 dark:focus-visible:ring-offset-panel-dark disabled:pointer-events-none disabled:opacity-40;
+    @apply rounded-2xl border border-dust px-5 py-3 text-sm font-semibold text-ink outline-none transition-colors focus-visible:ring-2 focus-visible:ring-walnut/35 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment dark:border-border-dark dark:bg-panel-dark/80 dark:text-ink-dark dark:hover:bg-panel-dark dark:focus-visible:ring-cream/45 dark:focus-visible:ring-offset-panel-dark disabled:pointer-events-none disabled:opacity-40;
   }
 
   .inkwell-hub-tertiary {
-    @apply rounded-full border border-dust bg-white/80 px-4 py-2 text-xs font-semibold text-ink outline-none transition-colors hover:bg-white focus-visible:ring-2 focus-visible:ring-walnut/35 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment/80 dark:border-border-dark dark:bg-panel-dark/80 dark:text-ink-dark dark:hover:bg-panel-dark dark:focus-visible:ring-cream/45 dark:focus-visible:ring-offset-panel-dark disabled:pointer-events-none disabled:opacity-40;
+    @apply rounded-full border border-dust px-4 py-2 text-xs font-semibold text-ink outline-none transition-colors focus-visible:ring-2 focus-visible:ring-walnut/35 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment dark:border-border-dark dark:bg-panel-dark/80 dark:text-ink-dark dark:hover:bg-panel-dark dark:focus-visible:ring-cream/45 dark:focus-visible:ring-offset-panel-dark disabled:pointer-events-none disabled:opacity-40;
   }
 
   .inkwell-hub-card {
@@ -459,12 +493,61 @@ select {
   }
 
   .inkwell-hub-row-btn {
-    @apply w-full rounded-xl border border-dust bg-white/70 px-4 py-3 text-sm font-semibold text-ink outline-none transition-colors hover:bg-white focus-visible:ring-2 focus-visible:ring-walnut/35 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment/80 dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90 dark:focus-visible:ring-cream/45 dark:focus-visible:ring-offset-panel-dark disabled:pointer-events-none disabled:opacity-40;
+    @apply w-full rounded-xl border border-dust px-4 py-3 text-sm font-semibold text-ink outline-none transition-colors focus-visible:ring-2 focus-visible:ring-walnut/35 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90 dark:focus-visible:ring-cream/45 dark:focus-visible:ring-offset-panel-dark disabled:pointer-events-none disabled:opacity-40;
   }
 
   .inkwell-hub-dropzone {
-    @apply block w-full cursor-pointer rounded-xl border border-dashed border-dust bg-white/50 px-4 py-3 text-center text-sm font-semibold text-ink/85 outline-none transition-colors hover:bg-white focus-visible:ring-2 focus-visible:ring-walnut/35 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment/80 dark:border-border-dark dark:bg-panel-dark/50 dark:text-ink-dark/85 dark:hover:bg-panel-dark/80 dark:focus-visible:ring-cream/45 dark:focus-visible:ring-offset-panel-dark;
+    @apply block w-full cursor-pointer rounded-xl border border-dashed border-dust px-4 py-3 text-center text-sm font-semibold text-ink-muted outline-none transition-colors focus-visible:ring-2 focus-visible:ring-walnut/35 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment dark:border-border-dark dark:bg-panel-dark/50 dark:text-ink-dark/85 dark:hover:bg-panel-dark/80 dark:focus-visible:ring-cream/45 dark:focus-visible:ring-offset-panel-dark;
   }
+}
+
+/* Light hub buttons: paper gradients / warm fills (dark uses Tailwind on components above). */
+html:not(.dark) .inkwell-hub-secondary {
+  background: linear-gradient(
+    168deg,
+    var(--color-panel-light-strong),
+    color-mix(in srgb, var(--color-parchment) 38%, var(--color-panel-light))
+  );
+}
+
+html:not(.dark) .inkwell-hub-secondary:hover {
+  background: linear-gradient(
+    168deg,
+    color-mix(in srgb, white 42%, var(--color-panel-light-strong)),
+    color-mix(in srgb, var(--color-parchment) 34%, var(--color-panel-light))
+  );
+}
+
+html:not(.dark) .inkwell-hub-tertiary {
+  background: linear-gradient(
+    168deg,
+    var(--color-panel-light-strong),
+    color-mix(in srgb, var(--color-parchment) 36%, var(--color-panel-light))
+  );
+}
+
+html:not(.dark) .inkwell-hub-tertiary:hover {
+  background: linear-gradient(
+    168deg,
+    color-mix(in srgb, white 44%, var(--color-panel-light-strong)),
+    color-mix(in srgb, var(--color-parchment) 32%, var(--color-panel-light-muted))
+  );
+}
+
+html:not(.dark) .inkwell-hub-row-btn {
+  background: color-mix(in srgb, var(--color-panel-light) 88%, var(--color-parchment));
+}
+
+html:not(.dark) .inkwell-hub-row-btn:hover {
+  background: var(--color-panel-light-strong);
+}
+
+html:not(.dark) .inkwell-hub-dropzone {
+  background: color-mix(in srgb, var(--color-panel-light-muted) 78%, transparent);
+}
+
+html:not(.dark) .inkwell-hub-dropzone:hover {
+  background: color-mix(in srgb, var(--color-panel-light-strong) 88%, var(--color-parchment));
 }
 
 /* Sign-in: manuscript-like canvas (static; no motion on background) */
@@ -720,8 +803,11 @@ select {
 .inkwell-editor-shell {
   background: var(--color-parchment);
   box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 82%, transparent),
     inset 0 0 60px -15px rgba(139, 69, 19, 0.18),
-    0 10px 30px -10px rgba(0, 0, 0, 0.1);
+    0 0 0 1px color-mix(in srgb, var(--color-walnut) 12%, transparent),
+    0 10px 34px -14px rgba(44, 36, 31, 0.09),
+    0 0 28px -16px color-mix(in srgb, var(--color-accent-warm) 24%, transparent);
 }
 
 .dark .inkwell-editor-shell {
@@ -740,7 +826,12 @@ select {
 }
 
 [data-inkwell-format-split] .inkwell-editor-shell--format-split {
-  box-shadow: inset 0 0 40px -18px rgba(139, 69, 19, 0.14);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 78%, transparent),
+    inset 0 0 40px -18px rgba(139, 69, 19, 0.14),
+    0 0 0 1px color-mix(in srgb, var(--color-walnut) 10%, transparent),
+    0 6px 22px -14px rgba(44, 36, 31, 0.07),
+    0 0 20px -14px color-mix(in srgb, var(--color-accent-warm) 18%, transparent);
 }
 
 .dark [data-inkwell-format-split] .inkwell-editor-shell--format-split {

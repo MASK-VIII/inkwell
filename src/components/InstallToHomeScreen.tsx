@@ -92,7 +92,7 @@ export function InstallToHomeScreen() {
   const showIosHint = !showChromiumInstall && isIosTouchDevice()
 
   return (
-    <section className="rounded-2xl border border-dust/80 bg-white/80 p-5 shadow-sm dark:border-border-dark dark:bg-panel-dark/70">
+    <section className="rounded-2xl border border-dust/80 bg-panel-light-strong/85 p-5 shadow-sm dark:border-border-dark dark:bg-panel-dark/70">
       <div className="flex items-start justify-between gap-3">
         <h2 className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
           Install on this device

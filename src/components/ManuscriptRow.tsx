@@ -76,7 +76,7 @@ function ManuscriptRowInner({
   const menuBtnClass = `inkwell-chapter-row-menu-btn flex h-8 w-8 items-center justify-center rounded-2xl transition-colors ${
     active
       ? 'text-parchment/80 hover:bg-white/10 dark:text-ink/70 dark:hover:bg-black/10'
-      : 'text-ink/55 hover:bg-white/50 dark:text-ink-dark/55 dark:hover:bg-panel-dark/80'
+      : 'text-ink-muted hover:bg-panel-light-muted/72 dark:text-ink-dark/55 dark:hover:bg-panel-dark/80'
   }`
 
   const menuItemClass = `block w-full px-3 py-2.5 text-left text-sm font-medium transition-colors ${
@@ -94,7 +94,7 @@ function ManuscriptRowInner({
       aria-grabbed={dragging}
       aria-label={`Section: ${displayTitle}. Drag the grip to reorder or activate to open.`}
       title="Drag the grip to reorder"
-      className={`flex cursor-default touch-pan-y flex-col gap-2 rounded-3xl px-2.5 py-3 outline-none transition-[transform,background-color,box-shadow,filter] duration-200 ease-out focus-visible:ring-2 focus-visible:ring-walnut focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark sm:px-3 ${
+      className={`flex cursor-default touch-pan-y flex-col gap-2 rounded-3xl px-2.5 py-3 outline-none transition-[transform,background-color,box-shadow,filter] duration-200 ease-out focus-visible:ring-2 focus-visible:ring-walnut focus-visible:ring-offset-2 focus-visible:ring-offset-parchment dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark sm:px-3 ${
         active
           ? 'bg-ink text-parchment dark:bg-cream dark:text-ink'
           : 'hover:bg-dust/30 dark:hover:bg-border-dark/50'
@@ -149,7 +149,7 @@ function ManuscriptRowInner({
           className={`touch-none mt-0.5 flex h-6 w-6 shrink-0 cursor-grab items-center justify-center rounded-lg border border-transparent active:cursor-grabbing sm:h-7 sm:w-7 sm:rounded-xl ${
             active
               ? 'text-parchment/90 hover:bg-white/10 dark:text-ink/80 dark:hover:bg-black/10'
-              : 'text-ink/50 hover:border-dust/80 hover:bg-white/50 dark:text-ink-dark/50 dark:hover:border-border-dark dark:hover:bg-panel-dark/60'
+              : 'text-ink-muted hover:border-dust/80 hover:bg-panel-light-muted/72 dark:text-ink-dark/50 dark:hover:border-border-dark dark:hover:bg-panel-dark/60'
           }`}
           onDragStart={(e) => {
             chapterHadDragRef.current = true
@@ -208,7 +208,7 @@ function ManuscriptRowInner({
               id={menuId}
               role="menu"
               aria-labelledby={`${menuId}-trigger`}
-              className="absolute right-0 top-full z-[60] mt-1 min-w-[10.5rem] overflow-hidden rounded-xl border border-dust bg-white py-1 shadow-lg dark:border-border-dark dark:bg-panel-dark"
+              className="absolute right-0 top-full z-[60] mt-1 min-w-[10.5rem] overflow-hidden rounded-xl border border-dust bg-panel-light-strong py-1 shadow-lg dark:border-border-dark dark:bg-panel-dark"
               onMouseDown={(e) => e.stopPropagation()}
             >
               {showSplit && onSplitChapter ? (

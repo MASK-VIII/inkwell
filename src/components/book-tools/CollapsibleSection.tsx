@@ -30,7 +30,7 @@ export function CollapsibleSection({
 
   return (
     <div
-      className={`rounded-2xl border border-dust bg-white/45 dark:border-border-dark dark:bg-panel-dark/45 ${className}`}
+      className={`rounded-2xl border border-dust bg-panel-light-muted/68 dark:border-border-dark dark:bg-panel-dark/45 ${className}`}
     >
       <button
         type="button"
@@ -38,7 +38,7 @@ export function CollapsibleSection({
         aria-expanded={open}
         aria-controls={panelId}
         onClick={toggle}
-        className="flex w-full cursor-pointer items-start gap-3 rounded-2xl px-3 py-3 text-left outline-none transition-colors hover:bg-white/55 focus-visible:ring-2 focus-visible:ring-walnut dark:hover:bg-white/8 dark:focus-visible:ring-cream sm:px-4"
+        className="flex w-full cursor-pointer items-start gap-3 rounded-2xl px-3 py-3 text-left outline-none transition-colors hover:bg-panel-light-muted/78 focus-visible:ring-2 focus-visible:ring-walnut dark:hover:bg-white/8 dark:focus-visible:ring-cream sm:px-4"
       >
         <ChevronDown
           className={`mt-0.5 h-4 w-4 shrink-0 text-walnut transition-transform duration-300 ease-[cubic-bezier(0.33,1,0.68,1)] motion-reduce:transition-none dark:text-accent-warm ${

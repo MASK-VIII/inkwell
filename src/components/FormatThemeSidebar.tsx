@@ -56,7 +56,7 @@ export function FormatThemeSidebar({
   if (collapsed) {
     return (
       <aside
-        className={`flex shrink-0 flex-col items-start gap-2 border-l border-dust bg-white/70 py-3 dark:border-border-dark dark:bg-panel-dark/70 sm:py-4 ${outerCol} transition-[width] duration-300 ease-out`}
+        className={`flex shrink-0 flex-col items-start gap-2 border-l border-dust bg-panel-light/88 py-3 dark:border-border-dark dark:bg-panel-dark/70 sm:py-4 ${outerCol} transition-[width] duration-300 ease-out`}
       >
         <div
           className={`flex min-h-0 flex-1 flex-col items-center gap-2 ${FORMAT_WORKSPACE_SIDE_RAIL_WIDTH_CLASS}`}
@@ -80,7 +80,7 @@ export function FormatThemeSidebar({
 
   return (
     <aside
-      className={`flex shrink-0 flex-col border-l border-dust bg-white/70 transition-[width] duration-300 ease-out dark:border-border-dark dark:bg-panel-dark/70 ${outerCol}`}
+      className={`flex shrink-0 flex-col border-l border-dust bg-panel-light/88 transition-[width] duration-300 ease-out dark:border-border-dark dark:bg-panel-dark/70 ${outerCol}`}
     >
       <div className="flex items-center gap-1.5 border-b border-dust px-3 py-3 dark:border-border-dark sm:gap-2 sm:px-5 sm:py-5">
         <div className="flex min-w-0 flex-1 items-center gap-2">

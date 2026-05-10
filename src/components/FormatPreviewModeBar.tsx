@@ -15,7 +15,7 @@ export function FormatPreviewModeBar({ mode, onSelectEbook, onSelectPrint }: Pro
   return (
     <div
       data-inkwell-tour="format-preview-modes"
-      className="inline-flex shrink-0 rounded-2xl border border-dust bg-white/90 p-1 shadow-sm dark:border-border-dark dark:bg-panel-dark/90"
+      className="inline-flex shrink-0 rounded-2xl border border-dust bg-panel-light-strong/92 p-1 shadow-sm dark:border-border-dark dark:bg-panel-dark/90"
       role="tablist"
       aria-label="Preview mode"
     >

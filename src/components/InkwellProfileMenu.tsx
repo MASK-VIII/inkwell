@@ -80,7 +80,7 @@ function InkwellProfileMenuInner({
       <button
         type="button"
         onClick={toggle}
-        className="flex shrink-0 items-center gap-2 rounded-2xl border border-dust bg-white/70 px-2.5 py-2 text-sm font-semibold text-ink outline-none transition-colors hover:bg-white focus-visible:ring-2 focus-visible:ring-walnut/35 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90 dark:focus-visible:ring-cream/45 dark:focus-visible:ring-offset-panel-dark sm:px-3"
+        className="flex shrink-0 items-center gap-2 rounded-2xl border border-dust bg-panel-light/88 px-2.5 py-2 text-sm font-semibold text-ink outline-none transition-colors hover:bg-panel-light-strong focus-visible:ring-2 focus-visible:ring-walnut/35 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90 dark:focus-visible:ring-cream/45 dark:focus-visible:ring-offset-panel-dark sm:px-3"
         aria-expanded={open}
         aria-haspopup="menu"
         aria-label="Profile"
@@ -92,7 +92,7 @@ function InkwellProfileMenuInner({
       {open ?
         <div
           role="menu"
-          className={`absolute ${align} top-full z-[60] mt-2 w-[min(17.5rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-dust bg-white py-1 shadow-xl dark:border-border-dark dark:bg-panel-dark`}
+          className={`absolute ${align} top-full z-[60] mt-2 w-[min(17.5rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-dust bg-panel-light-strong py-1 shadow-xl dark:border-border-dark dark:bg-panel-dark`}
         >
           <div className="flex gap-3 px-4 pb-3 pt-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-ink to-walnut text-xs font-bold uppercase tracking-[0.12em] text-parchment shadow-sm ring-1 ring-ink/20 dark:text-ink-dark dark:ring-cream/40">

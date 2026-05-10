@@ -24,7 +24,7 @@ export function OpenProjectInNewTabLink({
   const frame =
     variant === 'ghost'
       ? 'border-transparent bg-transparent text-faded hover:bg-dust/40 hover:text-ink dark:hover:bg-white/10 dark:hover:text-ink-dark'
-      : 'border border-dust bg-white/70 text-ink/60 hover:border-walnut/40 hover:bg-white hover:text-ink dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark/55 dark:hover:border-accent-warm/35 dark:hover:bg-panel-dark/90 dark:hover:text-ink-dark'
+      : 'border border-dust bg-panel-light/88 text-ink-muted hover:border-walnut/40 hover:bg-panel-light-strong hover:text-ink dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark/55 dark:hover:border-accent-warm/35 dark:hover:bg-panel-dark/90 dark:hover:text-ink-dark'
   return (
     <a
       href={href}

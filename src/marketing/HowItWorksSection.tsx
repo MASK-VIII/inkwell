@@ -39,7 +39,7 @@ export function HowItWorksSection() {
           {STEPS.map((step, i) => (
             <li
               key={step.title}
-              className="relative rounded-2xl border border-dust/70 bg-white/60 p-7 dark:border-border-dark dark:bg-panel-dark/60"
+              className="relative rounded-2xl border border-dust/70 bg-panel-light-muted/82 p-7 dark:border-border-dark dark:bg-panel-dark/60"
             >
               <p className="font-serif text-5xl leading-none tabular-nums text-walnut/45 dark:text-accent-warm/65">
                 {String(i + 1).padStart(2, '0')}

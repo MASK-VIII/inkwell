@@ -145,7 +145,7 @@ export function ShelfLinkedNotesList({
         }}
         className={`rounded-2xl ${dropHint === 'before' ? 'border-t-2 border-walnut dark:border-accent-warm' : ''} ${dropHint === 'after' ? 'border-b-2 border-walnut dark:border-accent-warm' : ''}`}
       >
-        <div className="flex items-stretch gap-1 rounded-2xl pr-1 outline-none hover:bg-dust/35 dark:hover:bg-border-dark/45 focus-within:ring-2 focus-within:ring-cream focus-within:ring-offset-2 focus-within:ring-offset-white dark:focus-within:ring-cream dark:focus-within:ring-offset-panel-dark">
+        <div className="flex items-stretch gap-1 rounded-2xl pr-1 outline-none hover:bg-dust/35 dark:hover:bg-border-dark/45 focus-within:ring-2 focus-within:ring-cream focus-within:ring-offset-2 focus-within:ring-offset-parchment dark:focus-within:ring-cream dark:focus-within:ring-offset-panel-dark">
           <a
             draggable
             href={buildInkwellUrlForProject(n.id)}

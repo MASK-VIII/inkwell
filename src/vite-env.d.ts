@@ -1,5 +1,8 @@
 /// <reference types="vite/client" />
 
+/** Injected by `vite.config.ts` when `VITE_INKWELL_DESKTOP_DOWNLOAD_URL` is unset. */
+declare const __INKWELL_DESKTOP_DOWNLOAD_DEFAULT__: string
+
 interface ImportMetaEnv {
   /** HTTPS endpoint that accepts POST multipart field `archive` (library .zip). */
   readonly VITE_INKWELL_CLOUD_BACKUP_URL?: string

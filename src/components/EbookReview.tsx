@@ -120,7 +120,7 @@ export function EbookReview({
 
   return (
     <div className="inkwell-ebook-review-scroll flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overscroll-y-contain">
-      <div className="inkwell-theme-bridge sticky top-0 z-10 grid shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 border-b border-dust bg-white/90 px-4 py-3 backdrop-blur-sm dark:border-border-dark dark:bg-panel-dark/90 sm:px-5">
+      <div className="inkwell-theme-bridge sticky top-0 z-10 grid shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 border-b border-dust bg-panel-light-strong/92 px-4 py-3 backdrop-blur-sm dark:border-border-dark dark:bg-panel-dark/90 sm:px-5">
         <div className="min-w-0" aria-hidden />
         <div className="flex justify-center">{formatModeBar}</div>
         <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
@@ -145,17 +145,17 @@ export function EbookReview({
             <style>{css}</style>
             <div
               ref={viewportEl}
-              className="inkwell-ebook-device-scroll overflow-y-auto overflow-x-hidden rounded-[2rem] border border-dust bg-white shadow-xl dark:border-border-dark dark:bg-panel-dark/40"
+              className="inkwell-ebook-device-scroll overflow-y-auto overflow-x-hidden rounded-[2rem] border border-dust bg-panel-light-strong shadow-xl dark:border-border-dark dark:bg-panel-dark/40"
               style={{ height }}
             >
               <div className="inkwell-ebook-preview">
                 <div className="py-6 px-4">
                   {!active ? (
-                    <div className="rounded-3xl border border-dust bg-white/60 p-6 text-sm text-ink/70 dark:border-border-dark dark:bg-panel-dark/60 dark:text-ink-dark/70">
+                    <div className="rounded-3xl border border-dust bg-panel-light-muted/85 p-6 text-sm text-ink-muted dark:border-border-dark dark:bg-panel-dark/60 dark:text-ink-dark/70">
                       Select a chapter to preview.
                     </div>
                   ) : status === 'error' ? (
-                    <div className="rounded-3xl border border-dust bg-white/60 p-6 text-sm text-ink/70 dark:border-border-dark dark:bg-panel-dark/60 dark:text-ink-dark/70">
+                    <div className="rounded-3xl border border-dust bg-panel-light-muted/85 p-6 text-sm text-ink-muted dark:border-border-dark dark:bg-panel-dark/60 dark:text-ink-dark/70">
                       Preview failed to render.
                     </div>
                   ) : (
@@ -171,7 +171,7 @@ export function EbookReview({
               type="button"
               onClick={onPrevChapter}
               disabled={!onPrevChapter || !canPrev}
-              className="rounded-3xl border border-dust bg-white/70 px-4 py-2 text-sm font-semibold text-ink transition-colors hover:bg-white disabled:opacity-40 dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
+              className="rounded-3xl border border-dust bg-panel-light/88 px-4 py-2 text-sm font-semibold text-ink transition-colors hover:bg-panel-light-strong disabled:opacity-40 dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
             >
               ‹ Chapter
             </button>
@@ -182,7 +182,7 @@ export function EbookReview({
               type="button"
               onClick={onNextChapter}
               disabled={!onNextChapter || !canNext}
-              className="rounded-3xl border border-dust bg-white/70 px-4 py-2 text-sm font-semibold text-ink transition-colors hover:bg-white disabled:opacity-40 dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
+              className="rounded-3xl border border-dust bg-panel-light/88 px-4 py-2 text-sm font-semibold text-ink transition-colors hover:bg-panel-light-strong disabled:opacity-40 dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
             >
               Chapter ›
             </button>

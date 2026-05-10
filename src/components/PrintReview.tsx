@@ -602,7 +602,7 @@ export function PrintReview({
   if (err) {
     return (
       <div className="flex flex-1 items-center justify-center p-10">
-        <div className="max-w-xl rounded-3xl border border-dust bg-white/70 p-6 text-sm text-ink shadow-sm dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark">
+        <div className="max-w-xl rounded-3xl border border-dust bg-panel-light/88 p-6 text-sm text-ink shadow-sm dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark">
           <div className="font-semibold">Print Review failed</div>
           <div className="mt-2 opacity-70">{err}</div>
         </div>
@@ -618,7 +618,7 @@ export function PrintReview({
   return (
     <div className="flex min-h-0 flex-1 flex-col outline-none" tabIndex={0}>
       <style dangerouslySetInnerHTML={{ __html: printFontFaceCss }} />
-      <div className="inkwell-theme-bridge shrink-0 border-b border-dust bg-white/90 px-4 py-3 backdrop-blur-sm dark:border-border-dark dark:bg-panel-dark/90 sm:px-5">
+      <div className="inkwell-theme-bridge shrink-0 border-b border-dust bg-panel-light-strong/92 px-4 py-3 backdrop-blur-sm dark:border-border-dark dark:bg-panel-dark/90 sm:px-5">
         <div className="mx-auto grid w-full max-w-[min(64rem,100%)] grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
           <div className="min-w-0" aria-hidden />
           <div className="flex justify-center">{formatModeBar}</div>
@@ -648,7 +648,7 @@ export function PrintReview({
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') applyJump()
                 }}
-                className="w-20 rounded-lg border border-dust bg-white px-2 py-1 text-xs dark:border-border-dark dark:bg-panel-dark sm:text-sm"
+                className="w-20 rounded-lg border border-dust bg-panel-light-strong px-2 py-1 text-xs dark:border-border-dark dark:bg-panel-dark sm:text-sm"
               />
               <button
                 type="button"
@@ -690,7 +690,7 @@ export function PrintReview({
         <button
           type="button"
           aria-label="Previous page"
-          className="shrink-0 rounded-full border border-dust bg-white/90 p-3 text-2xl leading-none shadow-sm hover:bg-dust/20 disabled:opacity-35 dark:border-border-dark dark:bg-panel-dark/90 dark:hover:bg-border-dark/30"
+          className="shrink-0 rounded-full border border-dust bg-panel-light-strong/92 p-3 text-2xl leading-none shadow-sm hover:bg-dust/20 disabled:opacity-35 dark:border-border-dark dark:bg-panel-dark/90 dark:hover:bg-border-dark/30"
           disabled={atChapterStart}
           onClick={goPrevPage}
         >
@@ -702,7 +702,7 @@ export function PrintReview({
             <div className="h-48 w-36 animate-pulse rounded-sm bg-dust/40 dark:bg-border-dark/50 sm:h-64 sm:w-48" />
           ) : currentPage ? (
             <div
-              className="relative overflow-hidden rounded-sm bg-white shadow-[0_18px_55px_-28px_rgba(0,0,0,0.55)] ring-1 ring-dust/80 dark:ring-border-dark"
+              className="relative overflow-hidden rounded-sm bg-panel-light-strong shadow-[0_18px_55px_-28px_rgba(0,0,0,0.55)] ring-1 ring-dust/80 dark:ring-border-dark"
               style={{
                 width: `${pageWidthPx * scale}px`,
                 height: `${pageHeightPx * scale}px`,
@@ -784,7 +784,7 @@ export function PrintReview({
         <button
           type="button"
           aria-label="Next page"
-          className="shrink-0 rounded-full border border-dust bg-white/90 p-3 text-2xl leading-none shadow-sm hover:bg-dust/20 disabled:opacity-35 dark:border-border-dark dark:bg-panel-dark/90 dark:hover:bg-border-dark/30"
+          className="shrink-0 rounded-full border border-dust bg-panel-light-strong/92 p-3 text-2xl leading-none shadow-sm hover:bg-dust/20 disabled:opacity-35 dark:border-border-dark dark:bg-panel-dark/90 dark:hover:bg-border-dark/30"
           disabled={atChapterEnd}
           onClick={goNextPage}
         >

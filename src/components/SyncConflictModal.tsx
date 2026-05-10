@@ -26,7 +26,7 @@ export function SyncConflictModal({
       aria-modal="true"
       aria-labelledby="sync-conflict-title"
     >
-      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-dust bg-white p-6 shadow-2xl dark:border-border-dark dark:bg-panel-dark">
+      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-dust bg-panel-light-strong p-6 shadow-2xl dark:border-border-dark dark:bg-panel-dark">
         <div className="flex gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
             <AlertTriangle className="h-5 w-5" aria-hidden />
@@ -56,7 +56,7 @@ export function SyncConflictModal({
             type="button"
             disabled={busy}
             onClick={onUseCloud}
-            className="rounded-xl border border-dust bg-white px-4 py-3 text-left text-sm font-semibold text-ink transition-colors hover:bg-dust/20 disabled:opacity-50 dark:border-border-dark dark:bg-panel-dark dark:text-ink-dark dark:hover:bg-border-dark/40"
+            className="rounded-xl border border-dust bg-panel-light-strong px-4 py-3 text-left text-sm font-semibold text-ink transition-colors hover:bg-dust/20 disabled:opacity-50 dark:border-border-dark dark:bg-panel-dark dark:text-ink-dark dark:hover:bg-border-dark/40"
           >
             Use cloud copy
             <span className="mt-0.5 block text-xs font-normal opacity-80">Replace this device’s library with the latest from the cloud.</span>

@@ -475,7 +475,7 @@ export function NotesTour({
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={bodyId}
-        className="pointer-events-auto fixed z-[201] w-[min(23rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-dust/90 bg-white p-5 shadow-[0_24px_48px_-12px_rgba(44,36,31,0.28),0_0_0_1px_rgba(44,36,31,0.04)] ring-1 ring-ink/[0.04] transition-[box-shadow,transform] duration-200 ease-out dark:border-border-dark dark:bg-panel-dark dark:shadow-[0_28px_56px_-16px_rgba(0,0,0,0.65),0_0_0_1px_rgba(247,231,194,0.06)] dark:ring-cream/10 sm:p-6"
+        className="pointer-events-auto fixed z-[201] w-[min(23rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-dust/90 bg-panel-light-strong p-5 shadow-[0_24px_48px_-12px_rgba(44,36,31,0.28),0_0_0_1px_rgba(44,36,31,0.04)] ring-1 ring-ink/[0.04] transition-[box-shadow,transform] duration-200 ease-out dark:border-border-dark dark:bg-panel-dark dark:shadow-[0_28px_56px_-16px_rgba(0,0,0,0.65),0_0_0_1px_rgba(247,231,194,0.06)] dark:ring-cream/10 sm:p-6"
         style={{ top: cardPos.top, left: cardPos.left }}
       >
         <div

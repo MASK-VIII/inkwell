@@ -75,7 +75,7 @@ export function MarketingNav({ showAnchors = true, darkMode, onToggleDarkMode }:
           <div className="flex flex-wrap items-center justify-end gap-2">
             <a
               href="/app#signin"
-              className="inline-flex items-center justify-center rounded-full border border-walnut/30 px-4 py-2 text-sm font-medium text-ink transition hover:border-walnut/55 hover:bg-white/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-walnut dark:border-border-dark dark:text-ink-dark dark:hover:border-accent-warm/45 dark:hover:bg-panel-dark/60 dark:focus-visible:outline-cream/50"
+              className="inline-flex items-center justify-center rounded-full border border-walnut/30 px-4 py-2 text-sm font-medium text-ink transition hover:border-walnut/55 hover:bg-panel-light-muted/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-walnut dark:border-border-dark dark:text-ink-dark dark:hover:border-accent-warm/45 dark:hover:bg-panel-dark/60 dark:focus-visible:outline-cream/50"
             >
               Log in
             </a>
@@ -89,7 +89,7 @@ export function MarketingNav({ showAnchors = true, darkMode, onToggleDarkMode }:
           <button
             type="button"
             onClick={onToggleDarkMode}
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-dust/70 bg-white/50 text-ink shadow-sm transition hover:bg-white/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-walnut dark:border-border-dark dark:bg-panel-dark/60 dark:text-ink-dark dark:hover:bg-panel-dark/80"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-dust/70 bg-panel-light-muted/72 text-ink shadow-sm transition hover:bg-panel-light-strong/88 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-walnut dark:border-border-dark dark:bg-panel-dark/60 dark:text-ink-dark dark:hover:bg-panel-dark/80"
             aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
           >
             {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}

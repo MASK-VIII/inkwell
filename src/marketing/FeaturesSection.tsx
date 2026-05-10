@@ -33,7 +33,7 @@ const FEATURES: Feature[] = [
 
 export function FeaturesSection() {
   return (
-    <section id="features" className="border-y border-dust/60 bg-white/50 dark:border-border-dark/80 dark:bg-panel-dark/40">
+    <section id="features" className="border-y border-dust/60 bg-panel-light-muted/75 dark:border-border-dark/80 dark:bg-panel-dark/40">
       <div className="mx-auto max-w-6xl px-5 py-24 sm:px-8">
         <div className="mb-12 max-w-2xl">
           <p className="text-xs font-medium uppercase tracking-[0.18em] text-walnut/75 dark:text-ink-dark/60">Features</p>

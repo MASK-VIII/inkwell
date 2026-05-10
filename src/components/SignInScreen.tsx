@@ -53,9 +53,9 @@ type AuthMode = 'signin' | 'signup' | 'forgot'
 export const REMEMBERED_SIGNIN_EMAIL_KEY = 'inkwell-signin-remembered-email'
 
 const inputClassName =
-  'w-full rounded-xl border border-dust/90 bg-white px-3.5 py-2.5 text-sm text-ink shadow-sm outline-none transition-shadow focus-visible:border-walnut focus-visible:ring-2 focus-visible:ring-walnut/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-border-dark dark:bg-panel-dark dark:text-ink-dark dark:shadow-inner dark:focus-visible:border-accent-warm dark:focus-visible:ring-cream/50 dark:focus-visible:ring-offset-panel-dark'
+  'w-full rounded-xl border border-dust/90 bg-panel-light-strong px-3.5 py-2.5 text-sm text-ink shadow-sm outline-none transition-shadow focus-visible:border-walnut focus-visible:ring-2 focus-visible:ring-walnut/40 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment dark:border-border-dark dark:bg-panel-dark dark:text-ink-dark dark:shadow-inner dark:focus-visible:border-accent-warm dark:focus-visible:ring-cream/50 dark:focus-visible:ring-offset-panel-dark'
 
-const labelClassName = 'text-sm font-medium text-ink/70 dark:text-ink-dark/65'
+const labelClassName = 'text-sm font-medium text-ink-muted dark:text-ink-dark/65'
 
 export function SignInScreen({
   darkMode,
@@ -246,11 +246,11 @@ export function SignInScreen({
 
   return (
     <div className="inkwell-signin-canvas flex min-h-0 flex-1 flex-col text-ink transition-colors dark:text-ink-dark">
-      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-dust/35 bg-white/82 px-4 py-3 backdrop-blur-md sm:px-6 dark:border-border-dark/60 dark:bg-panel-dark/80">
+      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-dust/35 bg-panel-light-strong/88 px-4 py-3 backdrop-blur-md sm:px-6 dark:border-border-dark/60 dark:bg-panel-dark/80">
         <button
           ref={brandRef}
           type="button"
-          className="inkwell-header-brand group inline-flex w-fit max-w-full min-w-0 items-center gap-2 rounded-2xl px-2 py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-walnut/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream/50 dark:focus-visible:ring-offset-panel-dark sm:gap-3"
+          className="inkwell-header-brand group inline-flex w-fit max-w-full min-w-0 items-center gap-2 rounded-2xl px-2 py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-walnut/40 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment dark:focus-visible:ring-cream/50 dark:focus-visible:ring-offset-panel-dark sm:gap-3"
           aria-label="Inkwell — back to home"
           title="Back to home"
           onClick={goToMarketingHome}
@@ -474,7 +474,7 @@ export function SignInScreen({
                               setRememberUsername(on)
                               if (!on) localStorage.removeItem(REMEMBERED_SIGNIN_EMAIL_KEY)
                             }}
-                            className="h-4 w-4 shrink-0 rounded border border-dust text-walnut focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-walnut/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-border-dark dark:text-accent-warm dark:focus-visible:ring-cream/50 dark:focus-visible:ring-offset-panel-dark"
+                            className="h-4 w-4 shrink-0 rounded border border-dust text-walnut focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-walnut/40 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment dark:border-border-dark dark:text-accent-warm dark:focus-visible:ring-cream/50 dark:focus-visible:ring-offset-panel-dark"
                           />
                           Remember username
                         </label>

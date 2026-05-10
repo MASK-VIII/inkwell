@@ -55,7 +55,7 @@ export function ChangelogSection() {
   const items = useMemo(() => feed?.items?.slice(0, 4) ?? [], [feed])
 
   return (
-    <section className="border-y border-dust/60 bg-white/40 dark:border-border-dark/80 dark:bg-panel-dark/35">
+    <section className="border-y border-dust/60 bg-panel-light-muted/62 dark:border-border-dark/80 dark:bg-panel-dark/35">
       <div className="mx-auto max-w-6xl px-5 py-24 sm:px-8">
         <div className="mb-12 max-w-2xl">
           <p className="text-xs font-medium uppercase tracking-[0.18em] text-walnut/75 dark:text-ink-dark/60">Roadmap</p>
@@ -77,7 +77,7 @@ export function ChangelogSection() {
               {COMING_SOON.map((line) => (
                 <li
                   key={line}
-                  className="rounded-2xl border border-walnut/20 bg-white/50 px-5 py-4 text-sm leading-relaxed text-ink dark:border-accent-warm/35 dark:bg-panel-dark/50 dark:text-ink-dark"
+                  className="rounded-2xl border border-walnut/20 bg-panel-light-muted/72 px-5 py-4 text-sm leading-relaxed text-ink dark:border-accent-warm/35 dark:bg-panel-dark/50 dark:text-ink-dark"
                 >
                   {line}
                 </li>

@@ -37,7 +37,7 @@ export function MarketingScreenshot({
   return (
     <figure className={`flex flex-col gap-3.5 ${className}`.trim()}>
       <div
-        className="relative w-full overflow-hidden rounded-2xl border border-dust/70 bg-white/60 shadow-[0_2px_30px_rgba(44,36,31,0.08)] ring-1 ring-walnut/5 transition-shadow duration-300 hover:shadow-[0_12px_44px_rgba(44,36,31,0.11)] dark:border-border-dark dark:bg-panel-dark/60 dark:shadow-[0_2px_40px_rgba(0,0,0,0.35)] dark:ring-cream/10 dark:hover:shadow-[0_14px_48px_rgba(0,0,0,0.45)]"
+        className="relative w-full overflow-hidden rounded-2xl border border-dust/70 bg-panel-light-muted/82 shadow-[0_2px_30px_rgba(44,36,31,0.08)] ring-1 ring-walnut/5 transition-shadow duration-300 hover:shadow-[0_12px_44px_rgba(44,36,31,0.11)] dark:border-border-dark dark:bg-panel-dark/60 dark:shadow-[0_2px_40px_rgba(0,0,0,0.35)] dark:ring-cream/10 dark:hover:shadow-[0_14px_48px_rgba(0,0,0,0.45)]"
         style={frameStyle}
       >
         {!errored ? (

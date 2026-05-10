@@ -25,7 +25,7 @@ export class EditorErrorBoundary extends Component<Props, State> {
             Try reloading the page. If this happened after importing a file, the document may contain unsupported
             structure—try simplifying it in Word and import again.
           </p>
-          <pre className="max-h-40 max-w-2xl overflow-auto rounded-2xl border border-dust bg-white/80 p-4 text-left text-xs dark:border-border-dark dark:bg-panel-dark/80">
+          <pre className="max-h-40 max-w-2xl overflow-auto rounded-2xl border border-dust bg-panel-light-strong/88 p-4 text-left text-xs dark:border-border-dark dark:bg-panel-dark/80">
             {String(this.state.error)}
           </pre>
           <button

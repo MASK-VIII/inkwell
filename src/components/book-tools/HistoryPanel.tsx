@@ -19,7 +19,7 @@ export function HistoryPanel({ projectId, historyEntries, onRestoreHistory, onCl
       </div>
 
       {historyEntries.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-dust bg-white/40 p-4 text-sm text-ink/60 dark:border-border-dark dark:bg-panel-dark/40 dark:text-ink-dark/60">
+        <div className="rounded-2xl border border-dashed border-dust bg-panel-light-muted/65 p-4 text-sm text-ink-muted dark:border-border-dark dark:bg-panel-dark/40 dark:text-ink-dark/60">
           No snapshots yet. Keep writing—snapshots appear automatically.
         </div>
       ) : (
@@ -29,7 +29,7 @@ export function HistoryPanel({ projectId, historyEntries, onRestoreHistory, onCl
               key={h.id}
               type="button"
               onClick={() => onRestoreHistory(h.id)}
-              className="w-full rounded-2xl border border-dust bg-white/70 px-4 py-3 text-left text-sm transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:hover:bg-panel-dark/90"
+              className="w-full rounded-2xl border border-dust bg-panel-light/88 px-4 py-3 text-left text-sm transition-colors hover:bg-panel-light-strong dark:border-border-dark dark:bg-panel-dark/70 dark:hover:bg-panel-dark/90"
               title={`Restore snapshot (${new Date(h.ts).toLocaleString()})`}
             >
               <div className="flex items-start justify-between gap-3">
@@ -50,7 +50,7 @@ export function HistoryPanel({ projectId, historyEntries, onRestoreHistory, onCl
             <button
               type="button"
               onClick={() => setShowAllHistory((v) => !v)}
-              className="w-full rounded-2xl border border-dust bg-white/40 px-4 py-2.5 text-sm font-semibold text-ink/80 transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/40 dark:text-ink-dark/80 dark:hover:bg-panel-dark/70"
+              className="w-full rounded-2xl border border-dust bg-panel-light-muted/68 px-4 py-2.5 text-sm font-semibold text-ink-muted transition-colors hover:bg-panel-light-strong dark:border-border-dark dark:bg-panel-dark/40 dark:text-ink-dark/80 dark:hover:bg-panel-dark/70"
             >
               {showAllHistory ? 'Show fewer' : `Show all (${historyEntries.length})`}
             </button>

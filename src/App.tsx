@@ -1961,7 +1961,7 @@ export default function App() {
           Chapter deleted
           <button
             type="button"
-            className="rounded-full bg-white/20 px-3 py-1 text-xs font-semibold hover:bg-white/30"
+            className="rounded-full bg-white/20 px-3 py-1 text-xs font-semibold hover:bg-panel-light-strong/30"
             onClick={() => undoDelete()}
           >
             Undo
@@ -2591,7 +2591,7 @@ export default function App() {
           Project deleted
           <button
             type="button"
-            className="rounded-full bg-white/20 px-3 py-1 text-xs font-semibold hover:bg-white/30"
+            className="rounded-full bg-white/20 px-3 py-1 text-xs font-semibold hover:bg-panel-light-strong/30"
             onClick={() => undoDeleteProject()}
           >
             Undo
@@ -2623,7 +2623,7 @@ export default function App() {
           Project deleted
           <button
             type="button"
-            className="rounded-full bg-white/20 px-3 py-1 text-xs font-semibold hover:bg-white/30"
+            className="rounded-full bg-white/20 px-3 py-1 text-xs font-semibold hover:bg-panel-light-strong/30"
             onClick={() => undoDeleteProject()}
           >
             Undo
@@ -2666,7 +2666,7 @@ export default function App() {
           Note deleted
           <button
             type="button"
-            className="rounded-full bg-white/20 px-3 py-1 text-xs font-semibold hover:bg-white/30"
+            className="rounded-full bg-white/20 px-3 py-1 text-xs font-semibold hover:bg-panel-light-strong/30"
             onClick={() => undoDeleteProject()}
           >
             Undo
@@ -3103,7 +3103,7 @@ export default function App() {
         }`}
       >
           <aside
-            className={`inkwell-chapters-overlay-rail pointer-events-auto absolute left-0 top-0 z-20 flex h-full shrink-0 flex-col items-center gap-2 rounded-r-2xl border-r border-dust bg-white/90 py-3 shadow-xl backdrop-blur-sm dark:border-border-dark dark:bg-panel-dark/90 sm:py-4 ${FORMAT_WORKSPACE_SIDE_RAIL_WIDTH_CLASS}${chaptersPanelMotionLive ? ' inkwell-panel-motion--live' : ''}`}
+            className={`inkwell-chapters-overlay-rail pointer-events-auto absolute left-0 top-0 z-20 flex h-full shrink-0 flex-col items-center gap-2 rounded-r-2xl border-r border-dust bg-panel-light-strong/92 py-3 shadow-xl backdrop-blur-sm dark:border-border-dark dark:bg-panel-dark/90 sm:py-4 ${FORMAT_WORKSPACE_SIDE_RAIL_WIDTH_CLASS}${chaptersPanelMotionLive ? ' inkwell-panel-motion--live' : ''}`}
           >
             <button
               type="button"
@@ -3125,7 +3125,7 @@ export default function App() {
             </button>
           </aside>
           <aside
-            className={`inkwell-chapters-overlay-panel absolute left-0 top-0 z-10 flex h-full shrink-0 flex-col rounded-r-2xl border-r border-dust bg-white/90 shadow-2xl backdrop-blur-sm dark:border-border-dark dark:bg-panel-dark/90 ${FORMAT_WORKSPACE_SIDE_PANEL_WIDTH_CLASS}${chaptersPanelMotionLive ? ' inkwell-panel-motion--live' : ''}`}
+            className={`inkwell-chapters-overlay-panel absolute left-0 top-0 z-10 flex h-full shrink-0 flex-col rounded-r-2xl border-r border-dust bg-panel-light-strong/92 shadow-2xl backdrop-blur-sm dark:border-border-dark dark:bg-panel-dark/90 ${FORMAT_WORKSPACE_SIDE_PANEL_WIDTH_CLASS}${chaptersPanelMotionLive ? ' inkwell-panel-motion--live' : ''}`}
             onTransitionEnd={onChaptersPanelTransitionEnd}
           >
             <div className="flex items-center gap-1.5 border-b border-dust px-3 py-3 dark:border-border-dark sm:gap-2 sm:px-5 sm:py-5">
@@ -3533,16 +3533,16 @@ export default function App() {
         />
       ) : route === 'bookshelf' ? (
         <div className="flex min-h-0 flex-1 flex-col">
-          <header className="inkwell-chrome-header sticky top-0 z-50 border-b border-dust bg-white/90 backdrop-blur-md dark:border-border-dark dark:bg-panel-dark/90">
+          <header className="inkwell-chrome-header sticky top-0 z-50 border-b border-dust bg-panel-light-strong/92 backdrop-blur-md dark:border-border-dark dark:bg-panel-dark/90">
             <div className="flex w-full min-h-[3.25rem] items-stretch sm:min-h-[3.5rem]">
-              <div className="inkwell-theme-bridge flex min-w-0 flex-1 items-center justify-start bg-white/70 py-2 pl-3 sm:py-3 sm:pl-5 dark:bg-panel-dark/70">
+              <div className="inkwell-theme-bridge flex min-w-0 flex-1 items-center justify-start bg-panel-light/88 py-2 pl-3 sm:py-3 sm:pl-5 dark:bg-panel-dark/70">
                 <button
                   ref={bookshelfBrandRef}
                   type="button"
                   onClick={() => {
                     syncPersistedState()
                   }}
-                  className="inkwell-header-brand group inline-flex w-fit max-w-full items-center gap-2 rounded-2xl px-2 py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-walnut/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream/50 dark:focus-visible:ring-offset-panel-dark sm:gap-3"
+                  className="inkwell-header-brand group inline-flex w-fit max-w-full items-center gap-2 rounded-2xl px-2 py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-walnut/40 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment dark:focus-visible:ring-cream/50 dark:focus-visible:ring-offset-panel-dark sm:gap-3"
                   aria-label="Inkwell"
                   title="Inkwell"
                 >
@@ -3556,7 +3556,7 @@ export default function App() {
                   <h1 className="w-full truncate font-serif text-xl font-semibold tracking-tight text-ink dark:text-ink-dark sm:text-2xl">
                     Bookshelf
                   </h1>
-                  <p className="mt-0.5 max-w-[min(22rem,100%)] text-pretty text-[11px] leading-snug text-ink/60 dark:text-ink-dark/60 sm:text-sm sm:leading-normal">
+                  <p className="mt-0.5 max-w-[min(22rem,100%)] text-pretty text-[11px] leading-snug text-ink-muted dark:text-ink-dark/60 sm:text-sm sm:leading-normal">
                     Local projects on this device
                   </p>
                 </div>
@@ -3575,7 +3575,7 @@ export default function App() {
                         setShelfNewImportSubmenuOpen(false)
                         setShelfHelpMenuOpen((v) => !v)
                       }}
-                      className="flex h-11 w-11 items-center justify-center rounded-3xl border border-dust bg-white/70 text-ink transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
+                      className="flex h-11 w-11 items-center justify-center rounded-3xl border border-dust bg-panel-light/88 text-ink transition-colors hover:bg-panel-light-strong dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
                       aria-label="Help"
                       title="Help"
                     >
@@ -3584,7 +3584,7 @@ export default function App() {
                     {shelfHelpMenuOpen ? (
                       <div
                         role="menu"
-                        className="absolute right-0 top-full z-[60] mt-2 min-w-[14rem] overflow-hidden rounded-2xl border border-dust bg-white py-1 shadow-xl dark:border-border-dark dark:bg-panel-dark"
+                        className="absolute right-0 top-full z-[60] mt-2 min-w-[14rem] overflow-hidden rounded-2xl border border-dust bg-panel-light-strong py-1 shadow-xl dark:border-border-dark dark:bg-panel-dark"
                       >
                         <button
                           type="button"
@@ -3626,7 +3626,7 @@ export default function App() {
                       setShelfNewImportSubmenuOpen(false)
                       toggleTheme()
                     }}
-                    className="flex h-11 w-11 items-center justify-center rounded-3xl border border-dust bg-white/70 text-ink transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
+                    className="flex h-11 w-11 items-center justify-center rounded-3xl border border-dust bg-panel-light/88 text-ink transition-colors hover:bg-panel-light-strong dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
                     aria-label="Toggle theme"
                     title="Toggle theme"
                   >
@@ -3696,7 +3696,7 @@ export default function App() {
                     {newProjectMenuOpen ? (
                       <div
                         role="menu"
-                        className="absolute right-0 top-full z-50 mt-2 min-w-[13.5rem] overflow-visible rounded-2xl border border-dust bg-white py-1 shadow-xl dark:border-border-dark dark:bg-panel-dark"
+                        className="absolute right-0 top-full z-50 mt-2 min-w-[13.5rem] overflow-visible rounded-2xl border border-dust bg-panel-light-strong py-1 shadow-xl dark:border-border-dark dark:bg-panel-dark"
                       >
                         <button
                           type="button"
@@ -3770,7 +3770,7 @@ export default function App() {
                           {shelfNewImportSubmenuOpen ? (
                             <div
                               role="menu"
-                              className="absolute right-full top-0 z-[60] mr-1 min-w-[13.5rem] overflow-hidden rounded-2xl border border-dust bg-white py-1 shadow-xl dark:border-border-dark dark:bg-panel-dark"
+                              className="absolute right-full top-0 z-[60] mr-1 min-w-[13.5rem] overflow-hidden rounded-2xl border border-dust bg-panel-light-strong py-1 shadow-xl dark:border-border-dark dark:bg-panel-dark"
                             >
                               <button
                                 type="button"
@@ -3903,7 +3903,7 @@ export default function App() {
                 title="Add book"
                 aria-label="Add book"
                 onClick={spawnBookOnShelf}
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl border border-dust bg-white/70 text-ink shadow-sm transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl border border-dust bg-panel-light/88 text-ink shadow-sm transition-colors hover:bg-panel-light-strong dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
               >
                 <Plus className="h-4 w-4" strokeWidth={2.5} />
               </button>
@@ -3911,7 +3911,7 @@ export default function App() {
             <div
               className={`grid items-start gap-3 sm:grid-cols-2 lg:grid-cols-3 ${
                 shelfBooks.length === 0
-                  ? 'min-h-[14rem] rounded-3xl border-2 border-dashed border-dust/90 bg-white/60 px-5 py-6 dark:border-border-dark dark:bg-panel-dark/55'
+                  ? 'min-h-[14rem] rounded-3xl border-2 border-dashed border-dust/90 bg-panel-light-muted/88 px-5 py-6 dark:border-border-dark dark:bg-panel-dark/55'
                   : ''
               }`}
             >
@@ -3935,7 +3935,7 @@ export default function App() {
                     onDragOver={(e) => shelfAttachTargetDragOver(e, p.id)}
                     onDragLeave={(e) => shelfAttachTargetDragLeave(e, p.id)}
                     onDrop={(e) => shelfAttachNoteDrop(e, p.id)}
-                    className={`inkwell-shelf-card flex flex-col rounded-3xl border border-dust bg-white/70 text-left ease-out hover:-translate-y-px hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:hover:bg-panel-dark/90 ${
+                    className={`inkwell-shelf-card flex flex-col rounded-3xl border border-dust bg-panel-light/88 text-left ease-out hover:-translate-y-px hover:bg-panel-light-strong dark:border-border-dark dark:bg-panel-dark/70 dark:hover:bg-panel-dark/90 ${
                       shelfDropHoverAttachId === p.id
                         ? 'inkwell-shelf-drop-target z-10 scale-[1.02] shadow-xl ring-2 ring-cream ring-offset-2 ring-offset-parchment dark:ring-accent-warm dark:ring-offset-panel-dark'
                         : ''
@@ -3961,7 +3961,7 @@ export default function App() {
                             openProject(p.id)
                           }
                         }}
-                        className="min-w-0 flex-1 cursor-pointer rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-cream focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark"
+                        className="min-w-0 flex-1 cursor-pointer rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-cream focus-visible:ring-offset-2 focus-visible:ring-offset-parchment dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark"
                       >
                         <div className="flex items-start gap-3">
                           <div
@@ -3983,7 +3983,7 @@ export default function App() {
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="truncate font-serif text-lg font-semibold">{p.title || 'Untitled book'}</div>
-                            <div className="mt-1 text-xs text-ink/55 dark:text-ink-dark/55">
+                            <div className="mt-1 text-xs text-ink-muted dark:text-ink-dark/55">
                               Updated {new Date(p.updatedAt).toLocaleString()}
                             </div>
                           </div>
@@ -4044,7 +4044,7 @@ export default function App() {
                               openProject(p.id)
                               setExpandedShelfParentId(null)
                             }}
-                            className="block w-full cursor-pointer rounded-2xl border border-dust bg-white/70 px-4 py-3 text-left outline-none transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:hover:bg-panel-dark/90 focus-visible:ring-2 focus-visible:ring-cream focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark"
+                            className="block w-full cursor-pointer rounded-2xl border border-dust bg-panel-light/88 px-4 py-3 text-left outline-none transition-colors hover:bg-panel-light-strong dark:border-border-dark dark:bg-panel-dark/70 dark:hover:bg-panel-dark/90 focus-visible:ring-2 focus-visible:ring-cream focus-visible:ring-offset-2 focus-visible:ring-offset-parchment dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark"
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0 flex-1">
@@ -4062,7 +4062,7 @@ export default function App() {
                           </a>
                         </div>
                         {kidsOrdered.length === 0 ? (
-                          <div className="px-4 py-2 text-xs text-ink/55 dark:text-ink-dark/55">
+                          <div className="px-4 py-2 text-xs text-ink-muted dark:text-ink-dark/55">
                             No linked notes yet. Drag notes here to attach them.
                           </div>
                         ) : (
@@ -4108,7 +4108,7 @@ export default function App() {
                               key={n.id}
                               href={buildInkwellUrlForProject(n.id)}
                               onClick={(e) => e.preventDefault()}
-                              className="block truncate text-xs text-ink/55 dark:text-ink-dark/55"
+                              className="block truncate text-xs text-ink-muted dark:text-ink-dark/55"
                             >
                               {n.title || 'Untitled note'}
                             </a>
@@ -4141,7 +4141,7 @@ export default function App() {
                 title="Add project"
                 aria-label="Add project"
                 onClick={spawnProjectOnShelf}
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl border border-dust bg-white/70 text-ink shadow-sm transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl border border-dust bg-panel-light/88 text-ink shadow-sm transition-colors hover:bg-panel-light-strong dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
               >
                 <Plus className="h-4 w-4" strokeWidth={2.5} />
               </button>
@@ -4149,7 +4149,7 @@ export default function App() {
             <div
               className={`grid items-start gap-3 sm:grid-cols-2 lg:grid-cols-3 ${
                 shelfProjectNotes.length === 0
-                  ? 'min-h-[14rem] rounded-3xl border-2 border-dashed border-dust/90 bg-white/60 px-5 py-6 dark:border-border-dark dark:bg-panel-dark/55'
+                  ? 'min-h-[14rem] rounded-3xl border-2 border-dashed border-dust/90 bg-panel-light-muted/88 px-5 py-6 dark:border-border-dark dark:bg-panel-dark/55'
                   : ''
               }`}
             >
@@ -4174,7 +4174,7 @@ export default function App() {
                     onDragOver={(e) => shelfAttachTargetDragOver(e, p.id)}
                     onDragLeave={(e) => shelfAttachTargetDragLeave(e, p.id)}
                     onDrop={(e) => shelfAttachNoteDrop(e, p.id)}
-                    className={`inkwell-shelf-card flex flex-col rounded-3xl border border-dust bg-white/70 text-left ease-out hover:-translate-y-px hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:hover:bg-panel-dark/90 ${
+                    className={`inkwell-shelf-card flex flex-col rounded-3xl border border-dust bg-panel-light/88 text-left ease-out hover:-translate-y-px hover:bg-panel-light-strong dark:border-border-dark dark:bg-panel-dark/70 dark:hover:bg-panel-dark/90 ${
                       shelfDropHoverAttachId === p.id
                         ? 'inkwell-shelf-drop-target z-10 scale-[1.02] shadow-xl ring-2 ring-cream ring-offset-2 ring-offset-parchment dark:ring-accent-warm dark:ring-offset-panel-dark'
                         : ''
@@ -4192,7 +4192,7 @@ export default function App() {
                           e.preventDefault()
                           setExpandedShelfParentId((cur) => (cur === p.id ? null : p.id))
                         }}
-                        className="min-w-0 flex-1 cursor-pointer rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-cream focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark"
+                        className="min-w-0 flex-1 cursor-pointer rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-cream focus-visible:ring-offset-2 focus-visible:ring-offset-parchment dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark"
                       >
                         <div className="flex items-start gap-3">
                           <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-dust/60 text-walnut dark:bg-border-dark/60 dark:text-accent-warm">
@@ -4200,7 +4200,7 @@ export default function App() {
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="truncate font-serif text-lg font-semibold">{p.title || 'Untitled project'}</div>
-                            <div className="mt-1 text-xs text-ink/55 dark:text-ink-dark/55">
+                            <div className="mt-1 text-xs text-ink-muted dark:text-ink-dark/55">
                               Updated {new Date(p.updatedAt).toLocaleString()}
                             </div>
                           </div>
@@ -4252,7 +4252,7 @@ export default function App() {
                             aria-label={`Master note: ${p.title || 'Untitled note'}. Drag to move, or activate to open.`}
                             onDragStart={(e) => shelfNoteDragStart(e, p.id, p.title || 'Untitled note')}
                             onDragEnd={shelfNoteDragEnd}
-                            className="block w-full cursor-grab rounded-2xl border border-dust bg-white/70 px-4 py-3 text-left outline-none transition-colors hover:bg-white active:cursor-grabbing dark:border-border-dark dark:bg-panel-dark/70 dark:hover:bg-panel-dark/90 focus-visible:ring-2 focus-visible:ring-cream focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark"
+                            className="block w-full cursor-grab rounded-2xl border border-dust bg-panel-light/88 px-4 py-3 text-left outline-none transition-colors hover:bg-panel-light-strong active:cursor-grabbing dark:border-border-dark dark:bg-panel-dark/70 dark:hover:bg-panel-dark/90 focus-visible:ring-2 focus-visible:ring-cream focus-visible:ring-offset-2 focus-visible:ring-offset-parchment dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark"
                             onClick={(e) => {
                               e.preventDefault()
                               tryOpenShelfNote(p.id)
@@ -4282,7 +4282,7 @@ export default function App() {
                           </a>
                         </div>
                         {kidsOrdered.length === 0 ? (
-                          <div className="px-4 py-2 text-xs text-ink/55 dark:text-ink-dark/55">
+                          <div className="px-4 py-2 text-xs text-ink-muted dark:text-ink-dark/55">
                             No notes in this project yet.
                           </div>
                         ) : (
@@ -4318,7 +4318,7 @@ export default function App() {
                               key={n.id}
                               href={buildInkwellUrlForProject(n.id)}
                               onClick={(e) => e.preventDefault()}
-                              className="block truncate text-xs text-ink/55 dark:text-ink-dark/55"
+                              className="block truncate text-xs text-ink-muted dark:text-ink-dark/55"
                             >
                               {n.title || 'Untitled note'}
                             </a>
@@ -4354,13 +4354,13 @@ export default function App() {
                   title="Add note"
                   aria-label="Add note"
                   onClick={spawnNoteOnShelf}
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl border border-dust bg-white/70 text-ink shadow-sm transition-colors hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl border border-dust bg-panel-light/88 text-ink shadow-sm transition-colors hover:bg-panel-light-strong dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90"
                 >
                   <Plus className="h-4 w-4" strokeWidth={2.5} />
                 </button>
               </div>
               {shelfLooseNotes.length > 0 ? (
-                <p className="text-sm text-ink/55 dark:text-ink-dark/55">
+                <p className="text-sm text-ink-muted dark:text-ink-dark/55">
                   Drag a note onto a book or another note to attach it, or drop here to move a linked note back into
                   Notes.
                 </p>
@@ -4369,7 +4369,7 @@ export default function App() {
             <div
               className={`grid items-start gap-3 sm:grid-cols-2 lg:grid-cols-3 ${
                 shelfLooseNotes.length === 0
-                  ? 'min-h-[14rem] rounded-3xl border-2 border-dashed border-dust/90 bg-white/60 px-5 py-6 dark:border-border-dark dark:bg-panel-dark/55'
+                  ? 'min-h-[14rem] rounded-3xl border-2 border-dashed border-dust/90 bg-panel-light-muted/88 px-5 py-6 dark:border-border-dark dark:bg-panel-dark/55'
                   : ''
               }`}
             >
@@ -4392,7 +4392,7 @@ export default function App() {
                     onDragOver={(e) => shelfAttachTargetDragOver(e, p.id)}
                     onDragLeave={(e) => shelfAttachTargetDragLeave(e, p.id)}
                     onDrop={(e) => shelfAttachNoteDrop(e, p.id)}
-                    className={`inkwell-shelf-card flex flex-col rounded-3xl border border-dust bg-white/70 text-left ease-out hover:-translate-y-px hover:bg-white dark:border-border-dark dark:bg-panel-dark/70 dark:hover:bg-panel-dark/90 ${
+                    className={`inkwell-shelf-card flex flex-col rounded-3xl border border-dust bg-panel-light/88 text-left ease-out hover:-translate-y-px hover:bg-panel-light-strong dark:border-border-dark dark:bg-panel-dark/70 dark:hover:bg-panel-dark/90 ${
                       shelfDropHoverAttachId === p.id
                         ? 'inkwell-shelf-drop-target z-10 scale-[1.02] shadow-xl ring-2 ring-cream ring-offset-2 ring-offset-parchment dark:ring-accent-warm dark:ring-offset-panel-dark'
                         : ''
@@ -4406,7 +4406,7 @@ export default function App() {
                         aria-label={`Note: ${p.title || 'Untitled note'}. Drag to move, or activate to open.`}
                         onDragStart={(e) => shelfNoteDragStart(e, p.id, p.title || 'Untitled note')}
                         onDragEnd={shelfNoteDragEnd}
-                        className="group min-w-0 flex-1 cursor-grab rounded-xl text-left outline-none active:cursor-grabbing focus-visible:ring-2 focus-visible:ring-cream focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark"
+                        className="group min-w-0 flex-1 cursor-grab rounded-xl text-left outline-none active:cursor-grabbing focus-visible:ring-2 focus-visible:ring-cream focus-visible:ring-offset-2 focus-visible:ring-offset-parchment dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark"
                         onClick={(e) => {
                           e.preventDefault()
                           tryOpenShelfNote(p.id)
@@ -4419,7 +4419,7 @@ export default function App() {
                         }}
                       >
                         <div className="truncate font-serif text-lg font-semibold">{p.title || 'Untitled note'}</div>
-                        <div className="mt-1 text-xs text-ink/55 dark:text-ink-dark/55">
+                        <div className="mt-1 text-xs text-ink-muted dark:text-ink-dark/55">
                           Updated {new Date(p.updatedAt).toLocaleString()}
                         </div>
                       </a>
@@ -4451,7 +4451,7 @@ export default function App() {
                           </button>
                           {openNoteMenuId === p.id ? (
                             <div
-                              className="absolute right-0 top-full z-[80] mt-1 w-44 rounded-xl border border-dust bg-white py-1 shadow-lg dark:border-border-dark dark:bg-panel-dark"
+                              className="absolute right-0 top-full z-[80] mt-1 w-44 rounded-xl border border-dust bg-panel-light-strong py-1 shadow-lg dark:border-border-dark dark:bg-panel-dark"
                               onMouseDown={(e) => e.stopPropagation()}
                             >
                               <button
@@ -4489,13 +4489,13 @@ export default function App() {
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="stick-note-title"
-                className="w-full max-w-md rounded-3xl border border-dust bg-white p-6 shadow-2xl dark:border-border-dark dark:bg-panel-dark"
+                className="w-full max-w-md rounded-3xl border border-dust bg-panel-light-strong p-6 shadow-2xl dark:border-border-dark dark:bg-panel-dark"
                 onMouseDown={(e) => e.stopPropagation()}
               >
                 <h3 id="stick-note-title" className="font-serif text-lg font-semibold text-ink dark:text-ink-dark">
                   Attach note
                 </h3>
-                <p className="mt-1 text-sm text-ink/65 dark:text-ink-dark/65">
+                <p className="mt-1 text-sm text-ink-muted dark:text-ink-dark/65">
                   Choose a book or note this entry appears under on the shelf (like pinning a sheet to another).
                 </p>
                 <label className="mt-4 block text-xs font-medium text-ink/70 dark:text-ink-dark/70">
@@ -4597,10 +4597,10 @@ export default function App() {
         </div>
       ) : (
         <>
-          <header className="inkwell-chrome-header sticky top-0 z-50 border-b border-dust bg-white/90 backdrop-blur-md dark:border-border-dark dark:bg-panel-dark/90">
+          <header className="inkwell-chrome-header sticky top-0 z-50 border-b border-dust bg-panel-light-strong/92 backdrop-blur-md dark:border-border-dark dark:bg-panel-dark/90">
             <div className="flex w-full min-h-[3.25rem] items-stretch sm:min-h-[3.5rem]">
               <div
-                className={`inkwell-theme-bridge flex min-w-0 flex-1 items-center justify-start bg-white/70 py-2 sm:py-3 dark:bg-panel-dark/70 ${
+                className={`inkwell-theme-bridge flex min-w-0 flex-1 items-center justify-start bg-panel-light/88 py-2 sm:py-3 dark:bg-panel-dark/70 ${
                   !isNote && (isFormatWorkspace || route === 'publish') ? 'pl-0 sm:pl-0' : 'pl-3 sm:pl-5'
                 }`}
               >
@@ -4629,7 +4629,7 @@ export default function App() {
                         syncPersistedState()
                       }
                     }}
-                    className="inkwell-header-brand group inline-flex w-fit max-w-full shrink-0 items-center gap-2 rounded-2xl px-2 py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-walnut/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-cream/50 dark:focus-visible:ring-offset-panel-dark sm:gap-3"
+                    className="inkwell-header-brand group inline-flex w-fit max-w-full shrink-0 items-center gap-2 rounded-2xl px-2 py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-walnut/40 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment dark:focus-visible:ring-cream/50 dark:focus-visible:ring-offset-panel-dark sm:gap-3"
                     aria-label="Back to Bookshelf"
                     title="Bookshelf"
                   >
@@ -4643,7 +4643,7 @@ export default function App() {
                         setEbookEditOpen(false)
                         navigateRoute('write')
                       }}
-                      className="flex shrink-0 items-center gap-2 rounded-3xl bg-ink px-3 py-2 text-sm font-medium text-parchment outline-none transition-colors hover:bg-walnut focus-visible:ring-2 focus-visible:ring-walnut/45 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:bg-cream dark:text-ink dark:hover:bg-accent-warm dark:focus-visible:ring-cream/55 dark:focus-visible:ring-offset-panel-dark sm:px-5 sm:py-2.5"
+                      className="flex shrink-0 items-center gap-2 rounded-3xl bg-ink px-3 py-2 text-sm font-medium text-parchment outline-none transition-colors hover:bg-walnut focus-visible:ring-2 focus-visible:ring-walnut/45 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment dark:bg-cream dark:text-ink dark:hover:bg-accent-warm dark:focus-visible:ring-cream/55 dark:focus-visible:ring-offset-panel-dark sm:px-5 sm:py-2.5"
                       aria-label="Back to writing"
                       title="Back to writing"
                     >
@@ -4658,7 +4658,7 @@ export default function App() {
                         setEbookEditOpen(false)
                         navigateRoute('format_ebook')
                       }}
-                      className="flex shrink-0 items-center gap-2 rounded-3xl bg-ink px-3 py-2 text-sm font-medium text-parchment outline-none transition-colors hover:bg-walnut focus-visible:ring-2 focus-visible:ring-walnut/45 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:bg-cream dark:text-ink dark:hover:bg-accent-warm dark:focus-visible:ring-cream/55 dark:focus-visible:ring-offset-panel-dark sm:px-5 sm:py-2.5"
+                      className="flex shrink-0 items-center gap-2 rounded-3xl bg-ink px-3 py-2 text-sm font-medium text-parchment outline-none transition-colors hover:bg-walnut focus-visible:ring-2 focus-visible:ring-walnut/45 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment dark:bg-cream dark:text-ink dark:hover:bg-accent-warm dark:focus-visible:ring-cream/55 dark:focus-visible:ring-offset-panel-dark sm:px-5 sm:py-2.5"
                       aria-label="Open Format workspace"
                       title="Ebook & print previews"
                     >
@@ -4724,7 +4724,7 @@ export default function App() {
                     {writeMobileOverflowOpen ?
                       <div
                         role="menu"
-                        className="absolute right-0 top-full z-[70] mt-2 w-[min(18.5rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-dust bg-white/98 py-1 shadow-xl backdrop-blur-md dark:border-border-dark dark:bg-panel-dark/98"
+                        className="absolute right-0 top-full z-[70] mt-2 w-[min(18.5rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-dust bg-panel-light-strong/98 py-1 shadow-xl backdrop-blur-md dark:border-border-dark dark:bg-panel-dark/98"
                       >
                         {!isNote ?
                           <button
@@ -4916,7 +4916,7 @@ export default function App() {
                         onClick={() => {
                           if (route === 'format_ebook') setEbookEditOpen((v) => !v)
                         }}
-                        className={`shrink-0 items-center gap-2 rounded-3xl border border-dust bg-white/70 px-2.5 py-2 text-sm font-medium text-ink outline-none transition-colors hover:bg-white focus-visible:ring-2 focus-visible:ring-walnut/35 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90 dark:focus-visible:ring-cream/45 dark:focus-visible:ring-offset-panel-dark sm:px-3 ${
+                        className={`shrink-0 items-center gap-2 rounded-3xl border border-dust bg-panel-light/88 px-2.5 py-2 text-sm font-medium text-ink outline-none transition-colors hover:bg-panel-light-strong focus-visible:ring-2 focus-visible:ring-walnut/35 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment dark:border-border-dark dark:bg-panel-dark/70 dark:text-ink-dark dark:hover:bg-panel-dark/90 dark:focus-visible:ring-cream/45 dark:focus-visible:ring-offset-panel-dark sm:px-3 ${
                           route === 'format_ebook' ? 'flex' : 'hidden'
                         }`}
                         title="Toggle editor for ebook review"
@@ -4955,7 +4955,7 @@ export default function App() {
                             else navigateRoute('note_export')
                           }}
                           disabled={!current}
-                          className="flex items-center gap-2 rounded-3xl bg-ink px-3 py-2 text-sm font-medium text-parchment outline-none transition-colors hover:bg-walnut focus-visible:ring-2 focus-visible:ring-walnut/45 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:pointer-events-none disabled:opacity-40 dark:bg-cream dark:text-ink dark:hover:bg-accent-warm dark:focus-visible:ring-cream/55 dark:focus-visible:ring-offset-panel-dark sm:px-5 sm:py-2.5"
+                          className="flex items-center gap-2 rounded-3xl bg-ink px-3 py-2 text-sm font-medium text-parchment outline-none transition-colors hover:bg-walnut focus-visible:ring-2 focus-visible:ring-walnut/45 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment disabled:pointer-events-none disabled:opacity-40 dark:bg-cream dark:text-ink dark:hover:bg-accent-warm dark:focus-visible:ring-cream/55 dark:focus-visible:ring-offset-panel-dark sm:px-5 sm:py-2.5"
                           aria-label={route === 'note_export' ? 'Back to Write' : 'Open Export workspace'}
                           title={route === 'note_export' ? 'Back to writing' : 'Export for the web and backups'}
                         >
@@ -4966,12 +4966,12 @@ export default function App() {
                         </button>
                       : route === 'publish' ?
                         <details ref={publishExportMenuRef} className="group relative shrink-0">
-                          <summary className="flex list-none cursor-pointer select-none items-center gap-1.5 rounded-3xl bg-ink px-3 py-2 text-sm font-medium text-parchment outline-none transition-colors hover:bg-walnut focus-visible:ring-2 focus-visible:ring-walnut/45 focus-visible:ring-offset-2 focus-visible:ring-offset-white [&::-webkit-details-marker]:hidden dark:bg-cream dark:text-ink dark:hover:bg-accent-warm dark:focus-visible:ring-cream/55 dark:focus-visible:ring-offset-panel-dark sm:gap-2 sm:px-5 sm:py-2.5">
+                          <summary className="flex list-none cursor-pointer select-none items-center gap-1.5 rounded-3xl bg-ink px-3 py-2 text-sm font-medium text-parchment outline-none transition-colors hover:bg-walnut focus-visible:ring-2 focus-visible:ring-walnut/45 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment [&::-webkit-details-marker]:hidden dark:bg-cream dark:text-ink dark:hover:bg-accent-warm dark:focus-visible:ring-cream/55 dark:focus-visible:ring-offset-panel-dark sm:gap-2 sm:px-5 sm:py-2.5">
                             <Download className="h-4 w-4 shrink-0" strokeWidth={2.25} />
                             <span className="hidden sm:inline">Export</span>
                             <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-75 transition-transform group-open:rotate-180 dark:opacity-80" />
                           </summary>
-                          <div className="absolute right-0 top-full z-[60] mt-1.5 min-w-[15rem] overflow-hidden rounded-2xl border border-dust bg-white/95 py-1 shadow-lg backdrop-blur-md dark:border-border-dark dark:bg-panel-dark/95">
+                          <div className="absolute right-0 top-full z-[60] mt-1.5 min-w-[15rem] overflow-hidden rounded-2xl border border-dust bg-panel-light-strong/95 py-1 shadow-lg backdrop-blur-md dark:border-border-dark dark:bg-panel-dark/95">
                             <button
                               type="button"
                               className="block w-full px-3 py-2.5 text-left text-sm font-medium text-ink hover:bg-parchment/80 dark:text-ink-dark dark:hover:bg-panel-dark/80"
@@ -5019,7 +5019,7 @@ export default function App() {
                             }
                           }}
                           disabled={isFormatWorkspace ? false : !current || route !== 'write'}
-                          className="flex shrink-0 items-center gap-2 rounded-3xl bg-ink px-3 py-2 text-sm font-medium text-parchment outline-none transition-colors hover:bg-walnut focus-visible:ring-2 focus-visible:ring-walnut/45 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:pointer-events-none disabled:opacity-40 dark:bg-cream dark:text-ink dark:hover:bg-accent-warm dark:focus-visible:ring-cream/55 dark:focus-visible:ring-offset-panel-dark sm:px-5 sm:py-2.5"
+                          className="flex shrink-0 items-center gap-2 rounded-3xl bg-ink px-3 py-2 text-sm font-medium text-parchment outline-none transition-colors hover:bg-walnut focus-visible:ring-2 focus-visible:ring-walnut/45 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment disabled:pointer-events-none disabled:opacity-40 dark:bg-cream dark:text-ink dark:hover:bg-accent-warm dark:focus-visible:ring-cream/55 dark:focus-visible:ring-offset-panel-dark sm:px-5 sm:py-2.5"
                           aria-label={isFormatWorkspace ? 'Go to Publish workspace' : 'Open Format workspace'}
                           title={isFormatWorkspace ? 'Open Publish workspace' : 'Ebook & print previews'}
                         >
@@ -5051,7 +5051,7 @@ export default function App() {
           <div className="flex min-h-0 w-full flex-1">
             {!isNote && route !== 'write' && route !== 'publish' ?
               <aside
-                className={`flex shrink-0 flex-col border-r border-dust bg-white/70 transition-[width] duration-300 ease-out dark:border-border-dark dark:bg-panel-dark/70 ${chaptersAsideWidthClass}`}
+                className={`flex shrink-0 flex-col border-r border-dust bg-panel-light/88 transition-[width] duration-300 ease-out dark:border-border-dark dark:bg-panel-dark/70 ${chaptersAsideWidthClass}`}
               >
                 {chaptersAsideCollapsed && !isFormatWorkspace ?
                   <div className="flex min-h-0 flex-1 flex-col items-end py-3 sm:py-4">

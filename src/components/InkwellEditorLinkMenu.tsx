@@ -68,7 +68,7 @@ export function InkwellEditorLinkMenu({
       ref={ref}
       role="menu"
       aria-label="Link options"
-      className="fixed z-[6000] min-w-[16rem] rounded-2xl border border-dust bg-white py-1 shadow-xl dark:border-border-dark dark:bg-panel-dark"
+      className="fixed z-[6000] min-w-[16rem] rounded-2xl border border-dust bg-panel-light-strong py-1 shadow-xl dark:border-border-dark dark:bg-panel-dark"
       style={{ left, top }}
     >
       {items.map((item, i) => (
