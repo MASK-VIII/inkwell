@@ -64,7 +64,9 @@ export function HeroSection({ darkMode = false }: { darkMode?: boolean }) {
             </div>
           : null}
           <MarketingScreenshot
-            src={darkMode ? '/marketing/chapter-in-progress-dark.png' : '/marketing/chapter-in-progress-light.png'}
+            src="/marketing/chapter-in-progress-light.png"
+            darkSrc="/marketing/chapter-in-progress-dark.png"
+            darkMode={darkMode}
             alt="Inkwell editor with chapter list and an open chapter in the manuscript"
             caption={'Inkwell \u2014 a chapter in progress'}
             aspectRatio="3 / 2"

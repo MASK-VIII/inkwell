@@ -58,7 +58,9 @@ export function ScreenshotsSection({ darkMode = false }: { darkMode?: boolean })
             <MarketingScreenshot
               key={shot.src}
               index={i + 1}
-              src={darkMode && shot.darkSrc ? shot.darkSrc : shot.src}
+              src={shot.src}
+              darkSrc={shot.darkSrc}
+              darkMode={darkMode}
               alt={shot.alt}
               caption={shot.caption}
               aspectRatio="16 / 10"
