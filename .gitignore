@@ -18,6 +18,9 @@ dist-ssr
 # Auto-generated marketing changelog feed
 public/changelog.json
 
+# Fetched on Vercel (private GitHub Release); do not commit
+public/downloads/*.exe
+
 # Electron-builder output (large binaries; never commit)
 release/
 release-build/

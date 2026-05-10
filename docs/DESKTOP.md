@@ -110,9 +110,36 @@ Use a **matrix** over OS so native binaries are produced on real hosts:
 
 The repository includes `.github/workflows/desktop.yml` as a minimal unsigned matrix build; tighten secrets and signing steps when you are ready to ship.
 
-## Supabase installer hosting (start here if the bucket already exists)
+## Vercel same-origin installer (private GitHub repo; no large-file Storage)
 
-Use this when the GitHub repo is **private** (anonymous `/releases/latest/download/…` returns **404**) but you still want a **public HTTPS** link for the marketing site.
+When the repo stays **private**, anonymous **`/releases/latest/download/…`** still **404**s. Instead of committing a **~120 MB** `.exe` (GitHub blocks blobs **> ~100 MB**) or paying for larger Storage quotas, **production Vercel builds** can **download** the installer from the GitHub API using a **read-only PAT**, then ship it as a static file.
+
+**Flow**
+
+1. **[`.github/workflows/release-desktop.yml`](../.github/workflows/release-desktop.yml)** publishes **`Inkwell Setup <version>.exe`** to a GitHub Release tagged **`v<version>`** (unchanged).
+2. **`npm run build`** on Vercel runs [**`scripts/fetch-desktop-installer-for-vercel.mjs`**](../scripts/fetch-desktop-installer-for-vercel.mjs) **before** `vite build` when **`VERCEL=1`** and **`VERCEL_ENV=production`** (or when **`INKWELL_FETCH_DESKTOP_INSTALLER=1`** for local testing).
+3. The script polls GitHub until that release asset exists (desktop CI can take several minutes after you bump **`package.json`**), then writes **`public/downloads/Inkwell-Setup-latest.exe`** (gitignored).
+4. Vercel serves files from the build output **before** applying the SPA rewrite to **`index.html`**, so **`/downloads/Inkwell-Setup-latest.exe`** resolves to the binary, not HTML.
+
+**Vercel configuration**
+
+| Variable / secret | Purpose |
+|-------------------|---------|
+| **`INKWELL_GITHUB_RELEASE_TOKEN`** (secret) | Classic GitHub PAT with **`repo`** scope (read-only suffices). **Never** expose to the client; Vercel build env only. |
+| **`INKWELL_GITHUB_OWNER_REPO`** (optional) | `Owner/repo` if Vercel clone has no useful **`origin`** (otherwise same as **`VITE_INKWELL_GITHUB_OWNER_REPO`**). |
+| **`VITE_INKWELL_DESKTOP_DOWNLOAD_URL`** | Set to **`https://<your-domain>/downloads/Inkwell-Setup-latest.exe`** or the origin-relative **`/downloads/Inkwell-Setup-latest.exe`** (supported by [`src/lib/marketing/desktopDownloadUrl.ts`](../src/lib/marketing/desktopDownloadUrl.ts)). |
+
+Preview deployments **skip** the fetch by default (avoids downloading ~120 MB per PR). To fetch on preview too, set **`INKWELL_FETCH_DESKTOP_INSTALLER_ON_PREVIEW=1`**.
+
+**Operational note:** If you bump **`package.json`** and push, **Vercel** and **Release desktop** may start together; the script **retries** until the release asset appears. If the desktop workflow is disabled or fails, the **production** build fails at this step — fix CI or temporarily remove the PAT / override URL.
+
+### Alternative: public GitHub repo (simplest hosting)
+
+Make the repository **public**. Anonymous **`/releases/latest/download/…`** works with no PAT and no fetch step. Clear **`VITE_INKWELL_DESKTOP_DOWNLOAD_URL`** on Vercel to use the default URL from **`vite.config.ts`** (same shape as **`npm run print:desktop-download-url`**).
+
+## Supabase installer hosting (optional; requires adequate bucket size limit)
+
+Use this when you prefer a **Supabase Storage** URL instead of Vercel or GitHub for the marketing button. Free tiers often cap object size (~**50 MB**); NSIS installers are commonly **100–200 MB**, so you may need a **paid** quota increase.
 
 You already created a Storage **bucket**. Finish setup in this order:
 
@@ -163,7 +190,7 @@ The web app bakes a default download URL from **`package.json` version** at buil
 
 **Which GitHub repo?** At build time, `vite.config.ts` resolves **`Owner/repo` from `git remote origin`** (same as `npm run print:desktop-download-url`). If your URL 404s, check **`git remote -v`** matches the repo in the browser (e.g. after an org rename). In CI without a full clone, set **`VITE_INKWELL_GITHUB_OWNER_REPO=Owner/inkwell`**.
 
-**Private repositories:** Unauthenticated visitors often get GitHub’s generic **404** page on `/releases/latest/download/…` (no login prompt). For a public “Download app” button, either **host the `.exe` on a public URL** and set **`VITE_INKWELL_DESKTOP_DOWNLOAD_URL`**, or **make the repo public**, or accept that only logged-in collaborators can download from GitHub Releases.
+**Private repositories:** Unauthenticated visitors often get GitHub’s generic **404** page on `/releases/latest/download/…` (no login prompt). For a public “Download app” button, prefer **Vercel same-origin fetch** (above), **`VITE_INKWELL_DESKTOP_DOWNLOAD_URL`** to Supabase or another HTTPS host, or **make the repo public**.
 
 ### Automated publishing (recommended)
 
@@ -196,7 +223,7 @@ Workflow **[`.github/workflows/release-desktop.yml`](../.github/workflows/releas
 
 - Link the project to this repo and set **Production branch** to `master` (or whatever you use).
 - Enable **automatic deployments** on push so you never need a manual “Deploy” for step (2).
-- **`VITE_INKWELL_DESKTOP_DOWNLOAD_URL`** is optional: omit it to use the build-time default from `vite.config.ts`; set it only to override (CDN, fork, or different filename).
+- **`VITE_INKWELL_DESKTOP_DOWNLOAD_URL`** is optional: omit it to use the build-time default from `vite.config.ts`; set it to override (same-site **`/downloads/…`**, Supabase, CDN, fork). **`INKWELL_GITHUB_RELEASE_TOKEN`** on Vercel only affects the optional fetch script — never prefix with **`VITE_`** (that would expose it to the browser).
 
 ### Manual publishing (fallback)
 
@@ -219,6 +246,7 @@ The public **`/releases/latest/download/…`** link works only after that asset 
 | `npm run build:desktop:install` | Same as above, then launches the Windows NSIS installer or opens the macOS `.dmg` |
 | `npm run generate:brand-icons` | Rasterize `public/favicon.svg` → `build/icon.png` (512) and `public/apple-touch-icon.png` (180) |
 | `npm run print:desktop-download-url` | Print `VITE_INKWELL_DESKTOP_DOWNLOAD_URL` for the Windows NSIS installer (GitHub Releases **latest** asset pattern) |
+| `scripts/fetch-desktop-installer-for-vercel.mjs` | Invoked from **`npm run build`** on Vercel production (or when **`INKWELL_FETCH_DESKTOP_INSTALLER=1`**): downloads Release **`Inkwell Setup <version>.exe`** via GitHub API → **`public/downloads/Inkwell-Setup-latest.exe`** |
 | GitHub Actions **Release desktop (Windows)** | On push `v*` or manual dispatch: CI builds NSIS and uploads `Inkwell Setup <version>.exe` to GitHub Releases (**Latest**); requires workflow **Read and write** permission |
 
 Installers land in **`release/`** (`package.json` → `build.directories.output`), next to `win-unpacked/` or the macOS `.dmg`. Running **`npm run build:desktop` does not install the app** — use **`npm run build:desktop:install`** or double-click the **`Inkwell Setup … .exe`** file in `release/`.

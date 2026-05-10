@@ -5,12 +5,19 @@
  * from `package.json` version → GitHub `MASK-VIII/inkwell` latest release asset (same
  * shape as `npm run print:desktop-download-url`).
  *
- * Must be an absolute HTTPS URL to the installer binary (or GitHub release asset URL).
- * Relative paths like `/Setup.exe` resolve on the SPA host and often return `index.html`.
+ * Absolute **https:** URL, **http:** on localhost, or an origin-relative path such as
+ * **`/downloads/Inkwell-Setup-latest.exe`** (same-site hosting on Vercel).
  */
 function normalizeDesktopDownloadUrl(candidate: string): string | null {
   const t = candidate.trim()
   if (!t.length) return null
+
+  if (t.startsWith('/') && !t.startsWith('//')) {
+    const pathOnly = (t.split(/[?#]/)[0] ?? '').toLowerCase()
+    if (pathOnly === '/' || pathOnly === '/index.html') return null
+    if (!/\.(exe|dmg)$/i.test(pathOnly)) return null
+    return t.split(/[?#]/)[0] ?? t
+  }
 
   let u: URL
   try {
