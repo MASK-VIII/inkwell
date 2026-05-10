@@ -7,6 +7,7 @@
  * - VERCEL=1 and INKWELL_FETCH_DESKTOP_INSTALLER_ON_PREVIEW=1
  *
  * Requires INKWELL_GITHUB_RELEASE_TOKEN (classic PAT: repo scope, read-only is enough).
+ * Emergency bypass (build without installer): INKWELL_SKIP_DESKTOP_INSTALLER_FETCH=1 on Vercel.
  * Optional: INKWELL_GITHUB_OWNER_REPO or VITE_INKWELL_GITHUB_OWNER_REPO (default: git remote or MASK-VIII/inkwell).
  *
  * Writes: public/downloads/Inkwell-Setup-latest.exe (gitignored)
@@ -93,6 +94,11 @@ async function downloadAsset(apiAssetUrl, token, destFile) {
 }
 
 async function main() {
+  if (process.env.INKWELL_SKIP_DESKTOP_INSTALLER_FETCH === '1') {
+    console.log('[fetch-desktop-installer] skipped (INKWELL_SKIP_DESKTOP_INSTALLER_FETCH=1)')
+    return
+  }
+
   if (!shouldRun()) {
     console.log('[fetch-desktop-installer] skipped (not a targeted Vercel build / no force flag)')
     return
@@ -118,6 +124,8 @@ async function main() {
 
   const tag = `v${version}`
   const releasesTagUrl = `https://api.github.com/repos/${owner}/${repo}/releases/tags/${tag}`
+
+  console.log(`[fetch-desktop-installer] repo=${ownerRepo} tag=${tag} asset="${assetName}"`)
 
   const destDir = join(root, 'public', 'downloads')
   const destFile = join(destDir, 'Inkwell-Setup-latest.exe')
