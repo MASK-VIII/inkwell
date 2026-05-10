@@ -36,12 +36,26 @@ function normalizeDesktopDownloadUrl(candidate: string): string | null {
   return u.href
 }
 
+/** Env overrides that should behave like “unset” (common Vercel misconfiguration). */
+function envOverrideLooksUnset(raw: string): boolean {
+  const t = raw.trim().toLowerCase()
+  return t === '' || t === 'false' || t === '0' || t === 'null' || t === 'undefined' || t === 'none'
+}
+
 export function getInkwellDesktopDownloadUrl(): string | null {
   const envRaw = import.meta.env.VITE_INKWELL_DESKTOP_DOWNLOAD_URL
-  const chosen =
-    typeof envRaw === 'string' && envRaw.trim().length > 0 ?
-      envRaw.trim()
-    : __INKWELL_DESKTOP_DOWNLOAD_DEFAULT__
+  const defaultUrl = __INKWELL_DESKTOP_DOWNLOAD_DEFAULT__
 
-  return normalizeDesktopDownloadUrl(chosen)
+  const fromEnv = typeof envRaw === 'string' ? envRaw.trim() : ''
+  const candidates: string[] = []
+  if (fromEnv.length > 0 && !envOverrideLooksUnset(fromEnv)) {
+    candidates.push(fromEnv)
+  }
+  candidates.push(defaultUrl)
+
+  for (const c of candidates) {
+    const normalized = normalizeDesktopDownloadUrl(c)
+    if (normalized) return normalized
+  }
+  return null
 }
