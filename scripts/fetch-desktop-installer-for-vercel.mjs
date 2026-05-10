@@ -146,6 +146,12 @@ async function main() {
       typeof data === 'object' && data && 'message' in data ?
         String(data.message)
       : await Promise.resolve(String(res.status))
+    if (res.status === 401 || res.status === 403) {
+      throw new Error(
+        `GitHub API ${res.status} (${msg}). Regenerate a classic PAT with "repo" scope, ` +
+          `set Vercel secret INKWELL_GITHUB_RELEASE_TOKEN exactly (no quotes/spaces), redeploy Production.`,
+      )
+    }
     throw new Error(`GitHub releases/tags/${tag} failed: ${res.status} ${msg}`)
   }
 
