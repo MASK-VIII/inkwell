@@ -36,6 +36,10 @@ Web builds continue to use normal `localStorage` for Supabase session keys unles
 
 See **`docs/CLOUD_SYNC.md`** for schema, RLS, conflict rules, and the manual test matrix.
 
+### Sign-in screen shows only “Welcome” / offline on desktop
+
+If the packaged app opens to **Welcome** with **Continue to library (offline)** and **no** email or password fields, the **renderer was built without** `VITE_INKWELL_CLOUD_SYNC` and Supabase URL/key. Cloud login is not missing at runtime—it was never compiled in. Fix by setting the variables below in **`.env.local`** (or your CI secrets), then **`npm run build:desktop`** again and reinstall.
+
 ### Vite env is compile-time for desktop
 
 Copy **`.env.example`** to **`.env.local`** in the repo root and set, at minimum:

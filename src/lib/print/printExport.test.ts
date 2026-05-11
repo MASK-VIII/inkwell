@@ -219,4 +219,23 @@ describe('extractPrintBlocks inline styles', () => {
     const para = blocks.find((b) => b.type === 'paragraph')
     expect(para?.runs?.some((r) => r.bold && r.text.includes('there'))).toBe(true)
   })
+
+  it('maps textStyle fontWeight / fontStyle to bold / italic runs', () => {
+    const doc: JSONContent = {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'W', marks: [{ type: 'textStyle', attrs: { fontWeight: '700' } }] },
+            { type: 'text', text: 'x', marks: [{ type: 'textStyle', attrs: { fontStyle: 'italic' } }] },
+          ],
+        },
+      ],
+    }
+    const blocks = extractPrintBlocks(doc)
+    const para = blocks.find((b) => b.type === 'paragraph')
+    expect(para?.runs?.some((r) => r.bold && r.text === 'W')).toBe(true)
+    expect(para?.runs?.some((r) => r.italic && r.text === 'x')).toBe(true)
+  })
 })

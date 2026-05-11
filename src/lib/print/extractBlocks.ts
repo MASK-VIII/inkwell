@@ -1,6 +1,6 @@
 import type { JSONContent } from '@tiptap/core'
 import type { InkwellFontId } from '../fonts/fontCatalog'
-import { inlineStyleFromMarks } from '../tiptap/inlineMarks'
+import { inlineStyleFromMarks, type TipTapMarkJson } from '../tiptap/inlineMarks'
 
 /**
  * `chapterBanner`     — synthetic chapter opener title (centered, multiplied size)
@@ -15,6 +15,7 @@ export type PrintTextRun = {
   bold?: boolean
   italic?: boolean
   underline?: boolean
+  strike?: boolean
 }
 
 export type PrintBlock =
@@ -55,8 +56,16 @@ function registerFootnote(buf: FootnoteBuf, id: string, content: string) {
   }
 }
 
-function sameRunStyle(a: PrintTextRun, b: Pick<PrintTextRun, 'bold' | 'italic' | 'underline'>): boolean {
-  return a.bold === b.bold && a.italic === b.italic && a.underline === b.underline
+function sameRunStyle(
+  a: PrintTextRun,
+  b: Pick<PrintTextRun, 'bold' | 'italic' | 'underline' | 'strike'>,
+): boolean {
+  return (
+    a.bold === b.bold &&
+    a.italic === b.italic &&
+    a.underline === b.underline &&
+    a.strike === b.strike
+  )
 }
 
 function pushStyledFragment(
@@ -65,14 +74,15 @@ function pushStyledFragment(
   bold?: boolean,
   italic?: boolean,
   underline?: boolean,
+  strike?: boolean,
 ) {
   if (!fragment) return
   const prev = runs[runs.length - 1]
-  if (prev && sameRunStyle(prev, { bold, italic, underline })) {
+  if (prev && sameRunStyle(prev, { bold, italic, underline, strike })) {
     prev.text += fragment
     return
   }
-  runs.push({ text: fragment, bold, italic, underline })
+  runs.push({ text: fragment, bold, italic, underline, strike })
 }
 
 function mergeAdjacentRuns(runs: PrintTextRun[]): PrintTextRun[] {
@@ -95,7 +105,7 @@ function finalizeRuns(runsRaw: PrintTextRun[]): PrintTextRun[] {
   return merged.filter((r) => r.text.length > 0)
 }
 
-type InheritedInlineStyle = { bold?: boolean; italic?: boolean; underline?: boolean }
+type InheritedInlineStyle = { bold?: boolean; italic?: boolean; underline?: boolean; strike?: boolean }
 
 function mergeInheritedStyle(a: InheritedInlineStyle | undefined, b: InheritedInlineStyle | undefined): InheritedInlineStyle | undefined {
   if (!a && !b) return undefined
@@ -103,6 +113,7 @@ function mergeInheritedStyle(a: InheritedInlineStyle | undefined, b: InheritedIn
     bold: a?.bold || b?.bold ? true : undefined,
     italic: a?.italic || b?.italic ? true : undefined,
     underline: a?.underline || b?.underline ? true : undefined,
+    strike: a?.strike || b?.strike ? true : undefined,
   }
 }
 
@@ -122,13 +133,14 @@ function styleAccumulationFromNodeType(nodeType: string): InheritedInlineStyle |
 
 function mergeMarksWithInherited(
   inherited: InheritedInlineStyle | undefined,
-  marks: { type: string; attrs?: Record<string, unknown> }[] | undefined,
+  marks: TipTapMarkJson[] | undefined,
 ): InheritedInlineStyle {
   const m = inlineStyleFromMarks(marks)
   return {
     bold: inherited?.bold || m.bold ? true : undefined,
     italic: inherited?.italic || m.italic ? true : undefined,
     underline: inherited?.underline || m.underline ? true : undefined,
+    strike: inherited?.strike || m.strike ? true : undefined,
   }
 }
 
@@ -141,13 +153,13 @@ function runsFromInline(nodes: JSONContent[] | undefined, buf: FootnoteBuf): Pri
       const nextInherited = mergeInheritedStyle(inherited, acc)
 
       if (node.type === 'text') {
-        const marks = node.marks as { type: string; attrs?: Record<string, unknown> }[] | undefined
+        const marks = node.marks as TipTapMarkJson[] | undefined
         const fn = marks?.find((m) => m.type === 'writerFootnote')
         if (fn?.attrs?.id != null) {
           registerFootnote(buf, String(fn.attrs.id), String(fn.attrs.content ?? ''))
         }
         const style = mergeMarksWithInherited(nextInherited, marks)
-        pushStyledFragment(runs, node.text ?? '', style.bold, style.italic, style.underline)
+        pushStyledFragment(runs, node.text ?? '', style.bold, style.italic, style.underline, style.strike)
       } else if (node.type === 'hardBreak') {
         pushStyledFragment(runs, ' ', undefined, undefined, undefined)
       } else if (node.type === 'mention') {

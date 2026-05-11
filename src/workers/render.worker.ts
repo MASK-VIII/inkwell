@@ -112,6 +112,14 @@ type PrintSpinePagesResult = {
   chapters: Array<{ chapterId: number; pages: PrintPage[] }>
 }
 
+/** Partial grouped pages while `paginatePrintSpine` advances through the spine (Atticus-class live updates). */
+type PrintSpinePagesProgress = {
+  kind: 'printSpinePagesProgress'
+  rev: number
+  chapters: Array<{ chapterId: number; pages: PrintPage[] }>
+  completedChapterIndex: number
+}
+
 type WorkerError = {
   kind: 'error'
   rev: number
@@ -125,6 +133,7 @@ type WorkerResponse =
   | PdfResult
   | PdfProgress
   | PrintSpineResult
+  | PrintSpinePagesProgress
   | PrintSpinePagesResult
   | WorkerError
 
@@ -354,15 +363,36 @@ self.onmessage = async (ev: MessageEvent<WorkerRequest>) => {
         bodyBoldIsSynthetic,
         bodyItalicIsSynthetic,
       } = await getPrintFontPairForMeasurement(req.theme.print.bodyFontId, titleFontId)
-      const allPages = await paginateSpineWithFont(req.spine, req.theme, {
-        body,
-        title,
-        bodyBold,
-        bodyItalic,
-        bodyBoldItalic,
-        bodyBoldIsSynthetic,
-        bodyItalicIsSynthetic,
-      }, ctx)
+      const allPages = await paginateSpineWithFont(
+        req.spine,
+        req.theme,
+        {
+          body,
+          title,
+          bodyBold,
+          bodyItalic,
+          bodyBoldItalic,
+          bodyBoldIsSynthetic,
+          bodyItalicIsSynthetic,
+        },
+        ctx,
+        {
+          onChapterComplete: async ({ spine, pagesSoFar, chapterIndex }) => {
+            try {
+              const grouped = groupPrintPreviewPagesByChapter(spine, pagesSoFar)
+              const chapters = spine.map((m) => ({ chapterId: m.id, pages: grouped.get(m.id) ?? [] }))
+              post({
+                kind: 'printSpinePagesProgress',
+                rev: req.rev,
+                chapters,
+                completedChapterIndex: chapterIndex,
+              })
+            } catch {
+              /* progress is best-effort; final result still posts */
+            }
+          },
+        },
+      )
       const grouped = groupPrintPreviewPagesByChapter(req.spine, allPages)
       const chapters = req.spine.map((m) => ({ chapterId: m.id, pages: grouped.get(m.id) ?? [] }))
       const flat: PrintPage[] = []

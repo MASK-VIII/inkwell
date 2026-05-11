@@ -7,7 +7,7 @@ import {
   setCharacterSpacing,
   type PDFFont,
 } from 'pdf-lib'
-import type { InkwellProject } from '../../types'
+import { type InkwellProject, TRIM_PRESETS } from '../../types'
 import {
   paginateProjectForPrintExport,
   resolvePrintTitleFontId,
@@ -47,6 +47,7 @@ async function tryEmbedRaster(
     return null
   }
   try {
+    // EPUB sanitizer allows webp/avif; pdf-lib only embeds PNG/JPEG here — rasterise upstream if needed.
     const embedded =
       dec.mime.includes('png') ? await pdf.embedPng(dec.bytes)
       : dec.mime.includes('jpeg') || dec.mime.includes('jpg') ? await pdf.embedJpg(dec.bytes)
@@ -78,6 +79,19 @@ export type BuildKdpPdfProgress = {
   total: number
 }
 
+/** Fail fast with a clear message before font work / pagination (KDP interior sanity). */
+export function validateKdpPdfProject(project: InkwellProject): void {
+  const print = project.theme.print
+  const trim = TRIM_PRESETS[print.trimPreset]
+  if (!(trim.widthIn > 0 && trim.heightIn > 0)) {
+    throw new Error('Print trim size must be positive for KDP PDF export.')
+  }
+  const bleed = print.bleedIn ?? 0
+  if (bleed < 0 || bleed > 0.5) {
+    throw new Error('Print bleed must be between 0 and 0.5 inches.')
+  }
+}
+
 export async function buildKdpPdf(
   project: InkwellProject,
   opts?: {
@@ -85,6 +99,7 @@ export async function buildKdpPdf(
     onProgress?: (p: BuildKdpPdfProgress) => void
   },
 ): Promise<Uint8Array> {
+  validateKdpPdfProject(project)
   const onProgress = opts?.onProgress
   const pdf = await PDFDocument.create()
   const titleFontId = resolvePrintTitleFontId(project.theme.print)
@@ -261,6 +276,19 @@ export async function buildKdpPdf(
                 start: { x: bx, y: uy },
                 end: { x: bx + uw, y: uy },
                 thickness: Math.max(0.35, l.fontSizePt * 0.045),
+                color: bodyTextRgb,
+              })
+            }
+            if (tr.strike) {
+              const prepared = drawWith(segFont, tr.text)
+              const uw = segFont.widthOfTextAtSize(prepared, l.fontSizePt)
+              const bx = segX + bleedPt
+              const baselineY = l.yPt + bleedPt
+              const sy = baselineY + l.fontSizePt * 0.27
+              page.drawLine({
+                start: { x: bx, y: sy },
+                end: { x: bx + uw, y: sy },
+                thickness: Math.max(0.35, l.fontSizePt * 0.04),
                 color: bodyTextRgb,
               })
             }

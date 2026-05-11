@@ -24,8 +24,13 @@ import { figureDisplayPts } from './imageDims'
 import { getEnglishHypher } from './hyphen'
 import { getPrintFontPairForMeasurement } from './fonts'
 
-/** Yield so the browser can paint and handle input between CPU-heavy pagination chunks. */
+/**
+ * Yield so the browser can paint and handle input between CPU-heavy pagination chunks.
+ * Workers have no main-thread UI to unblock — skipping the timer avoids adding tens of
+ * milliseconds per chapter/TOC iteration during `resolvePrintSpine` and PDF layout.
+ */
 export async function yieldToMain(): Promise<void> {
+  if (typeof document === 'undefined') return
   await new Promise<void>((resolve) => setTimeout(resolve, 0))
 }
 
@@ -36,6 +41,7 @@ export type PrintLineTextRun = {
   bold?: boolean
   italic?: boolean
   underline?: boolean
+  strike?: boolean
 }
 
 export type PrintLine = {
@@ -371,7 +377,8 @@ function mergePrintRuns(runs: PrintTextRun[]): PrintTextRun[] {
       prev &&
       prev.bold === r.bold &&
       prev.italic === r.italic &&
-      prev.underline === r.underline
+      prev.underline === r.underline &&
+      prev.strike === r.strike
     ) {
       prev.text += r.text
     } else out.push({ ...r })
@@ -381,7 +388,7 @@ function mergePrintRuns(runs: PrintTextRun[]): PrintTextRun[] {
 
 /** Word fragment or literal whitespace from the manuscript (preserves adjacency across styles). */
 type LinePiece =
-  | { kind: 'w'; text: string; bold?: boolean; italic?: boolean; underline?: boolean }
+  | { kind: 'w'; text: string; bold?: boolean; italic?: boolean; underline?: boolean; strike?: boolean }
   | { kind: 'sp'; text: string }
 
 function linePiecesFromRuns(runs: PrintTextRun[]): LinePiece[] {
@@ -391,7 +398,15 @@ function linePiecesFromRuns(runs: PrintTextRun[]): LinePiece[] {
     for (const p of parts) {
       if (!p) continue
       if (/^\s+$/.test(p)) out.push({ kind: 'sp', text: p })
-      else out.push({ kind: 'w', text: p, bold: r.bold, italic: r.italic, underline: r.underline })
+      else
+        out.push({
+          kind: 'w',
+          text: p,
+          bold: r.bold,
+          italic: r.italic,
+          underline: r.underline,
+          strike: r.strike,
+        })
     }
   }
   return out
@@ -438,6 +453,7 @@ function buildLineTextRunsFromPieces(pieces: LinePiece[], fontSizePt: number, fo
         bold: pc.bold,
         italic: pc.italic,
         underline: pc.underline,
+        strike: pc.strike,
       })
       x += safeWidthOfTextAtSize(pc.text, fontSizePt, f)
     }
@@ -449,8 +465,14 @@ function plainFromPieces(pieces: LinePiece[]): string {
   return pieces.map((pc) => pc.text).join('')
 }
 
-function wordPiece(text: string, bold?: boolean, italic?: boolean, underline?: boolean): LinePiece {
-  return { kind: 'w', text, bold, italic, underline }
+function wordPiece(
+  text: string,
+  bold?: boolean,
+  italic?: boolean,
+  underline?: boolean,
+  strike?: boolean,
+): LinePiece {
+  return { kind: 'w', text, bold, italic, underline, strike }
 }
 
 function wrapStyledLinePieces(
@@ -502,7 +524,7 @@ function wrapStyledLinePieces(
     const w = pc
     const chunks = hyphenationChunks(w.text, hyphenateOn, hypher)
     const whole = chunks.join('')
-    const wordAsPiece = wordPiece(whole, w.bold, w.italic, w.underline)
+    const wordAsPiece = wordPiece(whole, w.bold, w.italic, w.underline, w.strike)
     const cand = [...current, wordAsPiece]
     if (widthOfLinePieces(cand, fontSizePt, fonts, trackingEm) <= maxWidthPt) {
       current = cand
@@ -516,7 +538,7 @@ function wrapStyledLinePieces(
     }
 
     if (chunks.length === 1) {
-      const single = wordPiece(whole, w.bold, w.italic, w.underline)
+      const single = wordPiece(whole, w.bold, w.italic, w.underline, w.strike)
       if (widthOfLinePieces([single], fontSizePt, fonts, trackingEm) <= maxWidthPt) {
         current = [single]
         pi++
@@ -526,7 +548,7 @@ function wrapStyledLinePieces(
       const broken = hardBreakLongWord(whole, maxWidthPt, fontSizePt, fw)
       for (let bi = 0; bi < broken.length; bi++) {
         const part = broken[bi]!
-        const piece = wordPiece(part, w.bold, w.italic, w.underline)
+        const piece = wordPiece(part, w.bold, w.italic, w.underline, w.strike)
         if (bi < broken.length - 1) {
           flushLine([piece])
         } else {
@@ -545,7 +567,7 @@ function wrapStyledLinePieces(
         testAccum += chunks[j]!
         const hyphenAfter = j < chunks.length - 1
         const pieceText = hyphenAfter ? `${testAccum}-` : testAccum
-        const trial = [...current, wordPiece(pieceText, w.bold, w.italic, w.underline)]
+        const trial = [...current, wordPiece(pieceText, w.bold, w.italic, w.underline, w.strike)]
         if (widthOfLinePieces(trial, fontSizePt, fonts, trackingEm) <= maxWidthPt) bestJ = j
         else break
       }
@@ -554,7 +576,7 @@ function wrapStyledLinePieces(
         const merged = chunks.slice(ci, bestJ + 1).join('')
         const hyphenAfter = bestJ < chunks.length - 1
         const pieceText = hyphenAfter ? `${merged}-` : merged
-        current = [...current, wordPiece(pieceText, w.bold, w.italic, w.underline)]
+        current = [...current, wordPiece(pieceText, w.bold, w.italic, w.underline, w.strike)]
         ci = bestJ + 1
         if (hyphenAfter) {
           flushLine(current)
@@ -574,7 +596,7 @@ function wrapStyledLinePieces(
       const broken = hardBreakLongWord(rest, maxWidthPt, fontSizePt, fw)
       for (let bi = 0; bi < broken.length; bi++) {
         const part = broken[bi]!
-        const piece = wordPiece(part, w.bold, w.italic, w.underline)
+        const piece = wordPiece(part, w.bold, w.italic, w.underline, w.strike)
         if (bi < broken.length - 1) flushLine([piece])
         else current = [piece]
       }
@@ -628,9 +650,9 @@ function wrapHangParagraphRuns(
     const w0 = pieces[i] as Extract<LinePiece, { kind: 'w' }>
     const fw = resolveBodyFontMeasureForWidth(fonts, w0.bold, w0.italic)
     const broken = hardBreakLongWord(w0.text, firstInnerW, fontSizePt, fw)
-    firstInner = [wordPiece(broken[0]!, w0.bold, w0.italic, w0.underline)]
+    firstInner = [wordPiece(broken[0]!, w0.bold, w0.italic, w0.underline, w0.strike)]
     const restJoin = broken.slice(1).join('')
-    if (restJoin) pieces[i] = wordPiece(restJoin, w0.bold, w0.italic, w0.underline)
+    if (restJoin) pieces[i] = wordPiece(restJoin, w0.bold, w0.italic, w0.underline, w0.strike)
     else i++
   }
 
@@ -666,7 +688,7 @@ function paragraphRuns(block: Extract<PrintBlock, { type: 'paragraph' }>): Print
 }
 
 function blockHasStyledRuns(block: { runs?: PrintTextRun[] }): boolean {
-  return Boolean(block.runs?.some((r) => r.bold || r.italic || r.underline))
+  return Boolean(block.runs?.some((r) => r.bold || r.italic || r.underline || r.strike))
 }
 
 function bodyStartsWithChapterHeading(bodyBlocks: PrintBlock[], chapterTitle: string): boolean {
@@ -1377,11 +1399,22 @@ export async function paginateChapterWithFont(
   }
 }
 
+export type PaginateSpineWithFontOptions = {
+  /** Fires after each manuscript in `spine` is paginated (used for progressive print preview). */
+  onChapterComplete?: (info: {
+    chapterIndex: number
+    chapterId: number
+    spine: Manuscript[]
+    pagesSoFar: PrintPage[]
+  }) => void | Promise<void>
+}
+
 export async function paginateSpineWithFont(
   spine: Manuscript[],
   theme: Theme,
   fontOrPair: FontMeasurer | PrintFontPair,
   ctx?: PrintLayoutContext,
+  opts?: PaginateSpineWithFontOptions,
 ): Promise<PrintPage[]> {
   const print = theme.print
   const fonts: PrintFontPair = isFontPair(fontOrPair)
@@ -1404,6 +1437,12 @@ export async function paginateSpineWithFont(
     const res = await paginateChapterWithFont(ch, i, theme, fonts, nextStart, ctx, layout, ordinal)
     pages.push(...res.pages)
     nextStart = res.nextPageNumber
+    await opts?.onChapterComplete?.({
+      chapterIndex: i,
+      chapterId: ch.id,
+      spine,
+      pagesSoFar: pages.slice(),
+    })
   }
 
   if (pages.length === 0) {

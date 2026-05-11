@@ -116,8 +116,9 @@ export async function getPrintFontPairForMeasurement(
   }
 
   const row = FONT_CATALOG[bId] as InkwellFontCatalogRow
-  const bodyBoldIsSynthetic = !row.printFontUrlBold
-  const bodyItalicIsSynthetic = !row.printFontUrlItalic
+  /** If pdf-lib reuses one embedded font for multiple variants, draw faux bold/italic like a missing file. */
+  const bodyBoldIsSynthetic = !row.printFontUrlBold || body === bodyBold
+  const bodyItalicIsSynthetic = !row.printFontUrlItalic || body === bodyItalic
 
   return {
     pdf,
@@ -152,8 +153,8 @@ export async function getPrintFontPairForPdf(
   const bodyBoldItalic = await embedVariant(bId, 'boldItalic')
 
   const row = FONT_CATALOG[bId] as InkwellFontCatalogRow
-  const bodyBoldIsSynthetic = !row.printFontUrlBold
-  const bodyItalicIsSynthetic = !row.printFontUrlItalic
+  const bodyBoldIsSynthetic = !row.printFontUrlBold || body === bodyBold
+  const bodyItalicIsSynthetic = !row.printFontUrlItalic || body === bodyItalic
 
   let title = body
   let titleBold = bodyBold
@@ -168,8 +169,8 @@ export async function getPrintFontPairForPdf(
     titleItalic = await embedVariant(tId, 'italic')
     titleBoldItalic = await embedVariant(tId, 'boldItalic')
     const rowT = FONT_CATALOG[tId] as InkwellFontCatalogRow
-    titleBoldIsSynthetic = !rowT.printFontUrlBold
-    titleItalicIsSynthetic = !rowT.printFontUrlItalic
+    titleBoldIsSynthetic = !rowT.printFontUrlBold || title === titleBold
+    titleItalicIsSynthetic = !rowT.printFontUrlItalic || title === titleItalic
   }
 
   return {

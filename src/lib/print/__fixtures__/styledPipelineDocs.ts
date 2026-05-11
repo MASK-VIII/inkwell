@@ -56,6 +56,16 @@ export const underlineParagraphDoc: JSONContent = {
   ],
 }
 
+export const strikeParagraphDoc: JSONContent = {
+  type: 'doc',
+  content: [
+    {
+      type: 'paragraph',
+      content: [{ type: 'text', text: 'Struck', marks: [{ type: 'strike' }] }],
+    },
+  ],
+}
+
 export const listStyledDoc: JSONContent = {
   type: 'doc',
   content: [

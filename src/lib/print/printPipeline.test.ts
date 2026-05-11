@@ -7,6 +7,7 @@ import {
   aliasMarkDoc,
   headingItalicDoc,
   listStyledDoc,
+  strikeParagraphDoc,
   styledParagraphDoc,
   underlineParagraphDoc,
   wrapperBoldNodeDoc,
@@ -91,6 +92,20 @@ describe('print pipeline extract → paginate (diagnostics)', () => {
       p.lines.some((l) => l.kind === 'body' && l.textRuns?.some((tr) => tr.bold)),
     )
     expect(hasBoldRun).toBe(true)
+  })
+
+  it('carries strike through to paginated textRuns', async () => {
+    const blocks = extractPrintBlocks(strikeParagraphDoc)
+    const para = blocks.find((b) => b.type === 'paragraph')
+    expect(para?.runs?.some((r) => r.strike)).toBe(true)
+
+    const ch = minimalChapter(1, 'One', strikeParagraphDoc)
+    const res = await paginateChapterWithFont(ch, 0, fakeTheme, fakeFont, 1, undefined, 'chapter', 1)
+    const hasStrike = res.pages
+      .flatMap((p) => p.lines)
+      .flatMap((l) => l.textRuns ?? [])
+      .some((tr) => tr.strike)
+    expect(hasStrike).toBe(true)
   })
 
   it('styled heading yields italic textRuns', async () => {

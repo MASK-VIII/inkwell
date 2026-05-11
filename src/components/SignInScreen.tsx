@@ -192,7 +192,10 @@ export function SignInScreen({
   const recoveryActive = Boolean(cloudSync?.passwordRecovery)
 
   const heroTitle = (() => {
-    if (!cloudSync) return 'Welcome'
+    if (!cloudSync) {
+      if (isDesktopShell) return 'Cloud sign-in is not in this build'
+      return 'Welcome'
+    }
     if (recoveryActive) return 'New password'
     if (hasSession) return 'Welcome back'
     if (mode === 'forgot') return 'Reset password'
@@ -201,6 +204,39 @@ export function SignInScreen({
 
   const heroSubtitleEl = (() => {
     if (!cloudSync) {
+      if (isDesktopShell) {
+        return (
+          <div className="mx-auto mt-3 max-w-md text-pretty text-left text-sm leading-relaxed text-ink/65 dark:text-ink-dark/65 sm:text-[0.9375rem]">
+            <p>
+              Email and password sign-in only appear when the desktop app is built with Supabase
+              settings at compile time (same as the web app). This installer was packaged without
+              those variables.
+            </p>
+            <p className="mt-3 font-medium text-ink dark:text-ink-dark">
+              Rebuild with <code className="rounded bg-dust/25 px-1 font-normal dark:bg-border-dark/60">.env.local</code>{' '}
+              or CI secrets set to:
+            </p>
+            <ul className="mt-2 list-inside list-disc space-y-1.5 text-ink/80 dark:text-ink-dark/80">
+              <li>
+                <code className="rounded bg-dust/25 px-1 dark:bg-border-dark/60">VITE_INKWELL_CLOUD_SYNC=1</code>
+              </li>
+              <li>
+                <code className="rounded bg-dust/25 px-1 dark:bg-border-dark/60">VITE_SUPABASE_URL</code> (full https URL)
+              </li>
+              <li>
+                <code className="rounded bg-dust/25 px-1 dark:bg-border-dark/60">VITE_SUPABASE_PUBLISHABLE_KEY</code>{' '}
+                or <code className="rounded bg-dust/25 px-1 dark:bg-border-dark/60">VITE_SUPABASE_ANON_KEY</code>
+              </li>
+            </ul>
+            <p className="mt-3">
+              Then run{' '}
+              <code className="rounded bg-dust/25 px-1 dark:bg-border-dark/60">npm run build:desktop</code> and install
+              the new setup. See <span className="font-medium text-ink dark:text-ink-dark">docs/DESKTOP.md</span> in the
+              repo.
+            </p>
+          </div>
+        )
+      }
       return (
         <p className="mx-auto mt-3 max-w-sm text-pretty text-sm leading-relaxed text-ink/65 dark:text-ink-dark/65 sm:text-[0.9375rem]">
           Your work stays on this device until you export. Open the app when you are ready.
@@ -273,7 +309,9 @@ export function SignInScreen({
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-4 py-12 sm:px-8 sm:py-16">
-        <div className="inkwell-signin-hero flex w-full max-w-[420px] flex-col items-center text-center">
+        <div
+          className={`inkwell-signin-hero flex w-full flex-col items-center text-center ${!cloudSync && isDesktopShell ? 'max-w-lg sm:max-w-xl' : 'max-w-[420px]'}`}
+        >
           <div className="mb-8 w-full sm:mb-10">
             <h1 className="font-sans text-2xl font-semibold tracking-tight text-ink dark:text-ink-dark sm:text-[1.625rem]">
               {heroTitle}
@@ -305,7 +343,7 @@ export function SignInScreen({
 
           {!cloudSync ? (
             <button type="button" onClick={onContinue} className="inkwell-hub-primary sm:min-w-[14rem]">
-              Enter Library
+              {isDesktopShell ? 'Continue to library (offline)' : 'Enter Library'}
             </button>
           ) : recoveryActive && cloudSync.passwordRecovery ? (
             <div className="inkwell-signin-form-card w-full">

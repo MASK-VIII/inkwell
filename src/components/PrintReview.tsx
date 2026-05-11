@@ -23,12 +23,14 @@ import {
   onWorkerMessage,
   sendWorker,
   type PrintChapterResultMsg,
+  type PrintSpinePagesProgressMsg,
   type PrintSpinePagesResultMsg,
   type PrintSpineResultMsg,
   type WorkerErrorMsg,
   type WorkerResponse,
 } from '../lib/workerClient'
 import { buildPrintPreviewFontFaceCss, printPreviewFontFamilyStack } from '../lib/fonts/fontCatalog'
+import { roughPrintStartPageForSpineIndex } from '../lib/print/estimateRoughPrintPages'
 
 const PX_PER_PT = 96 / 72
 
@@ -75,6 +77,7 @@ function bookStartPageForChapterIndex(
 type PrintWorkerCompletionMsg =
   | PrintChapterResultMsg
   | PrintSpineResultMsg
+  | PrintSpinePagesProgressMsg
   | PrintSpinePagesResultMsg
   | WorkerErrorMsg
 
@@ -121,6 +124,7 @@ function printChapterPromise(
   const rev = nextWorkerRev()
   return new Promise((resolve, reject) => {
     pending.set(rev, (msg) => {
+      if (msg.kind === 'printSpinePagesProgress') return
       if (msg.kind === 'error') {
         reject(new Error(msg.message))
         return
@@ -151,12 +155,17 @@ function beginPaginatePrintSpine(
   theme: Theme,
   meta: { bookTitle: string; authorName: string },
   layoutFingerprint: string,
+  onProgress?: (msg: PrintSpinePagesProgressMsg) => void,
 ): { rev: number; promise: Promise<Map<number, PrintPage[]>>; abort: () => void } {
   const rev = nextWorkerRev()
   let rejectOuter: ((reason?: unknown) => void) | undefined
   const promise = new Promise<Map<number, PrintPage[]>>((resolve, reject) => {
     rejectOuter = reject
     pending.set(rev, (msg) => {
+      if (msg.kind === 'printSpinePagesProgress') {
+        onProgress?.(msg)
+        return
+      }
       pending.delete(rev)
       if (msg.kind === 'error') {
         reject(new Error(msg.message))
@@ -351,14 +360,19 @@ export function PrintReview({
       const okPrintChapter = msg.kind === 'printChapterResult'
       const okSpine = msg.kind === 'printSpineResult'
       const okSpinePages = msg.kind === 'printSpinePagesResult'
+      const okSpinePagesProgress = msg.kind === 'printSpinePagesProgress'
       const okErr =
         msg.kind === 'error' &&
         (msg.job === 'paginatePrintChapter' ||
           msg.job === 'resolvePrintSpine' ||
           msg.job === 'paginatePrintSpine')
-      if (!okPrintChapter && !okSpine && !okSpinePages && !okErr) return
+      if (!okPrintChapter && !okSpine && !okSpinePages && !okSpinePagesProgress && !okErr) return
       const cb = pendingHandlers.current.get(msg.rev)
       if (cb) {
+        if (okSpinePagesProgress) {
+          cb(msg)
+          return
+        }
         pendingHandlers.current.delete(msg.rev)
         cb(msg)
       }
@@ -388,12 +402,19 @@ export function PrintReview({
     setPageIndexInChapter(0)
 
     try {
+      const pagesLocal = new Map<number, PrintPage[]>()
       const begun = beginPaginatePrintSpine(
         pendingHandlers.current,
         layoutSpine,
         theme,
         meta,
         layoutBasisKeyRef.current,
+        (msg) => {
+          if (epoch !== layoutEpochRef.current) return
+          pagesLocal.clear()
+          for (const row of msg.chapters) pagesLocal.set(row.chapterId, row.pages)
+          setChapterPages(new Map(pagesLocal))
+        },
       )
       const map = await begun.promise
       if (epoch !== layoutEpochRef.current) return
@@ -447,6 +468,12 @@ export function PrintReview({
           theme,
           meta,
           layoutBasisKeyRef.current,
+          (msg) => {
+            if (cancelled || epoch !== layoutEpochRef.current) return
+            pagesLocal.clear()
+            for (const row of msg.chapters) pagesLocal.set(row.chapterId, row.pages)
+            pushPages()
+          },
         )
         const map = await begun.promise
         if (cancelled || epoch !== layoutEpochRef.current) return
@@ -469,6 +496,7 @@ export function PrintReview({
       inflightLocal.add(pch.id)
       pushInflight()
       try {
+        const startPn = roughPrintStartPageForSpineIndex(layoutSpine, pidx, theme.print)
         const msg = await printChapterPromise(
           pendingHandlers.current,
           pidx,
@@ -476,7 +504,7 @@ export function PrintReview({
           layoutSpine,
           theme,
           meta,
-          1,
+          startPn,
         )
         if (cancelled || epoch !== layoutEpochRef.current) return
         pagesLocal.clear()
@@ -491,6 +519,12 @@ export function PrintReview({
     void (async () => {
       try {
         if (layoutSpine.length > 1) {
+          try {
+            await runFastActiveChapterOnly()
+          } catch {
+            /* fast preview is optional; full spine below is authoritative */
+          }
+          if (cancelled || epoch !== layoutEpochRef.current) return
           await runFullSpinePagination()
         } else {
           await runFastActiveChapterOnly()
@@ -699,7 +733,8 @@ export function PrintReview({
     )
   }
 
-  const showSkeleton = !spineReady || (!currentPage && inflight.size > 0)
+  /** Keep showing preview once the active chapter has pages; full-spine refinement still spins in chrome. */
+  const showSkeleton = !spineReady || !currentPage
   const atChapterStart = safePageIndex <= 0
   const atChapterEnd =
     activePages != null && activePages.length > 0 && safePageIndex >= activePages.length - 1
@@ -864,8 +899,15 @@ export function PrintReview({
                         fontVariantLigatures: 'none',
                         fontFeatureSettings: '"liga" 0, "clig" 0',
                         ...(l.trackingEm ? { letterSpacing: `${l.trackingEm}em` } : null),
-                        ...(tr.underline ?
+                        ...(tr.underline && tr.strike ?
+                          {
+                            textDecoration: 'underline line-through',
+                            textUnderlineOffset: `${Math.max(1, fontSizePx * 0.08)}px`,
+                          }
+                        : tr.underline ?
                           { textDecoration: 'underline', textUnderlineOffset: `${Math.max(1, fontSizePx * 0.08)}px` }
+                        : tr.strike ?
+                          { textDecoration: 'line-through' }
                         : null),
                       })
                       if (l.textRuns?.length) {

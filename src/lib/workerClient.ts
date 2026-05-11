@@ -104,6 +104,13 @@ export type PrintSpinePagesResultMsg = {
   chapters: Array<{ chapterId: number; pages: PrintPage[] }>
 }
 
+export type PrintSpinePagesProgressMsg = {
+  kind: 'printSpinePagesProgress'
+  rev: number
+  chapters: Array<{ chapterId: number; pages: PrintPage[] }>
+  completedChapterIndex: number
+}
+
 export type WorkerErrorMsg = {
   kind: 'error'
   rev: number
@@ -117,6 +124,7 @@ export type WorkerResponse =
   | PdfResultMsg
   | PdfProgressMsg
   | PrintSpineResultMsg
+  | PrintSpinePagesProgressMsg
   | PrintSpinePagesResultMsg
   | WorkerErrorMsg
 
