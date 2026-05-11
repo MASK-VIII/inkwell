@@ -1,5 +1,6 @@
 import {
   PDFDocument,
+  degrees,
   popGraphicsState,
   pushGraphicsState,
   rgb,
@@ -7,8 +8,15 @@ import {
   type PDFFont,
 } from 'pdf-lib'
 import type { InkwellProject } from '../../types'
-import { paginateProjectForPrintExport, resolvePrintTitleFontId } from '../print/paginate'
+import {
+  paginateProjectForPrintExport,
+  resolvePrintTitleFontId,
+  trimTrailingBlankPrintPage,
+  yieldToMain,
+  type PrintPage,
+} from '../print/paginate'
 import { getPrintFontPairForPdf } from '../print/fonts'
+import { breakOptionalLigaturesForPrint } from '../print/normalizePrintText'
 
 function decodeDataUrl(src: string): { bytes: Uint8Array; mime: string } | null {
   const m = /^data:([^;,]+)?;base64,(.+)$/i.exec(src.trim())
@@ -64,32 +72,85 @@ function toWinAnsiFallback(s: string): string {
   )
 }
 
-export async function buildKdpPdf(project: InkwellProject): Promise<Uint8Array> {
+export type BuildKdpPdfProgress = {
+  phase: 'paginate' | 'render'
+  done: number
+  total: number
+}
+
+export async function buildKdpPdf(
+  project: InkwellProject,
+  opts?: {
+    precomputedPages?: PrintPage[]
+    onProgress?: (p: BuildKdpPdfProgress) => void
+  },
+): Promise<Uint8Array> {
+  const onProgress = opts?.onProgress
   const pdf = await PDFDocument.create()
   const titleFontId = resolvePrintTitleFontId(project.theme.print)
-  const { body, title } = await getPrintFontPairForPdf(
-    pdf,
-    project.theme.print.bodyFontId,
-    titleFontId,
-  )
+  const {
+    body,
+    title,
+    bodyBold,
+    bodyItalic,
+    bodyBoldItalic,
+    bodyBoldIsSynthetic,
+    bodyItalicIsSynthetic,
+    titleBold,
+    titleItalic,
+    titleBoldItalic,
+    titleBoldIsSynthetic,
+    titleItalicIsSynthetic,
+  } = await getPrintFontPairForPdf(pdf, project.theme.print.bodyFontId, titleFontId)
+
+  const pdfBodyFont = (bold?: boolean, italic?: boolean): PDFFont => {
+    if (bold && italic) return bodyBoldItalic
+    if (bold) return bodyBold
+    if (italic) return bodyItalic
+    return body
+  }
+
+  const pdfTitleFont = (bold?: boolean, italic?: boolean): PDFFont => {
+    if (bold && italic) return titleBoldItalic
+    if (bold) return titleBold
+    if (italic) return titleItalic
+    return title
+  }
 
   const bleedPt = (project.theme.print.bleedIn ?? 0) * 72
 
-  const pages = await paginateProjectForPrintExport(
-    project,
-    { body, title },
-    {
-      bookTitle: project.book.title,
-      authorName: project.book.authorName,
-    },
-  )
+  const fontCtx = {
+    body,
+    title,
+    bodyBold,
+    bodyItalic,
+    bodyBoldItalic,
+    bodyBoldIsSynthetic,
+    bodyItalicIsSynthetic,
+  }
+  const layoutCtx = {
+    bookTitle: project.book.title,
+    authorName: project.book.authorName,
+  }
+
+  let pages: PrintPage[]
+  const pre = opts?.precomputedPages
+  if (pre != null && pre.length > 0) {
+    pages = trimTrailingBlankPrintPage(pre)
+    onProgress?.({ phase: 'paginate', done: 1, total: 1 })
+  } else {
+    onProgress?.({ phase: 'paginate', done: 0, total: 1 })
+    pages = await paginateProjectForPrintExport(project, fontCtx, layoutCtx)
+    onProgress?.({ phase: 'paginate', done: 1, total: 1 })
+  }
 
   const drawWith = (font: PDFFont, raw: string): string => {
+    const prepared = breakOptionalLigaturesForPrint(raw)
     try {
-      font.encodeText(raw)
-      return raw
+      font.encodeText(prepared)
+      return prepared
     } catch {
-      return toWinAnsiFallback(raw)
+      return toWinAnsiFallback(prepared)
     }
   }
 
@@ -98,7 +159,13 @@ export async function buildKdpPdf(project: InkwellProject): Promise<Uint8Array> 
     Awaited<ReturnType<PDFDocument['embedPng']>> | Awaited<ReturnType<PDFDocument['embedJpg']>> | null
   >()
 
-  for (const p of pages) {
+  const renderStride = pages.length > 120 ? 12 : pages.length > 40 ? 4 : 1
+  for (let pi = 0; pi < pages.length; pi++) {
+    if (pi === 0 || pi === pages.length - 1 || pi % renderStride === 0) {
+      onProgress?.({ phase: 'render', done: pi + 1, total: pages.length })
+    }
+    if (pi > 0 && pi % 4 === 0) await yieldToMain()
+    const p = pages[pi]!
     const page = pdf.addPage([p.widthPt + 2 * bleedPt, p.heightPt + 2 * bleedPt])
     if (!p.isBlank) {
       for (const l of p.lines) {
@@ -124,28 +191,83 @@ export async function buildKdpPdf(project: InkwellProject): Promise<Uint8Array> 
         }
 
         // Title font for chapter banner / ornament lines (set via line.fontId in paginate),
-        // body font for everything else.
+        // body font (+ bold/italic variants) for everything else.
         const useTitleFont = l.fontId != null && l.fontId === titleFontId
-        const lineFont = useTitleFont ? title : body
-        const text = drawWith(lineFont, l.text)
-        const characterSpacing =
-          l.trackingEm && l.trackingEm > 0 ? l.trackingEm * l.fontSizePt : 0
 
-        // pdf-lib's high-level drawText doesn't expose the Tc text-state operator,
-        // so wrap the draw in a graphics-state push/pop and emit setCharacterSpacing
-        // ourselves when the line uses tracked letter-spacing.
-        if (characterSpacing > 0) {
-          page.pushOperators(pushGraphicsState(), setCharacterSpacing(characterSpacing))
+        const bodyTextRgb = rgb(0.12, 0.1, 0.09)
+        /** Oblique approximation when the body font has no italic file (matches browser faux-italic feel). */
+        const fauxItalicSkew = degrees(-14)
+
+        const drawOneLine = (
+          sub: string,
+          font: PDFFont,
+          xPt: number,
+          opts?: { fauxBold?: boolean; fauxItalic?: boolean },
+        ) => {
+          const text = drawWith(font, sub)
+          const characterSpacing =
+            l.trackingEm && l.trackingEm > 0 ? l.trackingEm * l.fontSizePt : 0
+          const fauxBold = Boolean(opts?.fauxBold)
+          const fauxItalic = Boolean(opts?.fauxItalic)
+          const dx = fauxBold ? Math.max(0.12, l.fontSizePt * 0.01) : 0
+          const shifts = fauxBold ? [0, dx, dx * 2] : [0]
+          if (characterSpacing > 0) {
+            page.pushOperators(pushGraphicsState(), setCharacterSpacing(characterSpacing))
+          }
+          for (const s of shifts) {
+            page.drawText(text, {
+              x: xPt + bleedPt + s,
+              y: l.yPt + bleedPt,
+              font,
+              size: l.fontSizePt,
+              color: bodyTextRgb,
+              ...(fauxItalic ? { xSkew: fauxItalicSkew } : {}),
+            })
+          }
+          if (characterSpacing > 0) {
+            page.pushOperators(popGraphicsState())
+          }
         }
-        page.drawText(text, {
-          x: l.xPt + bleedPt,
-          y: l.yPt + bleedPt,
-          font: lineFont,
-          size: l.fontSizePt,
-          color: rgb(0.12, 0.1, 0.09),
-        })
-        if (characterSpacing > 0) {
-          page.pushOperators(popGraphicsState())
+
+        const pdfBodyFontForDraw = (bold?: boolean, italic?: boolean): PDFFont => {
+          const b = Boolean(bold && !bodyBoldIsSynthetic)
+          const i = Boolean(italic && !bodyItalicIsSynthetic)
+          return pdfBodyFont(b, i)
+        }
+
+        const pdfTitleFontForDraw = (bold?: boolean, italic?: boolean): PDFFont => {
+          const b = Boolean(bold && !titleBoldIsSynthetic)
+          const i = Boolean(italic && !titleItalicIsSynthetic)
+          return pdfTitleFont(b, i)
+        }
+
+        if (l.textRuns?.length) {
+          const baseX = l.xPt
+          for (const tr of l.textRuns) {
+            const synthBold = useTitleFont ? titleBoldIsSynthetic : bodyBoldIsSynthetic
+            const synthItalic = useTitleFont ? titleItalicIsSynthetic : bodyItalicIsSynthetic
+            const fauxBold = Boolean(tr.bold && synthBold)
+            const fauxItalic = Boolean(tr.italic && synthItalic)
+            const segFont = useTitleFont ? pdfTitleFontForDraw(tr.bold, tr.italic) : pdfBodyFontForDraw(tr.bold, tr.italic)
+            const segX = baseX + tr.xOffsetPt
+            drawOneLine(tr.text, segFont, segX, { fauxBold, fauxItalic })
+            if (tr.underline) {
+              const prepared = drawWith(segFont, tr.text)
+              const uw = segFont.widthOfTextAtSize(prepared, l.fontSizePt)
+              const bx = segX + bleedPt
+              const baselineY = l.yPt + bleedPt
+              const uy = baselineY - Math.max(0.55, l.fontSizePt * 0.075)
+              page.drawLine({
+                start: { x: bx, y: uy },
+                end: { x: bx + uw, y: uy },
+                thickness: Math.max(0.35, l.fontSizePt * 0.045),
+                color: bodyTextRgb,
+              })
+            }
+          }
+        } else {
+          const lineFont = useTitleFont ? title : body
+          drawOneLine(l.text, lineFont, l.xPt)
         }
       }
     }
@@ -156,6 +278,7 @@ export async function buildKdpPdf(project: InkwellProject): Promise<Uint8Array> 
   pdf.setProducer('Inkwell')
   pdf.setTitle(project.book.title || 'Inkwell Manuscript')
 
+  await yieldToMain()
   return await pdf.save({ useObjectStreams: false })
 }
 

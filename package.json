@@ -16,6 +16,7 @@
     "build:desktop:install": "npm run build:desktop && node scripts/launch-desktop-installer.mjs",
     "desktop:open-release": "explorer release",
     "desktop:run-unpacked": "node scripts/run-unpacked-inkwell.mjs",
+    "test": "vitest run",
     "lint": "eslint .",
     "preview": "vite preview",
     "generate:brand-icons": "node scripts/generate-brand-icons.mjs",
@@ -94,6 +95,7 @@
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.58.2",
     "vite": "^8.0.10",
+    "vitest": "^3.2.4",
     "wait-on": "^8.0.5"
   },
   "build": {

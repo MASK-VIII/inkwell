@@ -15,14 +15,28 @@ import {
   buildPrintTocManuscript,
   insertPrintTocInSpine,
   layoutProfileForManuscript,
-  manuscriptsForPrint,
   printContentWidthPt,
-  stripSyntheticToc,
+  printSpineBaseForExport,
 } from '../bookAssembly'
-import { extractPrintBlocks, type PrintBlock } from './extractBlocks'
+import { extractPrintBlocks, type PrintBlock, type PrintTextRun } from './extractBlocks'
+import { breakOptionalLigaturesForPrint } from './normalizePrintText'
 import { figureDisplayPts } from './imageDims'
 import { getEnglishHypher } from './hyphen'
 import { getPrintFontPairForMeasurement } from './fonts'
+
+/** Yield so the browser can paint and handle input between CPU-heavy pagination chunks. */
+export async function yieldToMain(): Promise<void> {
+  await new Promise<void>((resolve) => setTimeout(resolve, 0))
+}
+
+/** Inline bold/italic segment on one visual line (PDF draws each at base xPt + xOffsetPt). */
+export type PrintLineTextRun = {
+  text: string
+  xOffsetPt: number
+  bold?: boolean
+  italic?: boolean
+  underline?: boolean
+}
 
 export type PrintLine = {
   text: string
@@ -40,6 +54,8 @@ export type PrintLine = {
   trackingEm?: number
   /** Additional left offset for hanging list lines (pt). */
   extraLeftPt?: number
+  /** When set, PDF/preview draw segments with body bold/italic variants; `text` stays full-line plain. */
+  textRuns?: PrintLineTextRun[]
   /** Raster figure (usually a data URL); PDF preview embeds when possible. */
   figureSrc?: string
   figureWidthPt?: number
@@ -51,10 +67,56 @@ export type PrintLine = {
  * different display font from the body. When the user picks `inherit` for the
  * chapter title style, both slots resolve to the same font instance.
  */
-export type PrintFontPair = { body: FontMeasurer; title: FontMeasurer }
+export type PrintFontPair = {
+  body: FontMeasurer
+  title: FontMeasurer
+  bodyBold?: FontMeasurer
+  bodyItalic?: FontMeasurer
+  bodyBoldItalic?: FontMeasurer
+  /** See `PrintFontEmbeddingSet.bodyBoldIsSynthetic` in fonts.ts */
+  bodyBoldIsSynthetic?: boolean
+  /** See `PrintFontEmbeddingSet.bodyItalicIsSynthetic` in fonts.ts */
+  bodyItalicIsSynthetic?: boolean
+}
+
+/** Layout width multiplier so pagination matches faux-bold PDF strokes when no bold font file exists. */
+const FAUX_BOLD_LAYOUT_WIDTH_FACTOR = 1.06
+/** Layout width multiplier for faux-italic (skew) when no italic font file exists. */
+const FAUX_ITALIC_LAYOUT_WIDTH_FACTOR = 1.04
 
 function isFontPair(x: FontMeasurer | PrintFontPair): x is PrintFontPair {
-  return typeof (x as PrintFontPair).body === 'object' && typeof (x as PrintFontPair).title === 'object'
+  return (
+    typeof x === 'object' &&
+    x !== null &&
+    'body' in x &&
+    'title' in x &&
+    typeof (x as PrintFontPair).body === 'object' &&
+    typeof (x as PrintFontPair).title === 'object'
+  )
+}
+
+export function resolveBodyFontMeasure(fonts: PrintFontPair, bold?: boolean, italic?: boolean): FontMeasurer {
+  if (bold && italic) {
+    if (fonts.bodyBoldItalic) return fonts.bodyBoldItalic
+    if (fonts.bodyBold) return fonts.bodyBold
+    if (fonts.bodyItalic) return fonts.bodyItalic
+    return fonts.body
+  }
+  if (bold) return fonts.bodyBold ?? fonts.body
+  if (italic) return fonts.bodyItalic ?? fonts.body
+  return fonts.body
+}
+
+/** Same as `resolveBodyFontMeasure`, but widens bold segments when the body font has no real bold file. */
+function resolveBodyFontMeasureForWidth(fonts: PrintFontPair, bold?: boolean, italic?: boolean): FontMeasurer {
+  const base = resolveBodyFontMeasure(fonts, bold, italic)
+  let mult = 1
+  if (bold && fonts.bodyBoldIsSynthetic) mult *= FAUX_BOLD_LAYOUT_WIDTH_FACTOR
+  if (italic && fonts.bodyItalicIsSynthetic) mult *= FAUX_ITALIC_LAYOUT_WIDTH_FACTOR
+  if (mult === 1) return base
+  return {
+    widthOfTextAtSize: (text: string, size: number) => base.widthOfTextAtSize(text, size) * mult,
+  }
 }
 
 export type PrintPage = {
@@ -63,6 +125,43 @@ export type PrintPage = {
   heightPt: number
   lines: PrintLine[]
   isBlank: boolean
+}
+
+/** Resolve owning manuscript id for grouping full-spine pagination into per-chapter previews. */
+function previewPageOwnerChapterId(p: PrintPage): number | null {
+  const body = p.lines.find((l) => l.kind === 'body' || l.kind === 'figure')
+  if (body) return body.chapterId
+  const hf = p.lines.find((l) => l.kind === 'header' || l.kind === 'footer')
+  if (hf) return hf.chapterId
+  return null
+}
+
+/**
+ * Split `paginateSpineWithFont` output into chapter buckets (matches sequential chapter pagination,
+ * including blanks before the next section's body).
+ */
+export function groupPrintPreviewPagesByChapter(spine: Manuscript[], pages: PrintPage[]): Map<number, PrintPage[]> {
+  const map = new Map<number, PrintPage[]>()
+  for (const m of spine) map.set(m.id, [])
+  const pending: PrintPage[] = []
+  const flush = (cid: number) => {
+    const arr = map.get(cid)
+    if (!arr) return
+    arr.push(...pending)
+    pending.length = 0
+  }
+  for (const p of pages) {
+    const cid = previewPageOwnerChapterId(p)
+    if (cid != null) {
+      flush(cid)
+      map.get(cid)!.push(p)
+    } else {
+      pending.push(p)
+    }
+  }
+  const lastId = spine[spine.length - 1]?.id
+  if (pending.length > 0 && lastId != null) flush(lastId)
+  return map
 }
 
 type FontMeasurer = {
@@ -94,11 +193,12 @@ function toWinAnsiFallback(s: string): string {
 }
 
 function safeWidthOfTextAtSize(text: string, size: number, font: FontMeasurer): number {
+  const t = breakOptionalLigaturesForPrint(text)
   try {
-    return font.widthOfTextAtSize(text, size)
+    return font.widthOfTextAtSize(t, size)
   } catch {
     // Fall back only if the font can't encode a character.
-    return font.widthOfTextAtSize(toWinAnsiFallback(text), size)
+    return font.widthOfTextAtSize(toWinAnsiFallback(t), size)
   }
 }
 
@@ -126,19 +226,43 @@ function normalizeSpaces(s: string): string {
 
 type HypherLike = { hyphenateText(str: string, minLength?: number): string }
 
+/** Grapheme-safe splitting avoids splitting surrogate pairs; binary breaks preserve shaping context vs char-at-a-time. */
+function graphemeSegments(s: string): string[] {
+  try {
+    if (typeof Intl !== 'undefined' && 'Segmenter' in Intl) {
+      const seg = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
+      return Array.from(seg.segment(s), (x) => x.segment)
+    }
+  } catch {
+    /* ignore */
+  }
+  return [...s]
+}
+
 function hardBreakLongWord(word: string, maxWidthPt: number, fontSizePt: number, font: FontMeasurer): string[] {
   const lines: string[] = []
-  let chunk = ''
-  for (const ch of word) {
-    const cand = chunk + ch
-    if (safeWidthOfTextAtSize(cand, fontSizePt, font) <= maxWidthPt) {
-      chunk = cand
-    } else {
-      if (chunk) lines.push(chunk)
-      chunk = ch
+  let rest = word
+  while (rest.length > 0) {
+    const segs = graphemeSegments(rest)
+    if (segs.length === 0) break
+    let lo = 1
+    let hi = segs.length
+    let best = 1
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1
+      const slice = segs.slice(0, mid).join('')
+      if (safeWidthOfTextAtSize(slice, fontSizePt, font) <= maxWidthPt) {
+        best = mid
+        lo = mid + 1
+      } else {
+        hi = mid - 1
+      }
     }
+    const take = Math.max(1, best)
+    const line = segs.slice(0, take).join('')
+    lines.push(line)
+    rest = segs.slice(take).join('')
   }
-  if (chunk) lines.push(chunk)
   return lines.length ? lines : ['']
 }
 
@@ -236,6 +360,313 @@ function wrapText(
 
   if (current) lines.push(current)
   return lines
+}
+
+function mergePrintRuns(runs: PrintTextRun[]): PrintTextRun[] {
+  const out: PrintTextRun[] = []
+  for (const r of runs) {
+    if (!r.text) continue
+    const prev = out[out.length - 1]
+    if (
+      prev &&
+      prev.bold === r.bold &&
+      prev.italic === r.italic &&
+      prev.underline === r.underline
+    ) {
+      prev.text += r.text
+    } else out.push({ ...r })
+  }
+  return out
+}
+
+/** Word fragment or literal whitespace from the manuscript (preserves adjacency across styles). */
+type LinePiece =
+  | { kind: 'w'; text: string; bold?: boolean; italic?: boolean; underline?: boolean }
+  | { kind: 'sp'; text: string }
+
+function linePiecesFromRuns(runs: PrintTextRun[]): LinePiece[] {
+  const out: LinePiece[] = []
+  for (const r of mergePrintRuns(runs)) {
+    const parts = r.text.split(/(\s+)/)
+    for (const p of parts) {
+      if (!p) continue
+      if (/^\s+$/.test(p)) out.push({ kind: 'sp', text: p })
+      else out.push({ kind: 'w', text: p, bold: r.bold, italic: r.italic, underline: r.underline })
+    }
+  }
+  return out
+}
+
+function widthOfLinePieces(
+  pieces: LinePiece[],
+  fontSizePt: number,
+  fonts: PrintFontPair,
+  trackingEm?: number,
+): number {
+  let sum = 0
+  for (const pc of pieces) {
+    if (pc.kind === 'sp') {
+      sum += safeWidthOfTextAtSize(pc.text, fontSizePt, fonts.body)
+    } else {
+      const f = resolveBodyFontMeasureForWidth(fonts, pc.bold, pc.italic)
+      sum += widthWithTracking(pc.text, fontSizePt, f, trackingEm)
+    }
+  }
+  return sum
+}
+
+function trimEdgeSpacePieces(pieces: LinePiece[]): LinePiece[] {
+  let a = 0
+  let b = pieces.length
+  while (a < b && pieces[a]!.kind === 'sp') a++
+  while (b > a && pieces[b - 1]!.kind === 'sp') b--
+  return pieces.slice(a, b)
+}
+
+function buildLineTextRunsFromPieces(pieces: LinePiece[], fontSizePt: number, fonts: PrintFontPair): PrintLineTextRun[] {
+  const out: PrintLineTextRun[] = []
+  let x = 0
+  for (const pc of pieces) {
+    if (pc.kind === 'sp') {
+      out.push({ text: pc.text, xOffsetPt: x })
+      x += safeWidthOfTextAtSize(pc.text, fontSizePt, fonts.body)
+    } else {
+      const f = resolveBodyFontMeasureForWidth(fonts, pc.bold, pc.italic)
+      out.push({
+        text: pc.text,
+        xOffsetPt: x,
+        bold: pc.bold,
+        italic: pc.italic,
+        underline: pc.underline,
+      })
+      x += safeWidthOfTextAtSize(pc.text, fontSizePt, f)
+    }
+  }
+  return out
+}
+
+function plainFromPieces(pieces: LinePiece[]): string {
+  return pieces.map((pc) => pc.text).join('')
+}
+
+function wordPiece(text: string, bold?: boolean, italic?: boolean, underline?: boolean): LinePiece {
+  return { kind: 'w', text, bold, italic, underline }
+}
+
+function wrapStyledLinePieces(
+  pieces: LinePiece[],
+  maxWidthPt: number,
+  fontSizePt: number,
+  fonts: PrintFontPair,
+  opts?: { hyphenate?: boolean; hypher?: HypherLike | null; trackingEm?: number },
+): Array<{ text: string; extraLeftPt: number; textRuns: PrintLineTextRun[] }> {
+  if (pieces.length === 0) return [{ text: '', extraLeftPt: 0, textRuns: [] }]
+
+  const hyphenateOn = Boolean(opts?.hyphenate && opts?.hypher)
+  const hypher = opts?.hypher ?? null
+  const trackingEm = opts?.trackingEm
+
+  const lines: Array<{ text: string; extraLeftPt: number; textRuns: PrintLineTextRun[] }> = []
+  let current: LinePiece[] = []
+
+  const flushLine = (raw: LinePiece[]) => {
+    const trimmed = trimEdgeSpacePieces(raw)
+    if (trimmed.length === 0) return
+    lines.push({
+      text: plainFromPieces(trimmed),
+      extraLeftPt: 0,
+      textRuns: buildLineTextRunsFromPieces(trimmed, fontSizePt, fonts),
+    })
+  }
+
+  let pi = 0
+  while (pi < pieces.length) {
+    const pc = pieces[pi]!
+    if (pc.kind === 'sp') {
+      if (current.length === 0) {
+        pi++
+        continue
+      }
+      const trial = [...current, pc]
+      if (widthOfLinePieces(trial, fontSizePt, fonts, trackingEm) <= maxWidthPt) {
+        current = trial
+        pi++
+        continue
+      }
+      flushLine(current)
+      current = []
+      pi++
+      continue
+    }
+
+    const w = pc
+    const chunks = hyphenationChunks(w.text, hyphenateOn, hypher)
+    const whole = chunks.join('')
+    const wordAsPiece = wordPiece(whole, w.bold, w.italic, w.underline)
+    const cand = [...current, wordAsPiece]
+    if (widthOfLinePieces(cand, fontSizePt, fonts, trackingEm) <= maxWidthPt) {
+      current = cand
+      pi++
+      continue
+    }
+
+    if (current.length > 0) {
+      flushLine(current)
+      current = []
+    }
+
+    if (chunks.length === 1) {
+      const single = wordPiece(whole, w.bold, w.italic, w.underline)
+      if (widthOfLinePieces([single], fontSizePt, fonts, trackingEm) <= maxWidthPt) {
+        current = [single]
+        pi++
+        continue
+      }
+      const fw = resolveBodyFontMeasureForWidth(fonts, w.bold, w.italic)
+      const broken = hardBreakLongWord(whole, maxWidthPt, fontSizePt, fw)
+      for (let bi = 0; bi < broken.length; bi++) {
+        const part = broken[bi]!
+        const piece = wordPiece(part, w.bold, w.italic, w.underline)
+        if (bi < broken.length - 1) {
+          flushLine([piece])
+        } else {
+          current = [piece]
+        }
+      }
+      pi++
+      continue
+    }
+
+    let ci = 0
+    while (ci < chunks.length) {
+      let bestJ = ci - 1
+      let testAccum = ''
+      for (let j = ci; j < chunks.length; j++) {
+        testAccum += chunks[j]!
+        const hyphenAfter = j < chunks.length - 1
+        const pieceText = hyphenAfter ? `${testAccum}-` : testAccum
+        const trial = [...current, wordPiece(pieceText, w.bold, w.italic, w.underline)]
+        if (widthOfLinePieces(trial, fontSizePt, fonts, trackingEm) <= maxWidthPt) bestJ = j
+        else break
+      }
+
+      if (bestJ >= ci) {
+        const merged = chunks.slice(ci, bestJ + 1).join('')
+        const hyphenAfter = bestJ < chunks.length - 1
+        const pieceText = hyphenAfter ? `${merged}-` : merged
+        current = [...current, wordPiece(pieceText, w.bold, w.italic, w.underline)]
+        ci = bestJ + 1
+        if (hyphenAfter) {
+          flushLine(current)
+          current = []
+        }
+        continue
+      }
+
+      if (current.length > 0) {
+        flushLine(current)
+        current = []
+        continue
+      }
+
+      const rest = chunks.slice(ci).join('')
+      const fw = resolveBodyFontMeasureForWidth(fonts, w.bold, w.italic)
+      const broken = hardBreakLongWord(rest, maxWidthPt, fontSizePt, fw)
+      for (let bi = 0; bi < broken.length; bi++) {
+        const part = broken[bi]!
+        const piece = wordPiece(part, w.bold, w.italic, w.underline)
+        if (bi < broken.length - 1) flushLine([piece])
+        else current = [piece]
+      }
+      break
+    }
+    pi++
+  }
+
+  if (current.length > 0) flushLine(current)
+  return lines
+}
+
+function wrapStyledWords(
+  runs: PrintTextRun[],
+  maxWidthPt: number,
+  fontSizePt: number,
+  fonts: PrintFontPair,
+  opts?: { hyphenate?: boolean; hypher?: HypherLike | null; trackingEm?: number },
+): Array<{ text: string; extraLeftPt: number; textRuns: PrintLineTextRun[] }> {
+  return wrapStyledLinePieces(linePiecesFromRuns(runs), maxWidthPt, fontSizePt, fonts, opts)
+}
+
+function wrapHangParagraphRuns(
+  prefix: string,
+  runs: PrintTextRun[],
+  maxWidthPt: number,
+  fontSizePt: number,
+  fonts: PrintFontPair,
+  opts?: { hyphenate?: boolean; hypher?: HypherLike | null; trackingEm?: number },
+): Array<{ text: string; extraLeftPt: number; textRuns: PrintLineTextRun[] }> {
+  const pieces = linePiecesFromRuns(runs)
+  if (!prefix) return wrapStyledLinePieces(pieces, maxWidthPt, fontSizePt, fonts, opts)
+
+  const gap = fontSizePt * 0.35
+  const hang = safeWidthOfTextAtSize(prefix, fontSizePt, fonts.body) + gap
+  const firstInnerW = Math.max(40, maxWidthPt - hang)
+  const restInnerW = Math.max(40, maxWidthPt - hang)
+
+  let i = 0
+  let firstInner: LinePiece[] = []
+  while (i < pieces.length) {
+    const next = pieces[i]!
+    const trial = [...firstInner, next]
+    if (widthOfLinePieces(trial, fontSizePt, fonts, opts?.trackingEm) <= firstInnerW) {
+      firstInner = trial
+      i++
+    } else break
+  }
+
+  if (firstInner.length === 0 && i < pieces.length && pieces[i]!.kind === 'w') {
+    const w0 = pieces[i] as Extract<LinePiece, { kind: 'w' }>
+    const fw = resolveBodyFontMeasureForWidth(fonts, w0.bold, w0.italic)
+    const broken = hardBreakLongWord(w0.text, firstInnerW, fontSizePt, fw)
+    firstInner = [wordPiece(broken[0]!, w0.bold, w0.italic, w0.underline)]
+    const restJoin = broken.slice(1).join('')
+    if (restJoin) pieces[i] = wordPiece(restJoin, w0.bold, w0.italic, w0.underline)
+    else i++
+  }
+
+  const prefixW = safeWidthOfTextAtSize(prefix, fontSizePt, fonts.body)
+  const innerOffset = prefixW + gap
+  const innerRuns = buildLineTextRunsFromPieces(trimEdgeSpacePieces(firstInner), fontSizePt, fonts).map((r) => ({
+    ...r,
+    xOffsetPt: r.xOffsetPt + innerOffset,
+  }))
+  const firstTextRuns: PrintLineTextRun[] = [{ text: prefix, xOffsetPt: 0 }, ...innerRuns]
+  const firstPlain = `${prefix}${plainFromPieces(trimEdgeSpacePieces(firstInner))}`
+
+  const lines: Array<{ text: string; extraLeftPt: number; textRuns: PrintLineTextRun[] }> = [
+    { text: firstPlain, extraLeftPt: 0, textRuns: firstTextRuns },
+  ]
+
+  const remainder = pieces.slice(i)
+  if (trimEdgeSpacePieces(remainder).length === 0) return lines
+
+  const tailLines = wrapStyledLinePieces(remainder, restInnerW, fontSizePt, fonts, opts)
+  for (const tl of tailLines) {
+    lines.push({
+      text: tl.text,
+      extraLeftPt: hang,
+      textRuns: tl.textRuns,
+    })
+  }
+  return lines
+}
+
+function paragraphRuns(block: Extract<PrintBlock, { type: 'paragraph' }>): PrintTextRun[] {
+  return block.runs && block.runs.length > 0 ? block.runs : [{ text: block.text }]
+}
+
+function blockHasStyledRuns(block: { runs?: PrintTextRun[] }): boolean {
+  return Boolean(block.runs?.some((r) => r.bold || r.italic || r.underline))
 }
 
 function bodyStartsWithChapterHeading(bodyBlocks: PrintBlock[], chapterTitle: string): boolean {
@@ -420,8 +851,29 @@ export async function paginateForPrintReview(
   // Use the same embedded Unicode font strategy as PDF export so Print Review
   // is a true WYSIWYG preview (including diacritics/symbols where glyphs exist).
   const titleFontId = resolvePrintTitleFontId(theme.print)
-  const { body, title } = await getPrintFontPairForMeasurement(theme.print.bodyFontId, titleFontId)
-  return paginateWithFont(chapters, theme, { body, title }, ctx)
+  const {
+    body,
+    title,
+    bodyBold,
+    bodyItalic,
+    bodyBoldItalic,
+    bodyBoldIsSynthetic,
+    bodyItalicIsSynthetic,
+  } = await getPrintFontPairForMeasurement(theme.print.bodyFontId, titleFontId)
+  return paginateWithFont(
+    chapters,
+    theme,
+    {
+      body,
+      title,
+      bodyBold,
+      bodyItalic,
+      bodyBoldItalic,
+      bodyBoldIsSynthetic,
+      bodyItalicIsSynthetic,
+    },
+    ctx,
+  )
 }
 
 export type PrintLayoutContext = {
@@ -560,6 +1012,25 @@ function applyPrintHeadersFooters(
   }
 }
 
+function lineVisualWidth(
+  line: { text: string; textRuns?: PrintLineTextRun[] },
+  fontSizePt: number,
+  measureFont: FontMeasurer,
+  fonts: PrintFontPair,
+  trackingEm?: number,
+): number {
+  if (!line.textRuns?.length) {
+    return widthWithTracking(line.text, fontSizePt, measureFont, trackingEm)
+  }
+  let sum = 0
+  for (const tr of line.textRuns) {
+    const f =
+      tr.bold || tr.italic ? resolveBodyFontMeasureForWidth(fonts, tr.bold, tr.italic) : measureFont
+    sum += widthWithTracking(tr.text, fontSizePt, f, trackingEm)
+  }
+  return sum
+}
+
 export async function paginateChapterWithFont(
   chapter: Manuscript,
   chapterIndex: number,
@@ -648,7 +1119,9 @@ export async function paginateChapterWithFont(
   const blocksToLayout = [...openerBlocks, ...run.blocks]
 
   let prevBlockChapterIntro = false
-  for (const block of blocksToLayout) {
+  for (let bi = 0; bi < blocksToLayout.length; bi++) {
+    if (bi > 0 && bi % 32 === 0) await yieldToMain()
+    const block = blocksToLayout[bi]!
     if (block.type === 'pageBreak') {
       nextPage(false)
       prevBlockChapterIntro = false
@@ -756,16 +1229,30 @@ export async function paginateChapterWithFont(
           trackingEm: undefined as number | undefined,
         }
 
-    let wrappedLines: Array<{ text: string; extraLeftPt?: number }>
+    let wrappedLines: Array<{ text: string; extraLeftPt?: number; textRuns?: PrintLineTextRun[] }>
     if (block.type === 'paragraph') {
       if (block.listPrefix) {
-        wrappedLines = wrapHangParagraph(block.listPrefix, block.text, innerWidth, fontSizePt, bodyFont, hyphenOpts)
+        wrappedLines =
+          blockHasStyledRuns(block) ?
+            wrapHangParagraphRuns(block.listPrefix, paragraphRuns(block), innerWidth, fontSizePt, fonts, hyphenOpts)
+          : wrapHangParagraph(block.listPrefix, block.text, innerWidth, fontSizePt, bodyFont, hyphenOpts)
+      } else if (blockHasStyledRuns(block)) {
+        wrappedLines = wrapStyledWords(paragraphRuns(block), innerWidth, fontSizePt, fonts, hyphenOpts)
       } else {
         wrappedLines = wrapText(block.text, innerWidth, fontSizePt, bodyFont, hyphenOpts).map((t) => ({
           text: t,
           extraLeftPt: 0,
         }))
       }
+    } else if (
+      block.type === 'heading' &&
+      isChapterIntro &&
+      blockHasStyledRuns(block) &&
+      block.runs?.length
+    ) {
+      wrappedLines = wrapStyledWords(block.runs, box.contentWidthPt, fontSizePt, fonts, hyphenOpts)
+    } else if (!isChapterIntro && blockHasStyledRuns(block) && block.runs?.length) {
+      wrappedLines = wrapStyledWords(block.runs, box.contentWidthPt, fontSizePt, fonts, hyphenOpts)
     } else {
       wrappedLines = wrapText(block.text, box.contentWidthPt, fontSizePt, blockFont, hyphenOpts).map((t) => ({
         text: t,
@@ -812,6 +1299,7 @@ export async function paginateChapterWithFont(
       }
     }
 
+    let shortParagraphSplitAdvances = 0
     for (let li = 0; li < wrappedLines.length; li++) {
       const line = wrappedLines[li]!
       const remainingAfter = wrappedLines.length - li - 1
@@ -823,8 +1311,10 @@ export async function paginateChapterWithFont(
         block.type === 'paragraph' &&
         wrappedLines.length >= 2 &&
         remainingAfter >= 1 &&
-        linesFit === 1
+        linesFit === 1 &&
+        shortParagraphSplitAdvances < 32
       ) {
+        shortParagraphSplitAdvances++
         nextPage(false)
         const nb = contentBoxForPage(print, pageNumber, boxOpts)
         cursorYPt = nb.heightPt - nb.topPt
@@ -841,7 +1331,13 @@ export async function paginateChapterWithFont(
 
       const boxNow = contentBoxForPage(print, pageNumber, boxOpts)
       const baseLeftNow = boxNow.leftPt + quotePad + listInd
-      const lineWidth = widthWithTracking(line.text, fontSizePt, blockFont, blockTrackingEm || undefined)
+      const lineWidth = lineVisualWidth(
+        line,
+        fontSizePt,
+        blockFont,
+        fonts,
+        blockTrackingEm || undefined,
+      )
       const hang = line.extraLeftPt ?? 0
       const xHeading = boxNow.leftPt + Math.max(0, (boxNow.contentWidthPt - lineWidth) / 2)
       const xPara = baseLeftNow + hang
@@ -855,6 +1351,7 @@ export async function paginateChapterWithFont(
         kind: 'body',
         ...(blockFontId ? { fontId: blockFontId } : {}),
         ...(blockTrackingEm ? { trackingEm: blockTrackingEm } : {}),
+        ...(line.textRuns?.length ? { textRuns: line.textRuns } : {}),
       })
       cursorYPt -= blockLineHeightPt
     }
@@ -899,6 +1396,7 @@ export async function paginateSpineWithFont(
   let bodyOrd = 0
 
   for (let i = 0; i < spine.length; i++) {
+    if (i > 0) await yieldToMain()
     const ch = spine[i]!
     const layout = layoutProfileForManuscript(ch)
     if (layout === 'chapter') bodyOrd += 1
@@ -941,19 +1439,26 @@ export async function paginateWithFont(
   return paginateSpineWithFont(chapters, theme, fontOrPair, ctx)
 }
 
-/** Full book for KDP PDF: optional printable TOC with page numbers (iterative layout). */
-export async function paginateProjectForPrintExport(
+/** Drop one trailing leaf only when marked blank and carrying no body/figure lines (mid-spread blanks unchanged). */
+export function trimTrailingBlankPrintPage(pages: PrintPage[]): PrintPage[] {
+  if (pages.length === 0) return pages
+  const last = pages[pages.length - 1]!
+  if (!last.isBlank) return pages
+  const hasBody = last.lines.some((l) => l.kind === 'body' || l.kind === 'figure')
+  if (hasBody) return pages
+  return pages.slice(0, -1)
+}
+
+async function paginatePrintExportInner(
   project: InkwellProject,
-  fontOrPair: FontMeasurer | PrintFontPair,
+  fonts: PrintFontPair,
   ctx?: PrintLayoutContext,
-): Promise<PrintPage[]> {
+): Promise<{ pages: PrintPage[]; finalSpine: Manuscript[] }> {
   const theme = project.theme
-  const fonts: PrintFontPair = isFontPair(fontOrPair)
-    ? fontOrPair
-    : { body: fontOrPair, title: fontOrPair }
-  const spine = stripSyntheticToc(manuscriptsForPrint(project))
+  const spine = printSpineBaseForExport(project)
   if (!project.assembly.includePrintToc) {
-    return paginateSpineWithFont(spine, theme, fonts, ctx)
+    const pages = await paginateSpineWithFont(spine, theme, fonts, ctx)
+    return { pages, finalSpine: spine }
   }
 
   const cw = printContentWidthPt(theme.print)
@@ -961,18 +1466,46 @@ export async function paginateProjectForPrintExport(
   let tocMs: Manuscript | null = null
 
   for (let iter = 0; iter < 12; iter++) {
+    if (iter > 0) await yieldToMain()
     const withToc =
       tocMs != null ? insertPrintTocInSpine(project, spine, tocMs) : spine
     const pages = await paginateSpineWithFont(withToc, theme, fonts, ctx)
     const starts = firstPageByChapterId(pages, withToc)
-    // TOC entries are body-text rows, so measure them with the body font.
     const nextToc = buildPrintTocManuscript(project, starts, cw, fonts.body, fs)
     const prevSig = tocMs ? JSON.stringify(tocMs.content) : ''
     const nextSig = JSON.stringify(nextToc.content)
-    if (prevSig === nextSig) return pages
+    if (prevSig === nextSig) return { pages, finalSpine: withToc }
     tocMs = nextToc
   }
   const finalSpine = tocMs != null ? insertPrintTocInSpine(project, spine, tocMs) : spine
-  return paginateSpineWithFont(finalSpine, theme, fonts, ctx)
+  const pages = await paginateSpineWithFont(finalSpine, theme, fonts, ctx)
+  return { pages, finalSpine }
 }
+
+/** Manuscript spine used for PDF export and print preview (includes converged synthetic TOC when enabled). */
+export async function resolvedPrintSpineManuscriptsForExport(
+  project: InkwellProject,
+  fontOrPair: FontMeasurer | PrintFontPair,
+  ctx?: PrintLayoutContext,
+): Promise<Manuscript[]> {
+  const fonts: PrintFontPair = isFontPair(fontOrPair)
+    ? fontOrPair
+    : { body: fontOrPair, title: fontOrPair }
+  const { finalSpine } = await paginatePrintExportInner(project, fonts, ctx)
+  return finalSpine
+}
+
+/** Full book for KDP PDF: optional printable TOC with page numbers (iterative layout). */
+export async function paginateProjectForPrintExport(
+  project: InkwellProject,
+  fontOrPair: FontMeasurer | PrintFontPair,
+  ctx?: PrintLayoutContext,
+): Promise<PrintPage[]> {
+  const fonts: PrintFontPair = isFontPair(fontOrPair)
+    ? fontOrPair
+    : { body: fontOrPair, title: fontOrPair }
+  const { pages } = await paginatePrintExportInner(project, fonts, ctx)
+  return trimTrailingBlankPrintPage(pages)
+}
+
 

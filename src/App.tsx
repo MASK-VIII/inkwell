@@ -123,7 +123,9 @@ import {
 import { buildPlaintextExport } from './lib/export/plaintext'
 import { tiptapDocToMarkdown } from './lib/export/tiptapToMarkdown'
 import { buildWebHtmlDocument } from './lib/export/webHtml'
-import { buildKdpPdf } from './lib/export/pdfKdp'
+import { estimateRoughPrintInteriorPages } from './lib/print/estimateRoughPrintPages'
+import { computePrintLayoutBasisKey } from './lib/print/printLayoutBasis'
+import { buildPdfInWorker } from './lib/workerClient'
 import { buildEpub, epubFilename } from './lib/export/epub'
 import { buildDocx, docxFilename } from './lib/export/docx'
 import { importDocxToChapters } from './lib/import/docx'
@@ -493,6 +495,8 @@ export default function App() {
   const [ebookEditOpen, setEbookEditOpen] = useState(false)
   const [bookToolsOpen, setBookToolsOpen] = useState(false)
   const [cloudBackupBusy, setCloudBackupBusy] = useState(false)
+  const [pdfExportBusy, setPdfExportBusy] = useState(false)
+  const [pdfExportLabel, setPdfExportLabel] = useState('')
   const [chaptersAsideCollapsed, setChaptersAsideCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false
     try {
@@ -798,6 +802,11 @@ export default function App() {
     }
     return project.theme
   }, [route, project.theme, ebookFormatSlice, printFormatSlice])
+
+  const printRoughPageEstimate = useMemo(() => {
+    if (route !== 'format_print' || isNote) return null
+    return estimateRoughPrintInteriorPages(project.chapters, displayTheme.print)
+  }, [route, isNote, project.chapters, displayTheme.print])
 
   const themeCommitDirty =
     route === 'format_ebook'
@@ -2039,8 +2048,21 @@ export default function App() {
 
   const exportPdfKdp = async () => {
     if (!requireEntitlement('pro')) return
+    if (pdfExportBusy) return
+    setPdfExportBusy(true)
+    setPdfExportLabel('Preparing PDF…')
     try {
-      const bytes = await buildKdpPdf(project)
+      const layoutFingerprint = computePrintLayoutBasisKey(project, project.theme)
+      const bytes = await buildPdfInWorker(project, {
+        layoutFingerprint,
+        onProgress: (p) => {
+          if (p.phase === 'paginate') setPdfExportLabel('Laying out interior…')
+          else
+            setPdfExportLabel(
+              `Rendering PDF ${p.done.toLocaleString()} / ${p.total.toLocaleString()}`,
+            )
+        },
+      })
       const docTitle = project.book.title.trim() || chapters[0]?.title || 'manuscript'
       const buf = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
       const blob = new Blob([buf], { type: 'application/pdf' })
@@ -2053,6 +2075,9 @@ export default function App() {
       showToast('Exported PDF (KDP)')
     } catch {
       showToast('PDF export failed')
+    } finally {
+      setPdfExportBusy(false)
+      setPdfExportLabel('')
     }
   }
 
@@ -4974,14 +4999,17 @@ export default function App() {
                           <div className="absolute right-0 top-full z-[60] mt-1.5 min-w-[15rem] overflow-hidden rounded-2xl border border-dust bg-panel-light-strong/95 py-1 shadow-lg backdrop-blur-md dark:border-border-dark dark:bg-panel-dark/95">
                             <button
                               type="button"
-                              className="block w-full px-3 py-2.5 text-left text-sm font-medium text-ink hover:bg-parchment/80 dark:text-ink-dark dark:hover:bg-panel-dark/80"
+                              disabled={pdfExportBusy}
+                              className="block w-full px-3 py-2.5 text-left text-sm font-medium text-ink hover:bg-parchment/80 disabled:pointer-events-none disabled:opacity-45 dark:text-ink-dark dark:hover:bg-panel-dark/80"
                               onClick={() => {
                                 closePublishExportMenu()
                                 syncPersistedState()
                                 void exportPdfKdp()
                               }}
                             >
-                              Export PDF (KDP)
+                              {pdfExportBusy ?
+                                (pdfExportLabel.trim() || 'Preparing PDF…')
+                              : 'Export PDF (KDP)'}
                             </button>
                             <button
                               type="button"
@@ -5129,9 +5157,8 @@ export default function App() {
               {route === 'format_print' ? (
                 <Suspense fallback={<RouteWorkspaceFallback />}>
                   <PrintReview
-                    chapters={chapters}
+                    project={project}
                     theme={displayTheme}
-                    book={project.book}
                     scrollToChapterId={currentId}
                     onChapterSelect={setCurrentId}
                     formatModeBar={
@@ -5151,6 +5178,7 @@ export default function App() {
                       setCurrentId(id)
                       navigateRoute('write')
                     }}
+                    roughInteriorPageEstimate={printRoughPageEstimate}
                   />
                 </Suspense>
               ) : route === 'format_ebook' ? (
@@ -5256,6 +5284,8 @@ export default function App() {
                       isCloudBackupConfigured() ? () => void uploadLibraryCloudBackup() : undefined
                     }
                     cloudBackupBusy={cloudBackupBusy}
+                    pdfExportBusy={pdfExportBusy}
+                    pdfExportLabel={pdfExportLabel}
                     publishAccess={publishAccessForUi}
                   />
                 </Suspense>
@@ -5296,6 +5326,7 @@ export default function App() {
                   formatScope={route === 'format_print' ? 'print' : 'ebook'}
                   onThemeChange={patchTheme}
                   onApplyThemePreset={applyInteriorPreset}
+                  printRoughPageEstimate={printRoughPageEstimate}
                   themeCommitDirty={themeCommitDirty}
                   onCommitTheme={commitActiveFormatTheme}
                   collapsed={formatThemeAsideCollapsed}
@@ -5406,6 +5437,8 @@ export default function App() {
             }
             cloudBackupBusy={cloudBackupBusy}
             publishLicensing={publishAccessForUi}
+            pdfExportBusy={pdfExportBusy}
+            pdfExportLabel={pdfExportLabel}
           />
 
           <FindReplaceModal

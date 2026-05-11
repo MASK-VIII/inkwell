@@ -19,6 +19,8 @@ type Props = {
   formatScope: ThemePresetScope
   onThemeChange: (patch: { print?: Partial<PrintTheme>; ebook?: Partial<EbookTheme> }) => void
   onApplyThemePreset: (id: ThemePresetId) => void
+  /** Print Format tab only: rough page estimate from word count (~). */
+  printRoughPageEstimate?: number | null
   /** True when the active format tab has theme edits not yet saved to the project. */
   themeCommitDirty?: boolean
   /** Persist draft theme to the project (save + history). */
@@ -38,6 +40,7 @@ export function FormatThemeSidebar({
   formatScope,
   onThemeChange,
   onApplyThemePreset,
+  printRoughPageEstimate = null,
   themeCommitDirty = false,
   onCommitTheme,
   themeCommitPending = false,
@@ -129,7 +132,11 @@ export function FormatThemeSidebar({
         </label>
 
         {formatScope === 'print' ? (
-          <PrintThemeForm theme={theme} onThemeChange={onThemeChange} />
+          <PrintThemeForm
+            theme={theme}
+            onThemeChange={onThemeChange}
+            printRoughPageEstimate={printRoughPageEstimate}
+          />
         ) : (
           <EbookThemeForm theme={theme} onThemeChange={onThemeChange} />
         )}

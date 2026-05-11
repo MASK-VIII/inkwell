@@ -32,9 +32,33 @@ type BuildPdfReq = {
   kind: 'buildPdf'
   rev: number
   project: InkwellProject
+  /** When set and worker has a fresh spine pagination for this key, skip export re-pagination. */
+  layoutFingerprint?: string
 }
 
-type WorkerRequest = RenderEbookReq | PaginatePrintChapterReq | BuildPdfReq
+type ResolvePrintSpineReq = {
+  kind: 'resolvePrintSpine'
+  rev: number
+  project: InkwellProject
+  meta: { bookTitle: string; authorName: string }
+}
+
+type PaginatePrintSpineReq = {
+  kind: 'paginatePrintSpine'
+  rev: number
+  spine: Manuscript[]
+  theme: Theme
+  meta: { bookTitle: string; authorName: string }
+  /** Matches `computePrintLayoutBasisKey(project, theme)` so export can reuse cached pages. */
+  layoutFingerprint: string
+}
+
+type WorkerRequest =
+  | RenderEbookReq
+  | PaginatePrintChapterReq
+  | BuildPdfReq
+  | ResolvePrintSpineReq
+  | PaginatePrintSpineReq
 
 export type EbookResultMsg = {
   kind: 'ebookResult'
@@ -60,6 +84,26 @@ export type PdfResultMsg = {
   bytes: Uint8Array
 }
 
+export type PdfProgressMsg = {
+  kind: 'pdfProgress'
+  rev: number
+  phase: 'paginate' | 'render'
+  done: number
+  total: number
+}
+
+export type PrintSpineResultMsg = {
+  kind: 'printSpineResult'
+  rev: number
+  spine: Manuscript[]
+}
+
+export type PrintSpinePagesResultMsg = {
+  kind: 'printSpinePagesResult'
+  rev: number
+  chapters: Array<{ chapterId: number; pages: PrintPage[] }>
+}
+
 export type WorkerErrorMsg = {
   kind: 'error'
   rev: number
@@ -67,7 +111,14 @@ export type WorkerErrorMsg = {
   message: string
 }
 
-export type WorkerResponse = EbookResultMsg | PrintChapterResultMsg | PdfResultMsg | WorkerErrorMsg
+export type WorkerResponse =
+  | EbookResultMsg
+  | PrintChapterResultMsg
+  | PdfResultMsg
+  | PdfProgressMsg
+  | PrintSpineResultMsg
+  | PrintSpinePagesResultMsg
+  | WorkerErrorMsg
 
 let singleton: Worker | null = null
 
@@ -86,4 +137,38 @@ export function onWorkerMessage(cb: (msg: WorkerResponse) => void): () => void {
   const handler = (e: MessageEvent<WorkerResponse>) => cb(e.data)
   w.addEventListener('message', handler)
   return () => w.removeEventListener('message', handler)
+}
+
+export function buildPdfInWorker(
+  project: InkwellProject,
+  opts?: {
+    layoutFingerprint?: string | null
+    onProgress?: (msg: PdfProgressMsg) => void
+  },
+): Promise<Uint8Array> {
+  const rev = nextWorkerRev()
+  return new Promise((resolve, reject) => {
+    const off = onWorkerMessage((msg: WorkerResponse) => {
+      if (msg.rev !== rev) return
+      if (msg.kind === 'pdfProgress') {
+        opts?.onProgress?.(msg)
+        return
+      }
+      if (msg.kind === 'pdfResult') {
+        off()
+        resolve(msg.bytes)
+        return
+      }
+      if (msg.kind === 'error') {
+        off()
+        reject(new Error(msg.message))
+      }
+    })
+    sendWorker({
+      kind: 'buildPdf',
+      rev,
+      project,
+      ...(opts?.layoutFingerprint ? { layoutFingerprint: opts.layoutFingerprint } : {}),
+    })
+  })
 }

@@ -1,22 +1,30 @@
 import {
+  Fragment,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type ReactNode,
 } from 'react'
-import type { BookMeta, Manuscript, Theme } from '../types'
+import type { InkwellProject, Manuscript, Theme } from '../types'
 import { TRIM_PRESETS } from '../types'
-import { layoutProfileForManuscript } from '../lib/bookAssembly'
-import type { PrintLayoutKind, PrintPage } from '../lib/print/paginate'
+import { layoutProfileForManuscript, printSpineBaseForExport } from '../lib/bookAssembly'
+import type { PrintLayoutKind, PrintLineTextRun, PrintPage } from '../lib/print/paginate'
 import { resolvePrintTitleFontId } from '../lib/print/paginate'
-import { hashStringDjb2 } from '../lib/hash'
+import {
+  computePrintContentLayoutKey,
+  computePrintLayoutBasisKey,
+  computePrintThemeKey,
+} from '../lib/print/printLayoutBasis'
 import {
   nextWorkerRev,
   onWorkerMessage,
   sendWorker,
   type PrintChapterResultMsg,
+  type PrintSpinePagesResultMsg,
+  type PrintSpineResultMsg,
   type WorkerErrorMsg,
   type WorkerResponse,
 } from '../lib/workerClient'
@@ -25,9 +33,9 @@ import { buildPrintPreviewFontFaceCss, printPreviewFontFamilyStack } from '../li
 const PX_PER_PT = 96 / 72
 
 type Props = {
-  chapters: Manuscript[]
+  /** Full project — print preview uses the same spine + TOC convergence as KDP PDF export. */
+  project: InkwellProject
   theme: Theme
-  book: BookMeta
   /** When this changes (e.g. chapter click in sidebar), show this chapter */
   scrollToChapterId?: number | null
   onJumpToChapter?: (chapterId: number) => void
@@ -35,33 +43,90 @@ type Props = {
   onChapterSelect?: (chapterId: number) => void
   /** Ebook / Print toggle, centered between preview chrome and page controls. */
   formatModeBar?: ReactNode
+  /** Word-count heuristic interior pages — shown until spine pagination finishes. */
+  roughInteriorPageEstimate?: number | null
 }
 
-function openerOrdinalForIndex(chapters: Manuscript[], index: number): { layout: PrintLayoutKind; ordinal: number } {
+function openerOrdinalForIndex(spine: Manuscript[], index: number): { layout: PrintLayoutKind; ordinal: number } {
   let bodyBefore = 0
   for (let j = 0; j < index; j++) {
-    if (layoutProfileForManuscript(chapters[j]!) === 'chapter') bodyBefore++
+    if (layoutProfileForManuscript(spine[j]!) === 'chapter') bodyBefore++
   }
-  const layout = layoutProfileForManuscript(chapters[index]!)
+  const layout = layoutProfileForManuscript(spine[index]!)
   const ordinal = layout === 'chapter' ? bodyBefore + 1 : Math.max(1, bodyBefore)
   return { layout, ordinal }
 }
 
+/** Book-global start page for `chapterIndex` when prior chapters are already paginated in `pagesByChapter`. */
+function bookStartPageForChapterIndex(
+  spine: Manuscript[],
+  chapterIndex: number,
+  pagesByChapter: Map<number, PrintPage[]>,
+): number {
+  let start = 1
+  for (let i = 0; i < chapterIndex; i++) {
+    const pages = pagesByChapter.get(spine[i]!.id)
+    if (!pages?.length) return 1
+    start = pages[pages.length - 1]!.pageNumber + 1
+  }
+  return start
+}
+
+type PrintWorkerCompletionMsg =
+  | PrintChapterResultMsg
+  | PrintSpineResultMsg
+  | PrintSpinePagesResultMsg
+  | WorkerErrorMsg
+
+function beginResolvePrintSpine(
+  pending: Map<number, (msg: PrintWorkerCompletionMsg) => void>,
+  project: InkwellProject,
+  meta: { bookTitle: string; authorName: string },
+): { rev: number; promise: Promise<Manuscript[]>; abort: () => void } {
+  const rev = nextWorkerRev()
+  let rejectOuter: ((reason?: unknown) => void) | undefined
+  const promise = new Promise<Manuscript[]>((resolve, reject) => {
+    rejectOuter = reject
+    pending.set(rev, (msg) => {
+      pending.delete(rev)
+      if (msg.kind === 'error') {
+        reject(new Error(msg.message))
+        return
+      }
+      if (msg.kind !== 'printSpineResult') {
+        reject(new Error('Unexpected worker response'))
+        return
+      }
+      resolve(msg.spine)
+    })
+    sendWorker({ kind: 'resolvePrintSpine', rev, project, meta })
+  })
+  const abort = () => {
+    pending.delete(rev)
+    rejectOuter?.(new DOMException('Print spine resolution aborted', 'AbortError'))
+  }
+  return { rev, promise, abort }
+}
+
 function printChapterPromise(
-  pending: Map<number, (msg: PrintChapterResultMsg | WorkerErrorMsg) => void>,
+  pending: Map<number, (msg: PrintWorkerCompletionMsg) => void>,
   chapterIndex: number,
   chapter: Manuscript,
-  chapters: Manuscript[],
+  spine: Manuscript[],
   theme: Theme,
   meta: { bookTitle: string; authorName: string },
   startPageNumber: number,
 ): Promise<PrintChapterResultMsg> {
-  const { layout, ordinal } = openerOrdinalForIndex(chapters, chapterIndex)
+  const { layout, ordinal } = openerOrdinalForIndex(spine, chapterIndex)
   const rev = nextWorkerRev()
   return new Promise((resolve, reject) => {
     pending.set(rev, (msg) => {
       if (msg.kind === 'error') {
         reject(new Error(msg.message))
+        return
+      }
+      if (msg.kind !== 'printChapterResult') {
+        reject(new Error('Unexpected worker response'))
         return
       }
       resolve(msg)
@@ -80,15 +145,52 @@ function printChapterPromise(
   })
 }
 
+function beginPaginatePrintSpine(
+  pending: Map<number, (msg: PrintWorkerCompletionMsg) => void>,
+  spine: Manuscript[],
+  theme: Theme,
+  meta: { bookTitle: string; authorName: string },
+  layoutFingerprint: string,
+): { rev: number; promise: Promise<Map<number, PrintPage[]>>; abort: () => void } {
+  const rev = nextWorkerRev()
+  let rejectOuter: ((reason?: unknown) => void) | undefined
+  const promise = new Promise<Map<number, PrintPage[]>>((resolve, reject) => {
+    rejectOuter = reject
+    pending.set(rev, (msg) => {
+      pending.delete(rev)
+      if (msg.kind === 'error') {
+        reject(new Error(msg.message))
+        return
+      }
+      if (msg.kind !== 'printSpinePagesResult') {
+        reject(new Error('Unexpected worker response'))
+        return
+      }
+      const m = new Map<number, PrintPage[]>()
+      for (const row of msg.chapters) m.set(row.chapterId, row.pages)
+      resolve(m)
+    })
+    sendWorker({ kind: 'paginatePrintSpine', rev, spine, theme, meta, layoutFingerprint })
+  })
+  const abort = () => {
+    pending.delete(rev)
+    rejectOuter?.(new DOMException('Print spine pagination aborted', 'AbortError'))
+  }
+  return { rev, promise, abort }
+}
+
 export function PrintReview({
-  chapters,
+  project,
   theme,
-  book,
   scrollToChapterId,
   onJumpToChapter,
   onChapterSelect,
   formatModeBar,
+  roughInteriorPageEstimate,
 }: Props) {
+  const book = project.book
+  const [layoutSpine, setLayoutSpine] = useState<Manuscript[]>([])
+  const [spineReady, setSpineReady] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [chapterPages, setChapterPages] = useState<Map<number, PrintPage[]>>(() => new Map())
   const [inflight, setInflight] = useState<Set<number>>(() => new Set())
@@ -97,7 +199,7 @@ export function PrintReview({
   const [viewportBox, setViewportBox] = useState({ w: 400, h: 560 })
 
   const viewportRef = useRef<HTMLDivElement>(null)
-  const pendingHandlers = useRef(new Map<number, (msg: PrintChapterResultMsg | WorkerErrorMsg) => void>())
+  const pendingHandlers = useRef(new Map<number, (msg: PrintWorkerCompletionMsg) => void>())
   const layoutEpochRef = useRef(0)
   const pendingPageIndexRef = useRef<number | null>(null)
   const [localChapterId, setLocalChapterId] = useState<number | null>(null)
@@ -127,7 +229,12 @@ export function PrintReview({
     queueMicrotask(() => setLocalChapterId(null))
   }, [scrollToChapterId])
 
-  const activeChapterId = localChapterId ?? scrollToChapterId ?? chapters[0]?.id ?? null
+  const activeChapterId = useMemo(() => {
+    const preferred = localChapterId ?? scrollToChapterId ?? layoutSpine[0]?.id ?? null
+    if (preferred == null) return null
+    if (layoutSpine.some((m) => m.id === preferred)) return preferred
+    return layoutSpine[0]?.id ?? null
+  }, [localChapterId, scrollToChapterId, layoutSpine])
   useEffect(() => {
     activeChapterIdRef.current = activeChapterId
   }, [activeChapterId])
@@ -137,36 +244,119 @@ export function PrintReview({
     [book.title, book.authorName],
   )
 
-  const contentLayoutKey = useMemo(() => {
-    const chapterSig = chapters
-      .map((c) => `${c.id}:${hashStringDjb2(JSON.stringify(c.content))}:${hashStringDjb2(c.title)}`)
-      .join('|')
-    return `${chapterSig}|${meta.bookTitle}|${meta.authorName}`
-  }, [chapters, meta.bookTitle, meta.authorName])
+  const contentLayoutKey = useMemo(() => computePrintContentLayoutKey(project), [
+    project.chapters,
+    project.assembly.includePrintToc,
+    project.assembly.printTocTitle,
+    meta.bookTitle,
+    meta.authorName,
+  ])
 
-  const printThemeKey = useMemo(
-    () => hashStringDjb2(JSON.stringify(theme.print)),
-    [theme.print],
-  )
+  const printThemeKey = useMemo(() => computePrintThemeKey(theme), [theme.print])
 
-  const layoutBasisKey = useMemo(
-    () => `${contentLayoutKey}|${printThemeKey}`,
-    [contentLayoutKey, printThemeKey],
-  )
+  const [debouncedPrintThemeKey, setDebouncedPrintThemeKey] = useState(printThemeKey)
+  useEffect(() => {
+    const id = window.setTimeout(() => setDebouncedPrintThemeKey(printThemeKey), 280)
+    return () => window.clearTimeout(id)
+  }, [printThemeKey])
+
+  const layoutBasisKey = useMemo(() => computePrintLayoutBasisKey(project, theme), [project, theme])
 
   const layoutBasisKeyRef = useRef(layoutBasisKey)
   useEffect(() => {
     layoutBasisKeyRef.current = layoutBasisKey
   }, [layoutBasisKey])
 
+  /** Printable TOC off: spine order is fixed from assembly — no worker TOC convergence. */
+  useEffect(() => {
+    if (project.assembly.includePrintToc) return
+    let cancelled = false
+    queueMicrotask(() => {
+      if (!cancelled) setErr(null)
+    })
+    void (async () => {
+      try {
+        if (project.chapters.length === 0) {
+          if (!cancelled) {
+            setLayoutSpine([])
+            setSpineReady(true)
+          }
+          return
+        }
+        const spine = printSpineBaseForExport(project)
+        if (!cancelled) {
+          setLayoutSpine(spine)
+          setSpineReady(true)
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setErr(e instanceof Error ? e.message : 'Print layout spine failed')
+          setLayoutSpine([])
+          setSpineReady(true)
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- contentLayoutKey fingerprints manuscript content + assembly
+  }, [contentLayoutKey, project.assembly.includePrintToc])
+
+  useEffect(() => {
+    if (!project.assembly.includePrintToc) return
+    let cancelled = false
+    queueMicrotask(() => {
+      if (cancelled) return
+      setSpineReady(false)
+      setErr(null)
+    })
+    let abortSpine: (() => void) | null = null
+    void (async () => {
+      try {
+        if (project.chapters.length === 0) {
+          if (!cancelled) {
+            setLayoutSpine([])
+            setSpineReady(true)
+          }
+          return
+        }
+        const begun = beginResolvePrintSpine(pendingHandlers.current, project, meta)
+        abortSpine = begun.abort
+        const spine = await begun.promise
+        if (!cancelled) {
+          setLayoutSpine(spine)
+          setSpineReady(true)
+        }
+      } catch (e) {
+        if (cancelled || (e instanceof DOMException && e.name === 'AbortError')) return
+        if (!cancelled) {
+          setErr(e instanceof Error ? e.message : 'Print layout spine failed')
+          setLayoutSpine([])
+          setSpineReady(true)
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+      abortSpine?.()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- debounced theme limits worker churn while TOC converges
+  }, [contentLayoutKey, debouncedPrintThemeKey, project.assembly.includePrintToc])
+
   const [appliedFullLayoutBasisKey, setAppliedFullLayoutBasisKey] = useState<string | null>(null)
   const [applyingFullLayout, setApplyingFullLayout] = useState(false)
 
-  const prevContentLayoutKeyRef = useRef<string | null>(null)
-
   useEffect(() => {
     const unsub = onWorkerMessage((msg: WorkerResponse) => {
-      if (msg.kind !== 'printChapterResult' && !(msg.kind === 'error' && msg.job === 'paginatePrintChapter')) return
+      const okPrintChapter = msg.kind === 'printChapterResult'
+      const okSpine = msg.kind === 'printSpineResult'
+      const okSpinePages = msg.kind === 'printSpinePagesResult'
+      const okErr =
+        msg.kind === 'error' &&
+        (msg.job === 'paginatePrintChapter' ||
+          msg.job === 'resolvePrintSpine' ||
+          msg.job === 'paginatePrintSpine')
+      if (!okPrintChapter && !okSpine && !okSpinePages && !okErr) return
       const cb = pendingHandlers.current.get(msg.rev)
       if (cb) {
         pendingHandlers.current.delete(msg.rev)
@@ -186,129 +376,56 @@ export function PrintReview({
   }, [scrollToChapterId, localChapterId])
 
   const applyFullBookLayout = useCallback(async () => {
-    if (chapters.length === 0) return
+    if (!spineReady || layoutSpine.length === 0) return
     layoutEpochRef.current += 1
     const epoch = layoutEpochRef.current
     setApplyingFullLayout(true)
     setErr(null)
 
     setChapterPages(new Map())
-    setInflight(new Set())
+    const inflightLocal = new Set(layoutSpine.map((c) => c.id))
+    setInflight(inflightLocal)
     setPageIndexInChapter(0)
 
-    const inflightLocal = new Set<number>()
-    const pagesLocal = new Map<number, PrintPage[]>()
-    const sequentialAuthoritativeStart = new Map<number, number>()
-
-    const pushInflight = () => {
-      if (epoch !== layoutEpochRef.current) return
-      setInflight(new Set(inflightLocal))
-    }
-
-    const pushPages = () => {
-      if (epoch !== layoutEpochRef.current) return
-      setChapterPages(new Map(pagesLocal))
-    }
-
-    const maybeApplyPrefetch = (msg: PrintChapterResultMsg) => {
-      const auth = sequentialAuthoritativeStart.get(msg.chapterId)
-      if (auth != null && auth !== msg.startPageNumber) return
-      pagesLocal.set(msg.chapterId, msg.pages)
-      pushPages()
-    }
-
     try {
-      const priorityId = activeChapterIdRef.current ?? chapters[0]!.id
-      const pidx = chapters.findIndex((c) => c.id === priorityId)
-      if (pidx >= 0) {
-        const pch = chapters[pidx]!
-        inflightLocal.add(pch.id)
-        pushInflight()
-        try {
-          const msg = await printChapterPromise(
-            pendingHandlers.current,
-            pidx,
-            pch,
-            chapters,
-            theme,
-            meta,
-            1,
-          )
-          if (epoch !== layoutEpochRef.current) return
-          maybeApplyPrefetch(msg)
-        } finally {
-          inflightLocal.delete(pch.id)
-          pushInflight()
-        }
-      }
-
-      let nextStart = 1
-      for (let i = 0; i < chapters.length; i++) {
-        if (epoch !== layoutEpochRef.current) return
-        const ch = chapters[i]!
-        const start = nextStart
-        inflightLocal.add(ch.id)
-        pushInflight()
-        let msg: PrintChapterResultMsg
-        try {
-          msg = await printChapterPromise(pendingHandlers.current, i, ch, chapters, theme, meta, start)
-        } finally {
-          inflightLocal.delete(ch.id)
-          pushInflight()
-        }
-        if (epoch !== layoutEpochRef.current) return
-        sequentialAuthoritativeStart.set(ch.id, start)
-        pagesLocal.set(ch.id, msg.pages)
-        nextStart = msg.nextPageNumber
-        pushPages()
-      }
-
-      if (epoch === layoutEpochRef.current) {
-        setAppliedFullLayoutBasisKey(layoutBasisKeyRef.current)
-      }
+      const begun = beginPaginatePrintSpine(
+        pendingHandlers.current,
+        layoutSpine,
+        theme,
+        meta,
+        layoutBasisKeyRef.current,
+      )
+      const map = await begun.promise
+      if (epoch !== layoutEpochRef.current) return
+      setChapterPages(new Map(map))
+      setAppliedFullLayoutBasisKey(layoutBasisKeyRef.current)
     } catch (e) {
       if (epoch === layoutEpochRef.current) {
         setErr(e instanceof Error ? e.message : 'Print pagination failed')
       }
     } finally {
-      if (epoch === layoutEpochRef.current) setApplyingFullLayout(false)
+      if (epoch === layoutEpochRef.current) {
+        setInflight(new Set())
+        setApplyingFullLayout(false)
+      }
     }
-  }, [chapters, theme, meta])
+  }, [layoutSpine, spineReady, theme, meta])
 
   useEffect(() => {
     layoutEpochRef.current += 1
     const epoch = layoutEpochRef.current
 
-    const contentChanged =
-      prevContentLayoutKeyRef.current === null || prevContentLayoutKeyRef.current !== contentLayoutKey
-    prevContentLayoutKeyRef.current = contentLayoutKey
+    setChapterPages(new Map())
+    setInflight(new Set())
+    setErr(null)
+    setPageIndexInChapter(0)
 
-    const themeOnlyMultiChapter = !contentChanged && chapters.length > 1
-
-    if (themeOnlyMultiChapter) {
-      setErr(null)
-      setInflight(new Set())
-      const keepId = activeChapterIdRef.current ?? chapters[0]!.id
-      setChapterPages((prev) => {
-        const cur = prev.get(keepId)
-        const next = new Map<number, PrintPage[]>()
-        if (cur) next.set(keepId, cur)
-        return next
-      })
-    } else {
-      setChapterPages(new Map())
-      setInflight(new Set())
-      setErr(null)
-      setPageIndexInChapter(0)
-    }
-
-    if (chapters.length === 0) return
+    if (!spineReady) return
+    if (layoutSpine.length === 0) return
 
     let cancelled = false
     const inflightLocal = new Set<number>()
     const pagesLocal = new Map<number, PrintPage[]>()
-    /** True start page used once sequential pagination has completed for this chapter. */
-    const sequentialAuthoritativeStart = new Map<number, number>()
 
     const pushInflight = () => {
       if (cancelled || epoch !== layoutEpochRef.current) return
@@ -320,65 +437,35 @@ export function PrintReview({
       setChapterPages(new Map(pagesLocal))
     }
 
-    const maybeApplyPrefetch = (msg: PrintChapterResultMsg) => {
-      const auth = sequentialAuthoritativeStart.get(msg.chapterId)
-      if (auth != null && auth !== msg.startPageNumber) return
-      pagesLocal.set(msg.chapterId, msg.pages)
-      pushPages()
-    }
-
-    const runFullSequential = async () => {
-      const priorityId = activeChapterIdRef.current ?? chapters[0]!.id
-      const pidx = chapters.findIndex((c) => c.id === priorityId)
-      if (pidx >= 0) {
-        const pch = chapters[pidx]!
-        inflightLocal.add(pch.id)
-        pushInflight()
-        try {
-          const msg = await printChapterPromise(
-            pendingHandlers.current,
-            pidx,
-            pch,
-            chapters,
-            theme,
-            meta,
-            1,
-          )
-          if (cancelled || epoch !== layoutEpochRef.current) return
-          maybeApplyPrefetch(msg)
-        } finally {
-          inflightLocal.delete(pch.id)
-          pushInflight()
-        }
-      }
-
-      let nextStart = 1
-      for (let i = 0; i < chapters.length; i++) {
+    const runFullSpinePagination = async () => {
+      for (const ch of layoutSpine) inflightLocal.add(ch.id)
+      pushInflight()
+      try {
+        const begun = beginPaginatePrintSpine(
+          pendingHandlers.current,
+          layoutSpine,
+          theme,
+          meta,
+          layoutBasisKeyRef.current,
+        )
+        const map = await begun.promise
         if (cancelled || epoch !== layoutEpochRef.current) return
-        const ch = chapters[i]!
-        const start = nextStart
-        inflightLocal.add(ch.id)
-        pushInflight()
-        let msg: PrintChapterResultMsg
-        try {
-          msg = await printChapterPromise(pendingHandlers.current, i, ch, chapters, theme, meta, start)
-        } finally {
-          inflightLocal.delete(ch.id)
-          pushInflight()
+        pagesLocal.clear()
+        for (const ch of layoutSpine) {
+          pagesLocal.set(ch.id, map.get(ch.id) ?? [])
         }
-        if (cancelled || epoch !== layoutEpochRef.current) return
-        sequentialAuthoritativeStart.set(ch.id, start)
-        pagesLocal.set(ch.id, msg.pages)
-        nextStart = msg.nextPageNumber
         pushPages()
+      } finally {
+        inflightLocal.clear()
+        pushInflight()
       }
     }
 
     const runFastActiveChapterOnly = async () => {
-      const aid = activeChapterIdRef.current ?? chapters[0]!.id
-      const pidx = chapters.findIndex((c) => c.id === aid)
+      const aid = activeChapterIdRef.current ?? layoutSpine[0]!.id
+      const pidx = layoutSpine.findIndex((c) => c.id === aid)
       if (pidx < 0) return
-      const pch = chapters[pidx]!
+      const pch = layoutSpine[pidx]!
       inflightLocal.add(pch.id)
       pushInflight()
       try {
@@ -386,7 +473,7 @@ export function PrintReview({
           pendingHandlers.current,
           pidx,
           pch,
-          chapters,
+          layoutSpine,
           theme,
           meta,
           1,
@@ -403,16 +490,13 @@ export function PrintReview({
 
     void (async () => {
       try {
-        if (contentChanged) {
-          await runFullSequential()
-          if (!cancelled && epoch === layoutEpochRef.current) {
-            setAppliedFullLayoutBasisKey(layoutBasisKey)
-          }
+        if (layoutSpine.length > 1) {
+          await runFullSpinePagination()
         } else {
           await runFastActiveChapterOnly()
-          if (!cancelled && epoch === layoutEpochRef.current && chapters.length <= 1) {
-            setAppliedFullLayoutBasisKey(layoutBasisKey)
-          }
+        }
+        if (!cancelled && epoch === layoutEpochRef.current) {
+          setAppliedFullLayoutBasisKey(layoutBasisKey)
         }
       } catch (e) {
         if (cancelled || epoch !== layoutEpochRef.current) return
@@ -423,12 +507,15 @@ export function PrintReview({
     return () => {
       cancelled = true
     }
-  }, [contentLayoutKey, printThemeKey, chapters, theme, meta, layoutBasisKey])
+  }, [contentLayoutKey, debouncedPrintThemeKey, layoutSpine, spineReady, theme, meta, layoutBasisKey])
 
   const activeChapterPagesMissing = useMemo(
     () =>
-      activeChapterId != null && chapters.length > 0 && !chapterPages.has(activeChapterId),
-    [activeChapterId, chapters.length, chapterPages],
+      spineReady &&
+      activeChapterId != null &&
+      layoutSpine.length > 0 &&
+      !chapterPages.has(activeChapterId),
+    [spineReady, activeChapterId, layoutSpine.length, chapterPages],
   )
 
   useEffect(() => {
@@ -441,17 +528,18 @@ export function PrintReview({
 
     void (async () => {
       try {
-        const pidx = chapters.findIndex((c) => c.id === aid)
+        const pidx = layoutSpine.findIndex((c) => c.id === aid)
         if (pidx < 0) return
-        const pch = chapters[pidx]!
+        const pch = layoutSpine[pidx]!
+        const startPn = bookStartPageForChapterIndex(layoutSpine, pidx, chapterPages)
         const msg = await printChapterPromise(
           pendingHandlers.current,
           pidx,
           pch,
-          chapters,
+          layoutSpine,
           theme,
           meta,
-          1,
+          startPn,
         )
         if (cancelled || gapEpoch !== gapFillEpochRef.current) return
         setChapterPages((prev) => {
@@ -468,7 +556,7 @@ export function PrintReview({
     return () => {
       cancelled = true
     }
-  }, [activeChapterPagesMissing, activeChapterId, chapters, theme, meta])
+  }, [activeChapterPagesMissing, activeChapterId, layoutSpine, theme, meta, chapterPages])
 
   useEffect(() => {
     const el = viewportRef.current
@@ -497,38 +585,39 @@ export function PrintReview({
   const currentPage = activePages?.[safePageIndex]
 
   const sequentialPrefixComplete = useMemo(() => {
-    if (chapters.length === 0) return true
-    for (let i = 0; i < chapters.length; i++) {
-      if (!chapterPages.has(chapters[i]!.id)) return false
+    if (!spineReady || layoutSpine.length === 0) return true
+    for (let i = 0; i < layoutSpine.length; i++) {
+      if (!chapterPages.has(layoutSpine[i]!.id)) return false
     }
     return true
-  }, [chapters, chapterPages])
+  }, [spineReady, layoutSpine, chapterPages])
 
   const needsApplyFullBookLayout = useMemo(
     () =>
-      chapters.length > 1 &&
+      spineReady &&
+      layoutSpine.length > 1 &&
       appliedFullLayoutBasisKey !== null &&
       appliedFullLayoutBasisKey !== layoutBasisKey,
-    [chapters.length, appliedFullLayoutBasisKey, layoutBasisKey],
+    [spineReady, layoutSpine.length, appliedFullLayoutBasisKey, layoutBasisKey],
   )
 
   const totalPagesDisplay = useMemo(() => {
-    if (chapters.length === 0) return { exact: 0, partialPlus: null as number | null }
+    if (!spineReady || layoutSpine.length === 0) return { exact: 0, partialPlus: null as number | null }
     if (sequentialPrefixComplete) {
       let sum = 0
-      for (const ch of chapters) {
+      for (const ch of layoutSpine) {
         sum += chapterPages.get(ch.id)?.length ?? 0
       }
       return { exact: sum, partialPlus: null }
     }
     let partial = 0
-    for (const ch of chapters) {
+    for (const ch of layoutSpine) {
       const pgs = chapterPages.get(ch.id)
       if (!pgs) break
       partial += pgs.length
     }
     return { exact: 0, partialPlus: partial }
-  }, [chapters, chapterPages, sequentialPrefixComplete])
+  }, [spineReady, layoutSpine, chapterPages, sequentialPrefixComplete])
 
   const bookPageLabel = currentPage?.pageNumber ?? '—'
 
@@ -560,8 +649,8 @@ export function PrintReview({
     const target = Number.parseInt(raw, 10)
     if (!Number.isFinite(target) || target < 1) return
 
-    for (let ci = 0; ci < chapters.length; ci++) {
-      const ch = chapters[ci]!
+    for (let ci = 0; ci < layoutSpine.length; ci++) {
+      const ch = layoutSpine[ci]!
       const pgs = chapterPages.get(ch.id)
       if (!pgs?.length) continue
       const first = pgs[0]!.pageNumber
@@ -575,7 +664,7 @@ export function PrintReview({
         return
       }
     }
-  }, [jumpDraft, chapters, chapterPages, onChapterSelect])
+  }, [jumpDraft, layoutSpine, chapterPages, onChapterSelect])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -610,7 +699,7 @@ export function PrintReview({
     )
   }
 
-  const showSkeleton = !currentPage && inflight.size > 0
+  const showSkeleton = !spineReady || (!currentPage && inflight.size > 0)
   const atChapterStart = safePageIndex <= 0
   const atChapterEnd =
     activePages != null && activePages.length > 0 && safePageIndex >= activePages.length - 1
@@ -625,17 +714,29 @@ export function PrintReview({
 
           <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
             <span className="text-xs text-ink/65 dark:text-ink-dark/65 sm:text-sm">
-              Page {bookPageLabel}
-              {!sequentialPrefixComplete
-                ? ` of ${totalPagesDisplay.partialPlus != null && totalPagesDisplay.partialPlus > 0 ? totalPagesDisplay.partialPlus : '…'}+`
-                : totalPagesDisplay.exact > 0
-                  ? ` of ${totalPagesDisplay.exact}`
-                  : ''}
+              {!spineReady ?
+                'Resolving print layout…'
+              : <>
+                  Page {bookPageLabel}
+                  {!sequentialPrefixComplete
+                    ? ` of ${totalPagesDisplay.partialPlus != null && totalPagesDisplay.partialPlus > 0 ? totalPagesDisplay.partialPlus : '…'}+`
+                    : totalPagesDisplay.exact > 0
+                      ? ` of ${totalPagesDisplay.exact}`
+                      : ''}
+                  {roughInteriorPageEstimate != null &&
+                  roughInteriorPageEstimate > 0 &&
+                  !sequentialPrefixComplete ?
+                    <span className="ml-1.5 whitespace-nowrap text-ink/50 dark:text-ink-dark/50">
+                      (~{roughInteriorPageEstimate.toLocaleString()} est.)
+                    </span>
+                  : null}
+                </>
+              }
             </span>
-            {inflight.size > 0 ? (
+            {!spineReady || inflight.size > 0 ? (
               <span
                 className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-dust border-t-ink dark:border-border-dark dark:border-t-ink-dark"
-                aria-label="Paginating"
+                aria-label={!spineReady ? 'Resolving print spine' : 'Paginating'}
               />
             ) : null}
             <div className="flex items-center gap-1">
@@ -663,7 +764,13 @@ export function PrintReview({
         <div className="mx-auto mt-1 flex max-w-[min(64rem,100%)] flex-wrap items-center gap-x-3 gap-y-2 text-[11px] text-ink/55 dark:text-ink-dark/55">
           <span>
             Trim {trim.widthIn}" × {trim.heightIn}"
-            {sequentialPrefixComplete ? ` · ${totalPagesDisplay.exact.toLocaleString()} pages` : null}
+            {!spineReady ?
+              ' · …'
+            : sequentialPrefixComplete && totalPagesDisplay.exact > 0 ?
+              ` · ${totalPagesDisplay.exact.toLocaleString()} pages`
+            : roughInteriorPageEstimate != null && roughInteriorPageEstimate > 0 ?
+              ` · ~${roughInteriorPageEstimate.toLocaleString()} pages (est.)`
+            : null}
           </span>
           {needsApplyFullBookLayout ? (
             <>
@@ -747,9 +854,44 @@ export function PrintReview({
                           />
                         )
                       }
+                      const fontSizePx = l.fontSizePt * PX_PER_PT
+                      const runStyle = (tr: PrintLineTextRun): CSSProperties => ({
+                        fontFamily: usingTitleFont ? titleFontStack : printFontStack,
+                        fontSize: `${fontSizePx}px`,
+                        lineHeight: `${theme.print.lineHeight}`,
+                        fontWeight: tr.bold ? 700 : 400,
+                        fontStyle: tr.italic ? 'italic' : 'normal',
+                        fontVariantLigatures: 'none',
+                        fontFeatureSettings: '"liga" 0, "clig" 0',
+                        ...(l.trackingEm ? { letterSpacing: `${l.trackingEm}em` } : null),
+                        ...(tr.underline ?
+                          { textDecoration: 'underline', textUnderlineOffset: `${Math.max(1, fontSizePx * 0.08)}px` }
+                        : null),
+                      })
+                      if (l.textRuns?.length) {
+                        return (
+                          <Fragment key={`${currentPage.pageNumber}_${i}`}>
+                            {l.textRuns.map((tr, ti) => (
+                              <span
+                                key={`${currentPage.pageNumber}_${i}_${ti}`}
+                                className="absolute whitespace-pre text-ink"
+                                style={{
+                                  left: (l.xPt + tr.xOffsetPt) * PX_PER_PT,
+                                  top: (currentPage.heightPt - l.yPt) * PX_PER_PT,
+                                  ...runStyle(tr),
+                                }}
+                                onClick={() => onJumpToChapter?.(l.chapterId)}
+                                role={onJumpToChapter ? 'button' : undefined}
+                                tabIndex={onJumpToChapter ? 0 : undefined}
+                              >
+                                {tr.text}
+                              </span>
+                            ))}
+                          </Fragment>
+                        )
+                      }
                       const left = l.xPt * PX_PER_PT
                       const top = (currentPage.heightPt - l.yPt) * PX_PER_PT
-                      const fontSizePx = l.fontSizePt * PX_PER_PT
                       return (
                         <div
                           key={`${currentPage.pageNumber}_${i}`}
@@ -760,6 +902,8 @@ export function PrintReview({
                             fontFamily: usingTitleFont ? titleFontStack : printFontStack,
                             fontSize: `${fontSizePx}px`,
                             lineHeight: `${theme.print.lineHeight}`,
+                            fontVariantLigatures: 'none',
+                            fontFeatureSettings: '"liga" 0, "clig" 0',
                             ...(l.trackingEm
                               ? { letterSpacing: `${l.trackingEm}em` }
                               : null),

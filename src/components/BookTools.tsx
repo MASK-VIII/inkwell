@@ -84,6 +84,8 @@ type Props = {
   /** When set (build-time URL configured), shows upload full library to cloud. */
   onCloudBackupLibrary?: () => void
   cloudBackupBusy?: boolean
+  pdfExportBusy?: boolean
+  pdfExportLabel?: string
   /** Paid-tier gates for Publish + cloud backup sections (omit = all unlocked). */
   publishLicensing?: PublishAccessProps
   /** @mentions / [[wikilink]] from other notes in this shelf cluster pointing at the open note. */
@@ -128,6 +130,8 @@ function BookToolsInner({
   onExportTxt,
   onCloudBackupLibrary,
   cloudBackupBusy = false,
+  pdfExportBusy = false,
+  pdfExportLabel = '',
   publishLicensing,
   backlinks = [],
   onOpenBacklinkSource,
@@ -1015,6 +1019,7 @@ function BookToolsInner({
               <div className="space-y-3 rounded-xl bg-parchment/60 p-4 dark:bg-panel-dark/50">
                 <button
                   type="button"
+                  disabled={pdfExportBusy}
                   onClick={() => {
                     if (!pa.allowProSuite) {
                       pa.onUnlockPro()
@@ -1022,9 +1027,9 @@ function BookToolsInner({
                     }
                     onExportPdfKdp()
                   }}
-                  className="inkwell-hub-row-btn"
+                  className="inkwell-hub-row-btn disabled:pointer-events-none disabled:opacity-45"
                 >
-                  Export PDF (KDP)
+                  {pdfExportBusy ? (pdfExportLabel.trim() || 'Preparing PDF…') : 'Export PDF (KDP)'}
                   {!pa.allowProSuite ? <span className="ml-1 text-[11px] opacity-80">· Pro</span> : null}
                 </button>
                 <button

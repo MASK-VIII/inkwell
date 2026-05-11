@@ -1,5 +1,6 @@
 import type { JSONContent } from '@tiptap/core'
 import type { InkwellFontId } from '../fonts/fontCatalog'
+import { inlineStyleFromMarks } from '../tiptap/inlineMarks'
 
 /**
  * `chapterBanner`     — synthetic chapter opener title (centered, multiplied size)
@@ -8,10 +9,20 @@ import type { InkwellFontId } from '../fonts/fontCatalog'
  */
 export type PrintHeadingRole = 'chapterBanner' | 'chapterOrnament' | 'sceneBreak'
 
+/** Inline TipTap segment for print layout / PDF (bold + italic from marks). */
+export type PrintTextRun = {
+  text: string
+  bold?: boolean
+  italic?: boolean
+  underline?: boolean
+}
+
 export type PrintBlock =
   | {
       type: 'paragraph'
       text: string
+      /** When present, drives wrapping and PDF styling; `text` remains joined runs for fallbacks. */
+      runs?: PrintTextRun[]
       /** Indented quote body */
       blockquote?: boolean
       /** Ordered / bullet prefix on first line only (e.g. "1. " or "• "); pagination handles hanging indent */
@@ -23,6 +34,7 @@ export type PrintBlock =
       type: 'heading'
       level: 1 | 2 | 3
       text: string
+      runs?: PrintTextRun[]
       printRole?: PrintHeadingRole
       sizeMultiplier?: number
       trackingEm?: number
@@ -43,30 +55,114 @@ function registerFootnote(buf: FootnoteBuf, id: string, content: string) {
   }
 }
 
-function textFromInline(nodes: JSONContent[] | undefined, buf: FootnoteBuf): string {
-  if (!nodes) return ''
-  let s = ''
-  for (const node of nodes) {
-    if (node.type === 'text') {
-      const marks = node.marks as { type: string; attrs?: Record<string, unknown> }[] | undefined
-      const fn = marks?.find((m) => m.type === 'writerFootnote')
-      if (fn?.attrs?.id != null) {
-        registerFootnote(buf, String(fn.attrs.id), String(fn.attrs.content ?? ''))
+function sameRunStyle(a: PrintTextRun, b: Pick<PrintTextRun, 'bold' | 'italic' | 'underline'>): boolean {
+  return a.bold === b.bold && a.italic === b.italic && a.underline === b.underline
+}
+
+function pushStyledFragment(
+  runs: PrintTextRun[],
+  fragment: string,
+  bold?: boolean,
+  italic?: boolean,
+  underline?: boolean,
+) {
+  if (!fragment) return
+  const prev = runs[runs.length - 1]
+  if (prev && sameRunStyle(prev, { bold, italic, underline })) {
+    prev.text += fragment
+    return
+  }
+  runs.push({ text: fragment, bold, italic, underline })
+}
+
+function mergeAdjacentRuns(runs: PrintTextRun[]): PrintTextRun[] {
+  const out: PrintTextRun[] = []
+  for (const r of runs) {
+    if (!r.text) continue
+    const prev = out[out.length - 1]
+    if (prev && sameRunStyle(prev, r)) prev.text += r.text
+    else out.push({ ...r })
+  }
+  return out
+}
+
+function finalizeRuns(runsRaw: PrintTextRun[]): PrintTextRun[] {
+  const merged = mergeAdjacentRuns(runsRaw.filter((r) => r.text.length > 0))
+  if (merged.length > 0) {
+    const last = merged[merged.length - 1]!
+    last.text = last.text.replace(/\s+$/, '')
+  }
+  return merged.filter((r) => r.text.length > 0)
+}
+
+type InheritedInlineStyle = { bold?: boolean; italic?: boolean; underline?: boolean }
+
+function mergeInheritedStyle(a: InheritedInlineStyle | undefined, b: InheritedInlineStyle | undefined): InheritedInlineStyle | undefined {
+  if (!a && !b) return undefined
+  return {
+    bold: a?.bold || b?.bold ? true : undefined,
+    italic: a?.italic || b?.italic ? true : undefined,
+    underline: a?.underline || b?.underline ? true : undefined,
+  }
+}
+
+/** Non-standard trees: emphasis as wrapper nodes (imports / foreign JSON). */
+function styleAccumulationFromNodeType(nodeType: string): InheritedInlineStyle | undefined {
+  switch (nodeType) {
+    case 'bold':
+    case 'strong':
+      return { bold: true }
+    case 'italic':
+    case 'em':
+      return { italic: true }
+    default:
+      return undefined
+  }
+}
+
+function mergeMarksWithInherited(
+  inherited: InheritedInlineStyle | undefined,
+  marks: { type: string; attrs?: Record<string, unknown> }[] | undefined,
+): InheritedInlineStyle {
+  const m = inlineStyleFromMarks(marks)
+  return {
+    bold: inherited?.bold || m.bold ? true : undefined,
+    italic: inherited?.italic || m.italic ? true : undefined,
+    underline: inherited?.underline || m.underline ? true : undefined,
+  }
+}
+
+function runsFromInline(nodes: JSONContent[] | undefined, buf: FootnoteBuf): PrintTextRun[] {
+  if (!nodes) return []
+  const runs: PrintTextRun[] = []
+  const visit = (ns: JSONContent[], inherited?: InheritedInlineStyle) => {
+    for (const node of ns) {
+      const acc = styleAccumulationFromNodeType(node.type ?? '')
+      const nextInherited = mergeInheritedStyle(inherited, acc)
+
+      if (node.type === 'text') {
+        const marks = node.marks as { type: string; attrs?: Record<string, unknown> }[] | undefined
+        const fn = marks?.find((m) => m.type === 'writerFootnote')
+        if (fn?.attrs?.id != null) {
+          registerFootnote(buf, String(fn.attrs.id), String(fn.attrs.content ?? ''))
+        }
+        const style = mergeMarksWithInherited(nextInherited, marks)
+        pushStyledFragment(runs, node.text ?? '', style.bold, style.italic, style.underline)
+      } else if (node.type === 'hardBreak') {
+        pushStyledFragment(runs, ' ', undefined, undefined, undefined)
+      } else if (node.type === 'mention') {
+        const label =
+          String((node.attrs as { label?: string; id?: string } | undefined)?.label ??
+            (node.attrs as { id?: string } | undefined)?.id ??
+            '')
+        pushStyledFragment(runs, label ? `@${label}` : '@', undefined, undefined, undefined)
+      } else if (node.content) {
+        visit(node.content, nextInherited)
       }
-      s += node.text ?? ''
-    } else if (node.type === 'hardBreak') {
-      s += ' '
-    } else if (node.type === 'mention') {
-      const label =
-        String((node.attrs as { label?: string; id?: string } | undefined)?.label ??
-          (node.attrs as { id?: string } | undefined)?.id ??
-          '')
-      s += label ? `@${label}` : '@'
-    } else if (node.content) {
-      s += textFromInline(node.content, buf)
     }
   }
-  return s
+  visit(nodes)
+  return runs
 }
 
 function visit(node: JSONContent, out: PrintBlock[], buf: FootnoteBuf, quoteDepth: number) {
@@ -90,10 +186,12 @@ function visit(node: JSONContent, out: PrintBlock[], buf: FootnoteBuf, quoteDept
   }
 
   if (node.type === 'paragraph') {
-    const text = textFromInline(node.content, buf).trimEnd()
+    const runsOut = finalizeRuns(runsFromInline(node.content, buf))
+    const text = runsOut.map((r) => r.text).join('')
     out.push({
       type: 'paragraph',
       text,
+      ...(runsOut.length > 0 ? { runs: runsOut } : {}),
       ...(quoteDepth > 0 ? { blockquote: true } : {}),
     })
     return
@@ -102,8 +200,14 @@ function visit(node: JSONContent, out: PrintBlock[], buf: FootnoteBuf, quoteDept
   if (node.type === 'heading') {
     const levelRaw = (node.attrs?.level ?? 1) as number
     const level = (levelRaw === 1 || levelRaw === 2 || levelRaw === 3 ? levelRaw : 1) as 1 | 2 | 3
-    const text = textFromInline(node.content, buf).trimEnd()
-    out.push({ type: 'heading', level, text })
+    const runsOut = finalizeRuns(runsFromInline(node.content, buf))
+    const text = runsOut.map((r) => r.text).join('')
+    out.push({
+      type: 'heading',
+      level,
+      text,
+      ...(runsOut.length > 0 ? { runs: runsOut } : {}),
+    })
     return
   }
 
@@ -143,11 +247,13 @@ function visitList(
         visitList(child, out, buf, quoteDepth, true, { n: 1 }, depth + 1)
         firstPara = false
       } else if (child.type === 'paragraph') {
-        const text = textFromInline(child.content, buf).trimEnd()
+        const runsOut = finalizeRuns(runsFromInline(child.content, buf))
+        const text = runsOut.map((r) => r.text).join('')
         const prefix = firstPara ? (ordered ? `${counter.n++}. ` : '• ') : ''
         out.push({
           type: 'paragraph',
           text,
+          ...(runsOut.length > 0 ? { runs: runsOut } : {}),
           listPrefix: prefix || undefined,
           listIndentPt: indentBase,
           ...(quoteDepth > 0 ? { blockquote: true } : {}),

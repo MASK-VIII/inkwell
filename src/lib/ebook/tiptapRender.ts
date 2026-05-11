@@ -1,4 +1,5 @@
 import type { JSONContent } from '@tiptap/core'
+import { markTypesBold, markTypesItalic } from '../tiptap/inlineMarks'
 
 function esc(s: string): string {
   return s
@@ -66,8 +67,10 @@ function openMarks(
   if (fn && fnId) out += `<sup class="inkwell-fn-ref"><a id="fnref-${esc(fnId)}" href="#fn-${esc(fnId)}">`
 
   const types = new Set(marks.map((m) => m.type))
-  if (types.has('bold')) out += '<strong>'
-  if (types.has('italic')) out += '<em>'
+  const boldTypes = markTypesBold()
+  const italicTypes = markTypesItalic()
+  if ([...types].some((t) => boldTypes.has(t))) out += '<strong>'
+  if ([...types].some((t) => italicTypes.has(t))) out += '<em>'
   if (types.has('underline')) out += '<u>'
   if (types.has('strike')) out += '<s>'
   return out
@@ -83,10 +86,12 @@ function closeMarks(marks: { type: string; attrs?: Record<string, unknown> }[] |
   const comment = marks.find((m) => m.type === 'writerComment') ?? null
 
   const types = new Set(marks.map((m) => m.type))
+  const boldTypes = markTypesBold()
+  const italicTypes = markTypesItalic()
   if (types.has('strike')) out += '</s>'
   if (types.has('underline')) out += '</u>'
-  if (types.has('italic')) out += '</em>'
-  if (types.has('bold')) out += '</strong>'
+  if ([...types].some((t) => italicTypes.has(t))) out += '</em>'
+  if ([...types].some((t) => boldTypes.has(t))) out += '</strong>'
   if (fn && fnId) out += '</a></sup>'
   if (comment) out += '</mark>'
   if (typeof href === 'string') {

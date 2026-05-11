@@ -2,6 +2,7 @@ import JSZip from 'jszip'
 import type { JSONContent } from '@tiptap/core'
 import type { InkwellProject } from '../../types'
 import { displayChapterLabel, effectiveSectionRole, manuscriptsForEpub } from '../bookAssembly'
+import { boldItalicFromMarks } from '../tiptap/inlineMarks'
 
 function esc(s: string): string {
   return s
@@ -70,9 +71,10 @@ function mergeMarks(
 ): { bold?: boolean; italic?: boolean; underline?: boolean; strike?: boolean } {
   if (!marks?.length) return {}
   const types = new Set(marks.map((m) => m.type))
+  const bi = boldItalicFromMarks(marks)
   return {
-    bold: types.has('bold'),
-    italic: types.has('italic'),
+    bold: bi.bold,
+    italic: bi.italic,
     underline: types.has('underline'),
     strike: types.has('strike'),
   }

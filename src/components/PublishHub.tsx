@@ -26,6 +26,10 @@ export type PublishHubProps = {
   onOpenFormatEbook?: () => void
   onCloudBackupLibrary?: () => void
   cloudBackupBusy?: boolean
+  /** True while KDP PDF is being generated (pagination + pdf-lib are CPU-heavy). */
+  pdfExportBusy?: boolean
+  /** Detailed status while busy (e.g. page render progress). */
+  pdfExportLabel?: string
   publishAccess?: PublishAccessProps
 }
 
@@ -65,6 +69,8 @@ export function PublishHub({
   onOpenFormatEbook,
   onCloudBackupLibrary,
   cloudBackupBusy = false,
+  pdfExportBusy = false,
+  pdfExportLabel = '',
   publishAccess,
 }: PublishHubProps) {
   const pa: PublishAccessProps =
@@ -126,6 +132,7 @@ export function PublishHub({
         <div className="flex flex-col gap-3 sm:flex-row">
           <button
             type="button"
+            disabled={pdfExportBusy}
             onClick={() => {
               if (!pa.allowProSuite) {
                 pa.onUnlockPro()
@@ -133,9 +140,9 @@ export function PublishHub({
               }
               onExportPdfKdp()
             }}
-            className="inkwell-hub-primary"
+            className="inkwell-hub-primary disabled:pointer-events-none disabled:opacity-55"
           >
-            Export PDF (KDP)
+            {pdfExportBusy ? (pdfExportLabel.trim() || 'Preparing PDF…') : 'Export PDF (KDP)'}
             {!pa.allowProSuite ? <span className="ml-1 text-[11px] font-normal opacity-80">· Pro</span> : null}
           </button>
           <button

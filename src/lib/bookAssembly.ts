@@ -154,3 +154,8 @@ export function insertPrintTocInSpine(project: InkwellProject, spine: Manuscript
 export function stripSyntheticToc(spine: Manuscript[]): Manuscript[] {
   return spine.filter((m) => m.id !== TOC_SYNTHETIC_ID)
 }
+
+/** Print manuscripts in export order, excluding any stale synthetic TOC row (matches KDP PDF base spine). */
+export function printSpineBaseForExport(project: InkwellProject): Manuscript[] {
+  return stripSyntheticToc(manuscriptsForPrint(project))
+}

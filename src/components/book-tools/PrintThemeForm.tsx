@@ -12,15 +12,18 @@ import { BodyFontPicker } from './BodyFontPicker'
 import { ChapterTitleStylePicker } from './ChapterTitleStylePicker'
 import { CollapsibleSection } from './CollapsibleSection'
 import { HeaderFooterRow } from './HeaderFooterRow'
-import { getFontCatalogEntry } from '../../lib/fonts/fontCatalog'
+import { getFontCatalogEntry, getPrintFaceAvailability } from '../../lib/fonts/fontCatalog'
 
 type Props = {
   theme: Theme
   onThemeChange: (patch: { print?: Partial<PrintTheme> }) => void
+  /** Rough interior page count for sidebar context (~); exact needs Print Review pagination. */
+  printRoughPageEstimate?: number | null
 }
 
-export function PrintThemeForm({ theme, onThemeChange }: Props) {
+export function PrintThemeForm({ theme, onThemeChange, printRoughPageEstimate }: Props) {
   const printPreset = TRIM_PRESETS[theme.print.trimPreset]
+  const printFaces = getPrintFaceAvailability(theme.print.bodyFontId)
 
   return (
     <div className="rounded-2xl border border-dust bg-parchment/80 p-4 dark:border-border-dark dark:bg-panel-dark/80 space-y-3">
@@ -48,6 +51,23 @@ export function PrintThemeForm({ theme, onThemeChange }: Props) {
           value={theme.print.bodyFontId}
           onChange={(bodyFontId) => onThemeChange({ print: { bodyFontId } })}
         />
+
+        {(!printFaces.hasDedicatedBold || !printFaces.hasDedicatedItalic) && (
+          <p className="rounded-xl border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-[11px] leading-snug text-amber-950/90 dark:border-amber-400/30 dark:bg-amber-500/15 dark:text-amber-100/90">
+            {!printFaces.hasDedicatedBold && !printFaces.hasDedicatedItalic ?
+              'This font has no separate bold or italic print files. Inkwell approximates them in PDF so exports stay close to preview, but a dedicated body font with full weights is best for critical layouts.'
+            : !printFaces.hasDedicatedBold ?
+              'This font has no separate bold file for print/PDF. Bold spans are thickened algorithmically in export.'
+            : 'This font has no separate italic file for print/PDF. Italic spans use an oblique skew in export.'}
+          </p>
+        )}
+
+        {printRoughPageEstimate != null && printRoughPageEstimate > 0 ?
+          <p className="text-[11px] leading-snug text-ink/55 dark:text-ink-dark/55">
+            Roughly <span className="tabular-nums font-medium">{printRoughPageEstimate.toLocaleString()}</span>{' '}
+            interior pages (quick estimate — hyphenation, blanks, and front matter can change the real count).
+          </p>
+        : null}
 
         <label className="mb-4 mt-3 block space-y-1">
           <span className="text-[11px] font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
@@ -218,6 +238,26 @@ export function PrintThemeForm({ theme, onThemeChange }: Props) {
           />
         </label>
       </div>
+
+        <label className="mt-3 block space-y-1">
+          <span className="text-xs font-medium text-ink/70 dark:text-ink-dark/70">New chapters start on</span>
+          <select
+            value={theme.print.chapterStartsOn}
+            onChange={(e) =>
+              onThemeChange({
+                print: { chapterStartsOn: e.target.value as PrintTheme['chapterStartsOn'] },
+              })
+            }
+            className="w-full rounded-2xl border border-dust bg-parchment px-3 py-2 text-sm focus:border-walnut focus:outline-none dark:border-border-dark dark:bg-panel-dark dark:focus:border-cream"
+          >
+            <option value="either">Next page (continuous)</option>
+            <option value="right">Right-hand page (may insert blank versos)</option>
+          </select>
+          <span className="block text-[11px] leading-snug text-ink/55 dark:text-ink-dark/55">
+            Recto opens match trade layout but add intentionally blank pages when the prior chapter ends on a
+            right-hand page. Continuous flow avoids extra blanks (often preferable for KDP interior PDFs).
+          </span>
+        </label>
 
         <label className="mt-3 block space-y-1">
           <span className="text-xs font-medium text-ink/70 dark:text-ink-dark/70">Chapter opener (print)</span>
