@@ -92,7 +92,7 @@ function InkwellProfileMenuInner({
       {open ?
         <div
           role="menu"
-          className={`absolute ${align} top-full z-[60] mt-2 w-[min(17.5rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-dust bg-panel-light-strong py-1 shadow-xl dark:border-border-dark dark:bg-panel-dark`}
+          className={`absolute ${align} top-full z-[100] mt-2 w-[min(17.5rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-dust bg-panel-light-strong py-1 shadow-xl dark:border-border-dark dark:bg-panel-dark`}
         >
           <div className="flex gap-3 px-4 pb-3 pt-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-ink to-walnut text-xs font-bold uppercase tracking-[0.12em] text-parchment shadow-sm ring-1 ring-ink/20 dark:text-ink-dark dark:ring-cream/40">

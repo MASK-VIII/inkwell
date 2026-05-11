@@ -3558,7 +3558,7 @@ export default function App() {
         />
       ) : route === 'bookshelf' ? (
         <div className="flex min-h-0 flex-1 flex-col">
-          <header className="inkwell-chrome-header sticky top-0 z-50 border-b border-dust bg-panel-light-strong/92 backdrop-blur-md dark:border-border-dark dark:bg-panel-dark/90">
+          <header className="inkwell-chrome-header sticky top-0 z-[90] border-b border-dust bg-panel-light-strong/92 backdrop-blur-md dark:border-border-dark dark:bg-panel-dark/90">
             <div className="flex w-full min-h-[3.25rem] items-stretch sm:min-h-[3.5rem]">
               <div className="inkwell-theme-bridge flex min-w-0 flex-1 items-center justify-start bg-panel-light/88 py-2 pl-3 sm:py-3 sm:pl-5 dark:bg-panel-dark/70">
                 <button
@@ -4622,7 +4622,7 @@ export default function App() {
         </div>
       ) : (
         <>
-          <header className="inkwell-chrome-header sticky top-0 z-50 border-b border-dust bg-panel-light-strong/92 backdrop-blur-md dark:border-border-dark dark:bg-panel-dark/90">
+          <header className="inkwell-chrome-header sticky top-0 z-[90] border-b border-dust bg-panel-light-strong/92 backdrop-blur-md dark:border-border-dark dark:bg-panel-dark/90">
             <div className="flex w-full min-h-[3.25rem] items-stretch sm:min-h-[3.5rem]">
               <div
                 className={`inkwell-theme-bridge flex min-w-0 flex-1 items-center justify-start bg-panel-light/88 py-2 sm:py-3 dark:bg-panel-dark/70 ${
