@@ -127,13 +127,13 @@ Shipped **Windows** installers are built with **`npm run build:desktop`**, which
 | `VITE_SUPABASE_ANON_KEY` | **or** publishable above | Legacy anon JWT; either key is enough |
 | `VERCEL_DEPLOY_HOOK_URL` | No | Vercel **Deploy Hook** URL; **[`desktop-publish-master.yml`](../.github/workflows/desktop-publish-master.yml)** POSTs after upload so Production can redeploy |
 
-**[`.github/workflows/release-desktop.yml`](../.github/workflows/release-desktop.yml)** and **[`.github/workflows/desktop-publish-master.yml`](../.github/workflows/desktop-publish-master.yml)** set **`VITE_INKWELL_CLOUD_SYNC=1`** for the build and **fail early** if URL or keys are missing, so you do not publish a login-less installer by mistake.
+**[`.github/workflows/release-desktop.yml`](../.github/workflows/release-desktop.yml)** and **[`.github/workflows/desktop-publish-master.yml`](../.github/workflows/desktop-publish-master.yml)** set **`VITE_INKWELL_CLOUD_SYNC=1`** for the build and **fail early** if URL or keys are missing, so you do not publish a login-less installer by mistake. Both run **`scripts/verify-desktop-renderer-inlined-supabase.mjs`** after **`vite build`** so the packaged app cannot pass CI if Supabase values were not inlined into **`dist/`**.
 
 **[`.github/workflows/desktop.yml`](../.github/workflows/desktop.yml)** passes the same secrets when present (fork PRs without secrets still produce offline-only artifacts).
 
 ### Continuous desktop installer (master)
 
-Every push to **`master`** runs **[`.github/workflows/desktop-publish-master.yml`](../.github/workflows/desktop-publish-master.yml)**. It builds **`npm run build:desktop`** with the same **`VITE_*`** secrets as **Release desktop**, then either **creates** a GitHub Release for **`v<package.json version>`** (if none exists yet) or **re-uploads** the NSIS file with **`gh release upload … --clobber`**, keeping the asset name **`Inkwell Setup <version>.exe`** aligned with **[`scripts/fetch-desktop-installer-for-vercel.mjs`](../scripts/fetch-desktop-installer-for-vercel.mjs)** (which resolves **`v${version}`** from `package.json`).
+Every push to **`master`** runs **[`.github/workflows/desktop-publish-master.yml`](../.github/workflows/desktop-publish-master.yml)**. It builds **`npm run build:desktop`** with the same **`VITE_*`** secrets as **Release desktop**, runs **`scripts/verify-desktop-renderer-inlined-supabase.mjs`** so a bad Windows env cannot ship an offline-only bundle silently, then either **creates** a GitHub Release for **`v<package.json version>`** (if none exists yet) or **re-uploads** the NSIS file with **`gh release upload … --clobber`**, keeping the asset name **`Inkwell Setup <version>.exe`** aligned with **[`scripts/fetch-desktop-installer-for-vercel.mjs`](../scripts/fetch-desktop-installer-for-vercel.mjs)** (which resolves **`v${version}`** from `package.json`).
 
 Requirements:
 

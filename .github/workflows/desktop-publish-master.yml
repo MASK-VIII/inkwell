@@ -37,8 +37,11 @@ jobs:
         run: |
           VERSION=$(node -p "require('./package.json').version")
           PRODUCT=$(node -p "(require('./package.json').build || {}).productName || 'Inkwell'")
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "product=$PRODUCT" >> "$GITHUB_OUTPUT"
+          # printf avoids CRLF in GITHUB_OUTPUT on windows-latest bash (echo can break paths: Inkwell\r)
+          {
+            printf 'version=%s\n' "$VERSION"
+            printf 'product=%s\n' "$PRODUCT"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Install dependencies
         run: npm ci
@@ -65,7 +68,16 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        shell: bash
         run: npm run build:desktop
+
+      - name: Verify renderer bundle inlined Supabase env
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        shell: bash
+        run: node scripts/verify-desktop-renderer-inlined-supabase.mjs
 
       - name: Verify NSIS installer exists
         shell: bash
