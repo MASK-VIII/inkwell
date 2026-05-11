@@ -23,11 +23,33 @@ let pendingAuthDeepLink = null
 const isDev = !app.isPackaged
 
 /**
+ * URL of the frame that sent an IPC message. Prefer `senderFrame.url`; fall back to
+ * `webContents.getURL()` because some Electron builds leave `senderFrame.url` empty for
+ * custom-protocol documents (`inkwell://app/…`), which would reject all trusted IPC and
+ * break Supabase auth storage (sign-in appears to do nothing or errors on every attempt).
+ * @param {Electron.IpcMainInvokeEvent | Electron.IpcMainEvent} event
+ */
+function senderNavigationUrl(event) {
+  const frameUrl = event?.senderFrame?.url
+  if (typeof frameUrl === 'string' && frameUrl.length > 0) return frameUrl
+  try {
+    const wc = event?.sender
+    if (wc && typeof wc.getURL === 'function') {
+      const u = wc.getURL()
+      return typeof u === 'string' ? u : ''
+    }
+  } catch {
+    /* ignore */
+  }
+  return ''
+}
+
+/**
  * Restrict all privileged actions (IPC, dialogs) to our own renderer.
  * @param {Electron.IpcMainInvokeEvent | Electron.IpcMainEvent} event
  */
 function assertTrustedSender(event) {
-  const frameUrl = event?.senderFrame?.url || ''
+  const frameUrl = senderNavigationUrl(event)
   const ok =
     (isDev && typeof frameUrl === 'string' && frameUrl.startsWith(VITE_DEV_URL)) ||
     (!isDev && typeof frameUrl === 'string' && frameUrl.startsWith(PROD_APP_ORIGIN))

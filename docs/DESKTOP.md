@@ -40,6 +40,8 @@ See **`docs/CLOUD_SYNC.md`** for schema, RLS, conflict rules, and the manual tes
 
 If the packaged app opens to **Welcome** with **Continue to library (offline)** and **no** email or password fields, the **renderer was built without** `VITE_INKWELL_CLOUD_SYNC` and Supabase URL/key. Cloud login is not missing at runtime—it was never compiled in. Fix by setting the variables below in **`.env.local`** (or your CI secrets), then **`npm run build:desktop`** again and reinstall.
 
+If **email and password fields appear** but sign-in never completes or always fails, the build has cloud env (see CI **Verify renderer bundle inlined Supabase env**). On Windows, encrypted auth storage uses main-process IPC; the shell must trust the `inkwell://app/` window. If Electron reports an empty `senderFrame.url` for that protocol, Inkwell falls back to `webContents.getURL()` so `inkwell:auth-kv-*` handlers still run—update to a build that includes that fallback (`electron/main.cjs`).
+
 ### Vite env is compile-time for desktop
 
 Copy **`.env.example`** to **`.env.local`** in the repo root and set, at minimum:
