@@ -1,0 +1,108 @@
+# Build Windows NSIS with Supabase baked in and update GitHub Release v{package.json version}
+# on every push to master — keeps the site download + Vercel fetch path fresh without tagging.
+#
+# Requires repository secrets (same as release-desktop): VITE_SUPABASE_URL + one key.
+# Optional: VERCEL_DEPLOY_HOOK_URL — POST after upload so Production fetches the new .exe.
+name: Publish desktop installer (master)
+
+on:
+  push:
+    branches: [master]
+
+concurrency:
+  group: desktop-publish-master
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+jobs:
+  publish-windows-installer:
+    if: ${{ secrets.VITE_SUPABASE_URL != '' && (secrets.VITE_SUPABASE_PUBLISHABLE_KEY != '' || secrets.VITE_SUPABASE_ANON_KEY != '') }}
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Read package version and product name
+        id: pkg
+        shell: bash
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          PRODUCT=$(node -p "(require('./package.json').build || {}).productName || 'Inkwell'")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "product=$PRODUCT" >> "$GITHUB_OUTPUT"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify Supabase build secrets
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        shell: bash
+        run: |
+          if [ -z "$VITE_SUPABASE_URL" ]; then
+            echo "::error::Missing VITE_SUPABASE_URL"
+            exit 1
+          fi
+          if [ -z "$VITE_SUPABASE_PUBLISHABLE_KEY" ] && [ -z "$VITE_SUPABASE_ANON_KEY" ]; then
+            echo "::error::Missing VITE_SUPABASE_PUBLISHABLE_KEY or VITE_SUPABASE_ANON_KEY"
+            exit 1
+          fi
+
+      - name: Build desktop (NSIS)
+        env:
+          VITE_INKWELL_CLOUD_SYNC: '1'
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: npm run build:desktop
+
+      - name: Verify NSIS installer exists
+        shell: bash
+        run: |
+          F="release/${{ steps.pkg.outputs.product }} Setup ${{ steps.pkg.outputs.version }}.exe"
+          if [ ! -f "$F" ]; then
+            echo "::error::Missing $F — listing release/:"
+            ls -la release/ || true
+            exit 1
+          fi
+          ls -la "$F"
+
+      - name: Create or update GitHub Release asset
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.pkg.outputs.version }}"
+          PRODUCT="${{ steps.pkg.outputs.product }}"
+          TAG="v${VERSION}"
+          FILE="release/${PRODUCT} Setup ${VERSION}.exe"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG exists — uploading installer (--clobber)"
+            gh release upload "$TAG" "$FILE" --clobber
+          else
+            echo "Creating release $TAG with installer"
+            gh release create "$TAG" "$FILE" \
+              --title "Inkwell ${VERSION}" \
+              --generate-notes \
+              --latest
+          fi
+
+      - name: Trigger Vercel production deploy (optional)
+        if: ${{ secrets.VERCEL_DEPLOY_HOOK_URL != '' }}
+        env:
+          VERCEL_DEPLOY_HOOK_URL: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
+        shell: bash
+        run: |
+          curl -fsS -X POST "$VERCEL_DEPLOY_HOOK_URL"
+          echo "Vercel deploy hook invoked."

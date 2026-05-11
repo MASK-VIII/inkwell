@@ -47,7 +47,29 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Vite inlines VITE_* at build time; without these, shipped installers show only offline Welcome (no email login).
+      - name: Verify Supabase build secrets
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        shell: bash
+        run: |
+          if [ -z "$VITE_SUPABASE_URL" ]; then
+            echo "::error::Add repository secret VITE_SUPABASE_URL (same value as .env.local for the web app)."
+            exit 1
+          fi
+          if [ -z "$VITE_SUPABASE_PUBLISHABLE_KEY" ] && [ -z "$VITE_SUPABASE_ANON_KEY" ]; then
+            echo "::error::Add VITE_SUPABASE_PUBLISHABLE_KEY or VITE_SUPABASE_ANON_KEY (same as .env.local)."
+            exit 1
+          fi
+
       - name: Build desktop (NSIS)
+        env:
+          VITE_INKWELL_CLOUD_SYNC: '1'
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: npm run build:desktop
 
       - name: Verify NSIS installer exists

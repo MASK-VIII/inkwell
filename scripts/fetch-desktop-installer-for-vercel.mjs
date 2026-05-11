@@ -167,9 +167,9 @@ async function main() {
   const destDir = join(root, 'public', 'downloads')
   const destFile = join(destDir, 'Inkwell-Setup-latest.exe')
 
-  // Windows desktop CI often takes several minutes after a version bump lands on main.
-  const maxAttempts = 22
-  const delayMs = 18_000
+  // Windows desktop CI often runs 8–15+ minutes after master lands; master-publish workflow can overlap Vercel.
+  const maxAttempts = 45
+  const delayMs = 20_000
 
   /** @type {{ assets?: { name?: string; url?: string }[]; tag_name?: string } | null} */
   let release = null
@@ -227,7 +227,7 @@ async function main() {
 
   if (!release?.assets?.length) {
     throw new Error(
-      `No release assets for ${tag} and /releases/latest had no usable assets — run **Release desktop (Windows)** on GitHub.`,
+      `No release assets for ${tag} and /releases/latest had no usable assets — run **Release desktop (Windows)** or wait for **Publish desktop installer (master)** on GitHub.`,
     )
   }
 

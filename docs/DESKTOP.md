@@ -114,13 +114,45 @@ Use a **matrix** over OS so native binaries are produced on real hosts:
 
 The repository includes `.github/workflows/desktop.yml` as a minimal unsigned matrix build; tighten secrets and signing steps when you are ready to ship.
 
+### GitHub Actions secrets (installers from the website / Releases)
+
+Shipped **Windows** installers are built with **`npm run build:desktop`**, which bakes **Vite** env into the renderer at compile time. If **`VITE_SUPABASE_*`** is missing in CI, users only see the offline **Welcome** screen (no email login).
+
+**Repository secrets** (Settings → Secrets and variables → Actions) — use the **same names and values** as `.env.local` for the web app:
+
+| Secret | Required for release workflow | Notes |
+|--------|-------------------------------|--------|
+| `VITE_SUPABASE_URL` | Yes | Full `https://…supabase.co` project URL |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | One of the two keys | Preferred new key name |
+| `VITE_SUPABASE_ANON_KEY` | **or** publishable above | Legacy anon JWT; either key is enough |
+| `VERCEL_DEPLOY_HOOK_URL` | No | Vercel **Deploy Hook** URL; **[`desktop-publish-master.yml`](../.github/workflows/desktop-publish-master.yml)** POSTs after upload so Production can redeploy |
+
+**[`.github/workflows/release-desktop.yml`](../.github/workflows/release-desktop.yml)** and **[`.github/workflows/desktop-publish-master.yml`](../.github/workflows/desktop-publish-master.yml)** set **`VITE_INKWELL_CLOUD_SYNC=1`** for the build and **fail early** if URL or keys are missing, so you do not publish a login-less installer by mistake.
+
+**[`.github/workflows/desktop.yml`](../.github/workflows/desktop.yml)** passes the same secrets when present (fork PRs without secrets still produce offline-only artifacts).
+
+### Continuous desktop installer (master)
+
+Every push to **`master`** runs **[`.github/workflows/desktop-publish-master.yml`](../.github/workflows/desktop-publish-master.yml)**. It builds **`npm run build:desktop`** with the same **`VITE_*`** secrets as **Release desktop**, then either **creates** a GitHub Release for **`v<package.json version>`** (if none exists yet) or **re-uploads** the NSIS file with **`gh release upload … --clobber`**, keeping the asset name **`Inkwell Setup <version>.exe`** aligned with **[`scripts/fetch-desktop-installer-for-vercel.mjs`](../scripts/fetch-desktop-installer-for-vercel.mjs)** (which resolves **`v${version}`** from `package.json`).
+
+Requirements:
+
+- The same **repository secrets** in the table above (`VITE_SUPABASE_URL` plus one key). If they are missing, the job is **skipped** (no failed run from empty secrets).
+- **Settings → Actions → General → Workflow permissions → Read and write** (same as tag releases).
+
+Optional **Actions** secret **`VERCEL_DEPLOY_HOOK_URL`**: a Vercel **Deploy Hook** URL. After the `.exe` is on GitHub, the workflow **POST**s to it so Production can redeploy once the release asset exists (tighter than relying only on the fetch script’s polling when the Windows job finishes after the first Vercel build).
+
+Tag-based **[`release-desktop.yml`](../.github/workflows/release-desktop.yml)** stays the path for **`v*`** pushes and **`workflow_dispatch`** with the stricter **tag must match package.json** check.
+
+After adding secrets, run **Release desktop** again (tag or `workflow_dispatch`) **or** rely on **Publish desktop installer (master)** on each **`master`** push; let Vercel production rebuild (or use the deploy hook) if you use **`fetch-desktop-installer-for-vercel.mjs`** so **`/downloads/Inkwell-Setup-latest.exe`** picks up the new binary.
+
 ## Vercel same-origin installer (private GitHub repo; no large-file Storage)
 
 When the repo stays **private**, anonymous **`/releases/latest/download/…`** still **404**s. Instead of committing a **~120 MB** `.exe` (GitHub blocks blobs **> ~100 MB**) or paying for larger Storage quotas, **production Vercel builds** can **download** the installer from the GitHub API using a **read-only PAT**, then ship it as a static file.
 
 **Flow**
 
-1. **[`.github/workflows/release-desktop.yml`](../.github/workflows/release-desktop.yml)** publishes **`Inkwell Setup <version>.exe`** to a GitHub Release tagged **`v<version>`** (unchanged).
+1. **[`.github/workflows/release-desktop.yml`](../.github/workflows/release-desktop.yml)** (tags / manual) or **[`.github/workflows/desktop-publish-master.yml`](../.github/workflows/desktop-publish-master.yml)** (every **`master`** push) publishes **`Inkwell Setup <version>.exe`** to a GitHub Release tagged **`v<version>`**.
 2. **`npm run build`** on Vercel runs [**`scripts/fetch-desktop-installer-for-vercel.mjs`**](../scripts/fetch-desktop-installer-for-vercel.mjs) **before** `vite build` when **`VERCEL=1`** and **`VERCEL_ENV=production`** (or when **`INKWELL_FETCH_DESKTOP_INSTALLER=1`** for local testing).
 3. The script polls GitHub until that release asset exists (desktop CI can take several minutes after you bump **`package.json`**), then writes **`public/downloads/Inkwell-Setup-latest.exe`** (gitignored).
 4. Vercel should serve **`/downloads/Inkwell-Setup-latest.exe`** as a static file from the build output. If the installer was **not** fetched (missing PAT, failed CI, etc.), that URL may fall through to **`index.html`** — you would see the **marketing landing**, not an in-app 404, after routing fixes. Check the **production build log** for **`[fetch-desktop-installer] done`**.
@@ -135,7 +167,7 @@ When the repo stays **private**, anonymous **`/releases/latest/download/…`** s
 
 Preview deployments **skip** the fetch by default (avoids downloading ~120 MB per PR). To fetch on preview too, set **`INKWELL_FETCH_DESKTOP_INSTALLER_ON_PREVIEW=1`**.
 
-**Operational note:** If you bump **`package.json`** and push, **Vercel** and **Release desktop** may start together; the script **retries** until the release asset appears. If the desktop workflow is disabled or fails, the **production** build fails at this step — fix CI or temporarily remove the PAT / override URL.
+**Operational note:** If you bump **`package.json`** and push, **Vercel** and **desktop** workflows may start together; the script **retries** (about **15 minutes** total) until the release asset appears. Optional **`VERCEL_DEPLOY_HOOK_URL`** on **Publish desktop installer (master)** triggers a second Production deploy after the `.exe` lands. If the desktop workflow is disabled or fails, the **production** build fails at this step — fix CI or temporarily remove the PAT / override URL.
 
 ### Alternative: public GitHub repo (simplest hosting)
 
@@ -211,5 +243,6 @@ The public **`/releases/latest/download/…`** link works only after that asset 
 | `npm run print:desktop-download-url` | Print `VITE_INKWELL_DESKTOP_DOWNLOAD_URL` for the Windows NSIS installer (GitHub Releases **latest** asset pattern) |
 | `scripts/fetch-desktop-installer-for-vercel.mjs` | Invoked from **`npm run build`** on Vercel production (or when **`INKWELL_FETCH_DESKTOP_INSTALLER=1`**): downloads Release **`Inkwell Setup <version>.exe`** via GitHub API → **`public/downloads/Inkwell-Setup-latest.exe`** |
 | GitHub Actions **Release desktop (Windows)** | On push `v*` or manual dispatch: CI builds NSIS and uploads `Inkwell Setup <version>.exe` to GitHub Releases (**Latest**); requires workflow **Read and write** permission |
+| GitHub Actions **Publish desktop installer (master)** | On every push to **`master`**: same NSIS build + create or **clobber**-upload the release asset for **`v<version>`**; optional **`VERCEL_DEPLOY_HOOK_URL`** secret |
 
 Installers land in **`release/`** (`package.json` → `build.directories.output`), next to `win-unpacked/` or the macOS `.dmg`. Running **`npm run build:desktop` does not install the app** — use **`npm run build:desktop:install`** or double-click the **`Inkwell Setup … .exe`** file in `release/`.
