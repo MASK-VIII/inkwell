@@ -21,17 +21,34 @@ env:
 
 jobs:
   publish-windows-installer:
-    if: ${{ secrets.VITE_SUPABASE_URL != '' && (secrets.VITE_SUPABASE_PUBLISHABLE_KEY != '' || secrets.VITE_SUPABASE_ANON_KEY != '') }}
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
+      # Job-level `if` cannot use the `secrets` context; gate here and skip remaining steps when secrets are absent.
+      - name: Gate — Supabase secrets required to publish
+        id: gate
+        shell: bash
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          if [ -n "$VITE_SUPABASE_URL" ] && { [ -n "$VITE_SUPABASE_PUBLISHABLE_KEY" ] || [ -n "$VITE_SUPABASE_ANON_KEY" ]; }; then
+            printf 'publish=true\n' >> "$GITHUB_OUTPUT"
+          else
+            printf 'publish=false\n' >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping desktop publish — add Actions secrets VITE_SUPABASE_URL and a Supabase key (see docs/DESKTOP.md)."
+          fi
+
       - uses: actions/setup-node@v4
+        if: ${{ steps.gate.outputs.publish == 'true' }}
         with:
           node-version: '22'
           cache: 'npm'
 
       - name: Read package version and product name
+        if: ${{ steps.gate.outputs.publish == 'true' }}
         id: pkg
         shell: bash
         run: |
@@ -44,9 +61,11 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Install dependencies
+        if: ${{ steps.gate.outputs.publish == 'true' }}
         run: npm ci
 
       - name: Verify Supabase build secrets
+        if: ${{ steps.gate.outputs.publish == 'true' }}
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
@@ -63,6 +82,7 @@ jobs:
           fi
 
       - name: Build desktop (NSIS)
+        if: ${{ steps.gate.outputs.publish == 'true' }}
         env:
           VITE_INKWELL_CLOUD_SYNC: '1'
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
@@ -72,6 +92,7 @@ jobs:
         run: npm run build:desktop
 
       - name: Verify renderer bundle inlined Supabase env
+        if: ${{ steps.gate.outputs.publish == 'true' }}
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
@@ -80,6 +101,7 @@ jobs:
         run: node scripts/verify-desktop-renderer-inlined-supabase.mjs
 
       - name: Verify NSIS installer exists
+        if: ${{ steps.gate.outputs.publish == 'true' }}
         shell: bash
         run: |
           F="release/${{ steps.pkg.outputs.product }} Setup ${{ steps.pkg.outputs.version }}.exe"
@@ -91,6 +113,7 @@ jobs:
           ls -la "$F"
 
       - name: Create or update GitHub Release asset
+        if: ${{ steps.gate.outputs.publish == 'true' }}
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -111,10 +134,14 @@ jobs:
           fi
 
       - name: Trigger Vercel production deploy (optional)
-        if: ${{ secrets.VERCEL_DEPLOY_HOOK_URL != '' }}
+        if: ${{ steps.gate.outputs.publish == 'true' }}
         env:
           VERCEL_DEPLOY_HOOK_URL: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
         shell: bash
         run: |
+          if [ -z "$VERCEL_DEPLOY_HOOK_URL" ]; then
+            echo "No VERCEL_DEPLOY_HOOK_URL secret; skipping deploy hook."
+            exit 0
+          fi
           curl -fsS -X POST "$VERCEL_DEPLOY_HOOK_URL"
           echo "Vercel deploy hook invoked."

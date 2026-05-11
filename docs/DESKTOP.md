@@ -137,7 +137,7 @@ Every push to **`master`** runs **[`.github/workflows/desktop-publish-master.yml
 
 Requirements:
 
-- The same **repository secrets** in the table above (`VITE_SUPABASE_URL` plus one key). If they are missing, the job is **skipped** (no failed run from empty secrets).
+- The same **repository secrets** in the table above (`VITE_SUPABASE_URL` plus one key). If they are missing, the workflow **stops after the gate step** and skips build/publish (green run with a notice — GitHub does not allow `secrets` in job-level `if`, so this uses a gate step instead).
 - **Settings → Actions → General → Workflow permissions → Read and write** (same as tag releases).
 
 Optional **Actions** secret **`VERCEL_DEPLOY_HOOK_URL`**: a Vercel **Deploy Hook** URL. After the `.exe` is on GitHub, the workflow **POST**s to it so Production can redeploy once the release asset exists (tighter than relying only on the fetch script’s polling when the Windows job finishes after the first Vercel build).
