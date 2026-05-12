@@ -40,6 +40,7 @@ import { InkwellWordmark } from './components/InkwellWordmark'
 import { GettingStartedTour, type TourRouteBucket } from './components/GettingStartedTour'
 import { NotesTour } from './components/NotesTour'
 import { AccountScreen } from './components/AccountScreen'
+import { DesktopAutoUpdate } from './components/DesktopAutoUpdate'
 import { InkwellProfileMenu } from './components/InkwellProfileMenu'
 import { REMEMBERED_SIGNIN_EMAIL_KEY, SignInScreen } from './components/SignInScreen'
 import { UpgradeOfferModal, type UpgradeOfferIntent } from './components/UpgradeOfferModal'
@@ -5467,6 +5468,8 @@ export default function App() {
               onNavigateToChapter={navigateChapterFromStickyPopout}
             />
           ) : null}
+
+          <DesktopAutoUpdate />
 
           {toast && (
             <div

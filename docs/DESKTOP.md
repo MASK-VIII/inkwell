@@ -64,7 +64,7 @@ Google Fonts were removed from `index.html` and the CSP. **Inter** and **Playfai
 
 ## Native menu and files
 
-- **Application menu** (Electron `Menu.buildFromTemplate`): Import backup, Export book backup, Export full library backup, **Sync library with cloud** (when the renderer handles the `sync-library-now` action), Toggle theme, plus standard Edit/View roles.
+- **Application menu** (Electron `Menu.buildFromTemplate`): Import backup, Export book backup, Export full library backup, **Sync library with cloud** (when the renderer handles the `sync-library-now` action), Toggle theme, **Check for updates…** (packaged Windows only), plus standard Edit/View roles.
 - **Keyboard:** `Ctrl/Cmd+O` import, `Ctrl/Cmd+Shift+E` export current book backup, `Ctrl/Cmd+Shift+Y` sync library (same IPC action as menu), `Ctrl/Cmd+Shift+L` toggle theme.
 - **Save dialogs** write **`.inkwell`** for single-book exports (ZIP payload identical to the in-app archive) so **file association** can target a dedicated extension.
 - **Open on launch / second instance:** command-line paths matching `*.inkwell`, `*.inkwell.zip`, or `inkwell-library-backup.zip` are read in the main process and delivered to the renderer as a pending import (single-instance lock + `second-instance` on Windows).
@@ -73,15 +73,17 @@ Google Fonts were removed from `index.html` and the CSP. **Inter** and **Playfai
 
 ## Release hardening: auto-update, signing, CI
 
-### Auto-update
+### Auto-update (implemented)
 
-Recommended path: add **`electron-updater`** (pairs with `electron-builder` publish config). High level:
+Inkwell ships **`electron-updater`** in the **main process** (`electron/main.cjs`) for **packaged Windows** builds:
 
-1. Configure `build.publish` (e.g. GitHub Releases or S3 + YAML update manifest).
-2. In `electron/main.cjs` (main process only), on `app.whenReady`, call `autoUpdater.checkForUpdatesAndNotify()` behind a feature flag for beta channels.
-3. Gate downloads behind HTTPS and verify signatures provided by `electron-updater` / your host.
+- **`package.json`** declares **`repository`** (GitHub URL) and **`build.publish`** with **`provider: "github"`** so `electron-builder` emits **`release/latest.yml`** (and **`*.blockmap`**) next to the NSIS installer. Those files must live on the **same** GitHub Release as the `.exe` (`v<version>` tag matching **`package.json`**).
+- **CI:** **[`desktop-publish-master.yml`](../.github/workflows/desktop-publish-master.yml)** and **[`release-desktop.yml`](../.github/workflows/release-desktop.yml)** verify `latest.yml` exists and upload it (and blockmaps) alongside **`Inkwell Setup <version>.exe`**.
+- **Runtime:** ~12s after the first successful load, the app checks GitHub in the background, **auto-downloads** newer installers, and shows an in-app **“Update ready”** banner with **Restart now** / **Later** once the download finishes. **View → Check for updates…** runs the same check immediately (native dialog if already up to date or on error).
 
-Do **not** run the updater from the renderer; keep trust boundaries in the main process.
+**Not automatic in the sense of the website:** the **web** app updates when Vercel deploys. The **desktop** binary only changes when CI publishes a new installer; users pick it up via this updater (or by re-downloading). Forks should adjust **`package.json` → `repository.url`** if releases live under another org/repo.
+
+Do **not** run the updater from the renderer; IPC bridges are exposed only via **`electron/preload.cjs`**.
 
 ### Windows packaging without Developer Mode
 

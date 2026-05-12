@@ -40,6 +40,16 @@ jobs:
         shell: bash
         run: npm run build:desktop
 
+      - name: Verify latest.yml (Windows NSIS + GitHub publish config)
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        run: |
+          if [ ! -f release/latest.yml ]; then
+            echo "::error::Missing release/latest.yml — add package.json build.publish (GitHub) for electron-updater."
+            ls -la release/ || true
+            exit 1
+          fi
+
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:

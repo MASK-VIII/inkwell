@@ -246,6 +246,105 @@ function sendPendingImportSignal() {
   mainWindow.webContents.send('inkwell-pending-import')
 }
 
+/** @type {import('electron-updater').AppUpdater | null} */
+let inkwellAutoUpdater = null
+
+/** True while the user asked for an explicit check (shows native dialogs on no update / errors). */
+let manualInkwellUpdateCheck = false
+
+/** True after `setupInkwellAutoUpdater` registered listeners (single global `autoUpdater`). */
+let inkwellAutoUpdaterSetupDone = false
+
+/**
+ * GitHub Releases auto-update (NSIS). CI must attach `latest.yml` + `.blockmap` next to the installer
+ * on the same `v{version}` release (see docs/DESKTOP.md).
+ */
+function setupInkwellAutoUpdater() {
+  if (inkwellAutoUpdaterSetupDone) return
+  if (isDev || !app.isPackaged || process.platform !== 'win32') return
+
+  let autoUpdater
+  try {
+    ;({ autoUpdater } = require('electron-updater'))
+  } catch (e) {
+    console.warn('[inkwell] electron-updater unavailable', e)
+    return
+  }
+
+  inkwellAutoUpdater = autoUpdater
+  autoUpdater.autoDownload = true
+  autoUpdater.autoInstallOnAppQuit = true
+
+  /** @param {unknown} payload */
+  const send = (payload) => {
+    const win = mainWindow
+    if (!win || win.isDestroyed()) return
+    try {
+      win.webContents.send('inkwell:auto-update', payload)
+    } catch {
+      /* ignore */
+    }
+  }
+
+  autoUpdater.on('checking-for-update', () => {
+    send({ kind: 'checking' })
+  })
+
+  autoUpdater.on('update-available', (info) => {
+    send({ kind: 'available', version: String(info?.version ?? '') })
+  })
+
+  autoUpdater.on('update-not-available', async () => {
+    send({ kind: 'not-available' })
+    if (manualInkwellUpdateCheck) {
+      manualInkwellUpdateCheck = false
+      try {
+        await dialog.showMessageBox(mainWindow ?? undefined, {
+          type: 'info',
+          message: 'You are on the latest Inkwell.',
+          buttons: ['OK'],
+        })
+      } catch {
+        /* ignore */
+      }
+    }
+  })
+
+  autoUpdater.on('error', async (err) => {
+    const message = err instanceof Error ? err.message : String(err)
+    send({ kind: 'error', message })
+    if (manualInkwellUpdateCheck) {
+      manualInkwellUpdateCheck = false
+      try {
+        await dialog.showMessageBox(mainWindow ?? undefined, {
+          type: 'warning',
+          title: 'Update check failed',
+          message: 'Could not reach the update server.',
+          detail: message,
+          buttons: ['OK'],
+        })
+      } catch {
+        /* ignore */
+      }
+    }
+  })
+
+  autoUpdater.on('download-progress', (p) => {
+    send({ kind: 'progress', percent: typeof p.percent === 'number' ? p.percent : 0 })
+  })
+
+  autoUpdater.on('update-downloaded', (info) => {
+    send({ kind: 'downloaded', version: String(info?.version ?? '') })
+  })
+
+  // Defer so first paint + auth/storage are not contending with GitHub on cold start.
+  setTimeout(() => {
+    void autoUpdater.checkForUpdates().catch(() => {})
+  }, 12_000)
+
+  inkwellAutoUpdaterSetupDone = true
+}
+
 /**
  * @param {BrowserWindow} win
  */
@@ -331,6 +430,20 @@ function buildAppMenu(win) {
         { role: 'zoomOut' },
         { type: 'separator' },
         { role: 'togglefullscreen' },
+        ...(app.isPackaged && process.platform === 'win32' ?
+          [
+            { type: 'separator' },
+            {
+              label: 'Check for updates…',
+              click: () => {
+                if (!mainWindow || mainWindow.isDestroyed()) return
+                if (!inkwellAutoUpdater) return
+                manualInkwellUpdateCheck = true
+                void inkwellAutoUpdater.checkForUpdates().catch(() => {})
+              },
+            },
+          ]
+        : []),
       ],
     },
   ]
@@ -390,6 +503,10 @@ function createWindow() {
         void shell.openExternal(url)
       }
     }
+  })
+
+  mainWindow.webContents.once('did-finish-load', () => {
+    setupInkwellAutoUpdater()
   })
 
   buildAppMenu(mainWindow)
@@ -507,6 +624,31 @@ function registerIpcHandlers() {
     if (!(ab instanceof ArrayBuffer)) return { ok: false }
     await fs.promises.writeFile(r.filePath, Buffer.from(ab))
     return { ok: true, path: r.filePath }
+  })
+
+  ipcMain.handle('inkwell:auto-update-check', async (event) => {
+    assertTrustedSender(event)
+    if (isDev || !app.isPackaged || process.platform !== 'win32') return { ok: false, reason: 'unsupported' }
+    if (!inkwellAutoUpdater) return { ok: false, reason: 'not-ready' }
+    manualInkwellUpdateCheck = true
+    try {
+      const r = await inkwellAutoUpdater.checkForUpdates()
+      return { ok: true, version: r?.updateInfo?.version ?? null }
+    } catch (e) {
+      manualInkwellUpdateCheck = false
+      return { ok: false, message: e instanceof Error ? e.message : String(e) }
+    }
+  })
+
+  ipcMain.handle('inkwell:auto-update-quit-install', (event) => {
+    assertTrustedSender(event)
+    if (!inkwellAutoUpdater) return { ok: false }
+    try {
+      inkwellAutoUpdater.quitAndInstall(false, true)
+      return { ok: true }
+    } catch (e) {
+      return { ok: false, message: e instanceof Error ? e.message : String(e) }
+    }
   })
 }
 

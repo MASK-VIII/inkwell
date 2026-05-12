@@ -23,4 +23,15 @@ contextBridge.exposeInMainWorld('inkwellDesktop', {
     ipcRenderer.on('inkwell-pending-import', listener)
     return () => ipcRenderer.removeListener('inkwell-pending-import', listener)
   },
+  updates: {
+    check: () => ipcRenderer.invoke('inkwell:auto-update-check'),
+    quitAndInstall: () => ipcRenderer.invoke('inkwell:auto-update-quit-install'),
+    onStatus: (handler) => {
+      const listener = (_event, payload) => {
+        handler(payload)
+      }
+      ipcRenderer.on('inkwell:auto-update', listener)
+      return () => ipcRenderer.removeListener('inkwell:auto-update', listener)
+    },
+  },
 })

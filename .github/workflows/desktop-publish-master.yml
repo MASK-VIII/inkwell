@@ -112,6 +112,16 @@ jobs:
           fi
           ls -la "$F"
 
+      - name: Verify electron-updater metadata (latest.yml)
+        if: ${{ steps.gate.outputs.publish == 'true' }}
+        shell: bash
+        run: |
+          if [ ! -f release/latest.yml ]; then
+            echo "::error::Missing release/latest.yml — electron-updater needs this on the GitHub release (see package.json build.publish)."
+            ls -la release/ || true
+            exit 1
+          fi
+
       - name: Create or update GitHub Release asset
         if: ${{ steps.gate.outputs.publish == 'true' }}
         shell: bash
@@ -132,6 +142,16 @@ jobs:
               --generate-notes \
               --latest
           fi
+          if [ ! -f release/latest.yml ]; then
+            echo "::error::Missing release/latest.yml — electron-updater requires this asset."
+            ls -la release/ || true
+            exit 1
+          fi
+          gh release upload "$TAG" release/latest.yml --clobber
+          shopt -s nullglob
+          for f in release/*.blockmap; do
+            gh release upload "$TAG" "$f" --clobber
+          done
 
       - name: Trigger Vercel production deploy (optional)
         if: ${{ steps.gate.outputs.publish == 'true' }}
