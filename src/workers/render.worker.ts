@@ -12,12 +12,13 @@ import {
   groupPrintPreviewPagesByChapter,
   paginateChapterWithFont,
   paginateSpineWithFont,
-  resolvedPrintSpineManuscriptsForExport,
+  resolvePrintSpineLayoutForExport,
   resolvePrintTitleFontId,
   trimTrailingBlankPrintPage,
   type PrintLayoutKind,
   type PrintPage,
 } from '../lib/print/paginate'
+import { computePrintLayoutBasisKey } from '../lib/print/printLayoutBasis'
 
 type RenderEbookJob = {
   kind: 'renderEbook'
@@ -50,6 +51,8 @@ type ResolvePrintSpineJob = {
   rev: number
   project: InkwellProject
   meta: { bookTitle: string; authorName: string }
+  /** Live print theme (format workspace); must match `computePrintLayoutBasisKey(project, theme)` on the main thread. */
+  theme: Theme
 }
 
 type PaginatePrintSpineJob = {
@@ -104,6 +107,10 @@ type PrintSpineResult = {
   kind: 'printSpineResult'
   rev: number
   spine: Manuscript[]
+  layoutSeed?: {
+    layoutBasisKey: string
+    chapters: Array<{ chapterId: number; pages: PrintPage[] }>
+  }
 }
 
 type PrintSpinePagesResult = {
@@ -159,13 +166,18 @@ function touchLru<K, V>(map: Map<K, V>, key: K, value: V, maxSize: number): void
   }
 }
 
-function printSpineCacheKey(project: InkwellProject, meta: { bookTitle: string; authorName: string }): string {
+function printSpineCacheKey(
+  project: InkwellProject,
+  meta: { bookTitle: string; authorName: string },
+  printOverride?: Theme['print'],
+): string {
+  const print = printOverride ?? project.theme.print
   return hashStringDjb2(
     safeStringify({
       id: project.id,
       meta,
       assembly: project.assembly,
-      print: project.theme.print,
+      print,
       chapters: project.chapters.map((c) => ({
         id: c.id,
         title: c.title,
@@ -317,10 +329,16 @@ self.onmessage = async (ev: MessageEvent<WorkerRequest>) => {
     }
 
     if (req.kind === 'resolvePrintSpine') {
-      const ck = printSpineCacheKey(req.project, req.meta)
+      const ck = printSpineCacheKey(req.project, req.meta, req.theme.print)
       let spine = printSpineCache.get(ck)
+      let layoutSeed:
+        | {
+            layoutBasisKey: string
+            chapters: Array<{ chapterId: number; pages: PrintPage[] }>
+          }
+        | undefined
       if (!spine) {
-        const titleFontId = resolvePrintTitleFontId(req.project.theme.print)
+        const titleFontId = resolvePrintTitleFontId(req.theme.print)
         const {
           body,
           title,
@@ -329,8 +347,8 @@ self.onmessage = async (ev: MessageEvent<WorkerRequest>) => {
           bodyBoldItalic,
           bodyBoldIsSynthetic,
           bodyItalicIsSynthetic,
-        } = await getPrintFontPairForMeasurement(req.project.theme.print.bodyFontId, titleFontId)
-        spine = await resolvedPrintSpineManuscriptsForExport(
+        } = await getPrintFontPairForMeasurement(req.theme.print.bodyFontId, titleFontId)
+        const { finalSpine, pages } = await resolvePrintSpineLayoutForExport(
           req.project,
           {
             body,
@@ -342,12 +360,27 @@ self.onmessage = async (ev: MessageEvent<WorkerRequest>) => {
             bodyItalicIsSynthetic,
           },
           req.meta,
+          req.theme,
         )
+        spine = finalSpine
         touchLru(printSpineCache, ck, spine, MAX_PRINT_SPINE_CACHE)
+
+        if (req.project.assembly.includePrintToc && pages.length > 0) {
+          const layoutBasisKey = computePrintLayoutBasisKey(req.project, req.theme)
+          const grouped = groupPrintPreviewPagesByChapter(spine, pages)
+          const chapters = spine.map((m) => ({ chapterId: m.id, pages: grouped.get(m.id) ?? [] }))
+          const flat: PrintPage[] = []
+          for (const m of spine) {
+            flat.push(...(grouped.get(m.id) ?? []))
+          }
+          const trimmed = trimTrailingBlankPrintPage(flat)
+          touchLru(printLayoutPaginatedCache, layoutBasisKey, trimmed, MAX_PRINT_LAYOUT_PAGES_CACHE)
+          layoutSeed = { layoutBasisKey, chapters }
+        }
       } else {
         touchLru(printSpineCache, ck, spine, MAX_PRINT_SPINE_CACHE)
       }
-      post({ kind: 'printSpineResult', rev: req.rev, spine })
+      post({ kind: 'printSpineResult', rev: req.rev, spine, layoutSeed })
       return
     }
 

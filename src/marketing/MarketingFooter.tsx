@@ -11,7 +11,7 @@ export function MarketingFooter() {
           <div>
             <p className="font-serif text-lg text-ink dark:text-ink-dark">Inkwell</p>
             <p className="mt-2 text-sm leading-relaxed text-walnut/80 dark:text-ink-dark/80">
-              Draft, format, publish—chapter-first writing for new authors and seasoned novelists. Beta.
+              Draft, format, publish—chapter-first writing for new authors and seasoned novelists. 1.0 · solo-built.
             </p>
           </div>
 

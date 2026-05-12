@@ -70,13 +70,13 @@ export function PrivacyPage() {
       title="Privacy"
       pageTitle={'Privacy \u2014 Inkwell'}
       canonicalPath="/privacy"
-      metaDescription="Inkwell privacy policy: how we handle manuscripts, account data, cloud sync, and payments during early access and beyond. We do not sell your data or train AI on your writing."
+      metaDescription="Inkwell privacy policy: how we handle manuscripts, account data, cloud sync, and payments as Inkwell evolves. We do not sell your data or train AI on your writing."
       ogDescription="Read how Inkwell treats local manuscripts vs optional cloud backup, what auth and billing providers see, and what we do not do with your work."
       lastUpdated="Last updated: May 7, 2026"
     >
       <p>
-        This policy describes how Inkwell handles information during early access and after general
-        availability. We may update it as features evolve; the date at the top reflects the latest revision.
+        This policy describes how Inkwell handles information for Inkwell 1.0 and future updates. We may
+        update it as features evolve; the date at the top reflects the latest revision.
       </p>
 
       <h2>What Inkwell stores</h2>
@@ -128,15 +128,14 @@ export function RefundPage() {
       lastUpdated="Last updated: May 7, 2026"
     >
       <p>
-        This refund policy applies during Inkwell’s early access period and stays the same after
-        general availability—unless we post an update here (the date above shows the latest
-        revision).
+        This refund policy applies to qualifying Basic and Pro one-time purchases. It stays in effect
+        unless we post an update here (the date above shows the latest revision).
       </p>
 
       <h2>Before you purchase</h2>
       <p>
-        Inkwell is digital software. Please review the feature list and early-access messaging on the
-        site before completing a purchase so you know what Basic and Pro unlock.
+        Inkwell is digital software. Please review the feature list and pricing on the site before
+        completing a purchase so you know what Basic and Pro unlock.
       </p>
 
       <h2>30-day refund window</h2>
@@ -171,19 +170,19 @@ export function TermsPage() {
       title="Terms of use"
       pageTitle={'Terms \u2014 Inkwell'}
       canonicalPath="/terms"
-      metaDescription="Inkwell terms of use: your rights to your manuscripts, acceptable use, cloud backup limits, and how the product may change during early access and beyond."
-      ogDescription="Terms covering early access, content ownership, acceptable use, and cloud backup limits on Basic and Pro as Inkwell grows."
+      metaDescription="Inkwell terms of use: your rights to your manuscripts, acceptable use, cloud backup limits, and how the product may change as Inkwell evolves."
+      ogDescription="Terms covering product updates, content ownership, acceptable use, and cloud backup limits on Basic and Pro as Inkwell grows."
       lastUpdated="Last updated: May 7, 2026"
     >
       <p>
-        These terms apply during Inkwell’s early access period and after general availability. We may
-        update them as the product matures; the date at the top reflects the latest revision.
+        These terms apply to Inkwell 1.0 and future updates. We may update them as the product matures;
+        the date at the top reflects the latest revision.
       </p>
 
-      <h2>Early access</h2>
+      <h2>Product updates</h2>
       <p>
-        Inkwell is shipping under an early access label while we iterate quickly. Features may change,
-        and there may be occasional bugs. Please keep your own backups while we polish the edges.
+        Inkwell is maintained by a solo founder. Features may evolve, and occasional bugs are possible.
+        Please keep your own backups and check the public roadmap for what is planned next.
       </p>
 
       <h2>Your work, your rights</h2>

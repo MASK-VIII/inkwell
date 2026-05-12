@@ -14,13 +14,39 @@ export function HeroSection({ darkMode = false }: { darkMode?: boolean }) {
       <div className="mx-auto grid max-w-6xl items-center gap-12 px-5 py-16 sm:gap-14 sm:px-8 sm:py-28 lg:grid-cols-[1.05fr_1fr] lg:gap-16">
         <div className="flex flex-col gap-7">
           <p className="text-xs font-medium uppercase tracking-[0.18em] text-walnut/75 dark:text-ink-dark/60">
-            Inkwell &nbsp;&middot;&nbsp; early access
+            Inkwell 1.0
           </p>
           <h1 className="font-serif text-4xl leading-[1.05] text-ink sm:text-5xl lg:text-6xl dark:text-ink-dark">
             Draft. Format. Publish.
           </h1>
           <p className="max-w-xl text-lg leading-relaxed text-walnut/90 dark:text-ink-dark/82">
-            Draft in a calm, type-led workspace; refine layout when you are ready; export when the manuscript is finished—the same arc whether it is your first book or your fifth. Built for offline novel writing and self-publishing: EPUB for Kindle and other stores on Basic, print-ready PDF and DOCX on Pro. Chapters, revisions, and notes stay together all the way through. Start writing locally for free with no sign-up—open the app and go. Paid tiers unlock exports (see pricing).
+            A local-first workspace for long-form fiction: stay in the draft, preview print and ebook layouts, then export—without stacking another subscription.
+          </p>
+          <ul className="max-w-xl space-y-2 text-base leading-relaxed text-walnut/90 dark:text-ink-dark/82">
+            <li className="flex gap-2.5">
+              <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-walnut/50 dark:bg-accent-warm/70" aria-hidden />
+              <span>
+                <span className="font-medium text-ink dark:text-ink-dark">Start free, no signup</span>
+                —full chapter-first writing on your device until you choose paid cloud or exports.
+              </span>
+            </li>
+            <li className="flex gap-2.5">
+              <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-walnut/50 dark:bg-accent-warm/70" aria-hidden />
+              <span>
+                <span className="font-medium text-ink dark:text-ink-dark">Basic</span>
+                —sync + backup + EPUB when you are ready to publish digitally.
+              </span>
+            </li>
+            <li className="flex gap-2.5">
+              <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-walnut/50 dark:bg-accent-warm/70" aria-hidden />
+              <span>
+                <span className="font-medium text-ink dark:text-ink-dark">Pro (intro pricing)</span>
+                —full export suite and deeper formatting for print and submissions.
+              </span>
+            </li>
+          </ul>
+          <p className="max-w-xl text-sm leading-relaxed text-walnut/78 dark:text-ink-dark/70">
+            Inkwell 1.0 is built and supported by one person—human support, fast fixes when edge cases show up, and a 30-day refund on paid tiers if it is not the right fit.
           </p>
           <div className="flex flex-wrap items-center gap-4 pt-2">
             <a

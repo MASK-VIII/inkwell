@@ -1492,8 +1492,10 @@ async function paginatePrintExportInner(
   project: InkwellProject,
   fonts: PrintFontPair,
   ctx?: PrintLayoutContext,
+  /** When set (e.g. format preview), paginate with this theme while still reading manuscript data from `project`. */
+  layoutTheme?: Theme,
 ): Promise<{ pages: PrintPage[]; finalSpine: Manuscript[] }> {
-  const theme = project.theme
+  const theme = layoutTheme ?? project.theme
   const spine = printSpineBaseForExport(project)
   if (!project.assembly.includePrintToc) {
     const pages = await paginateSpineWithFont(spine, theme, fonts, ctx)
@@ -1521,16 +1523,27 @@ async function paginatePrintExportInner(
   return { pages, finalSpine }
 }
 
+/** Spine + flat pages from TOC convergence (or a single pass when TOC is off). */
+export async function resolvePrintSpineLayoutForExport(
+  project: InkwellProject,
+  fontOrPair: FontMeasurer | PrintFontPair,
+  ctx?: PrintLayoutContext,
+  layoutTheme?: Theme,
+): Promise<{ finalSpine: Manuscript[]; pages: PrintPage[] }> {
+  const fonts: PrintFontPair = isFontPair(fontOrPair)
+    ? fontOrPair
+    : { body: fontOrPair, title: fontOrPair }
+  return paginatePrintExportInner(project, fonts, ctx, layoutTheme)
+}
+
 /** Manuscript spine used for PDF export and print preview (includes converged synthetic TOC when enabled). */
 export async function resolvedPrintSpineManuscriptsForExport(
   project: InkwellProject,
   fontOrPair: FontMeasurer | PrintFontPair,
   ctx?: PrintLayoutContext,
+  layoutTheme?: Theme,
 ): Promise<Manuscript[]> {
-  const fonts: PrintFontPair = isFontPair(fontOrPair)
-    ? fontOrPair
-    : { body: fontOrPair, title: fontOrPair }
-  const { finalSpine } = await paginatePrintExportInner(project, fonts, ctx)
+  const { finalSpine } = await resolvePrintSpineLayoutForExport(project, fontOrPair, ctx, layoutTheme)
   return finalSpine
 }
 
@@ -1539,11 +1552,12 @@ export async function paginateProjectForPrintExport(
   project: InkwellProject,
   fontOrPair: FontMeasurer | PrintFontPair,
   ctx?: PrintLayoutContext,
+  layoutTheme?: Theme,
 ): Promise<PrintPage[]> {
   const fonts: PrintFontPair = isFontPair(fontOrPair)
     ? fontOrPair
     : { body: fontOrPair, title: fontOrPair }
-  const { pages } = await paginatePrintExportInner(project, fonts, ctx)
+  const { pages } = await paginatePrintExportInner(project, fonts, ctx, layoutTheme)
   return trimTrailingBlankPrintPage(pages)
 }
 

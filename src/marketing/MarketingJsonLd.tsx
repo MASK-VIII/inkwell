@@ -52,7 +52,7 @@ export function MarketingJsonLd() {
             name: 'Inkwell Pro',
             price: pro,
             priceCurrency: 'USD',
-            description: 'One-time purchase early access: full export suite including PDF and DOCX.',
+            description: 'One-time purchase (intro pricing): full export suite including PDF and DOCX.',
           },
         ],
       },

@@ -201,13 +201,13 @@ Workflow **[`.github/workflows/release-desktop.yml`](../.github/workflows/releas
 
 **Release routine**
 
-1. Bump **`version`** in `package.json` (semver, e.g. `0.8.0`).
+1. Bump **`version`** in `package.json` (semver, e.g. `1.0.0`).
 2. Commit and push to **`master`** (or your production branch) so **Vercel** runs **`npm run build`** and the site embeds the new download URL.
 3. Create and push an **annotated or lightweight tag** whose semver matches `package.json` **exactly** (leading `v` only):
 
    ```bash
-   git tag v0.8.0   # must match package.json 0.8.0
-   git push origin v0.8.0
+   git tag v1.0.0   # must match package.json 1.0.0
+   git push origin v1.0.0
    ```
 
    The workflow verifies the tag matches `package.json`; then it runs **`npm run build:desktop`** on `windows-latest` and publishes **`release/Inkwell Setup <version>.exe`** to a GitHub Release.

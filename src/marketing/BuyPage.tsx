@@ -24,7 +24,7 @@ type BuyTile = {
   price: string
   compareAtPrice?: string
   badge?: string
-  /** Shown under the price (e.g. One-time, Early access); separate from the featured corner pill. */
+  /** Shown under the price (e.g. One-time, Intro pricing); separate from the featured corner pill. */
   priceNote?: string
   forWhom: string
   bullets: string[]
@@ -65,9 +65,9 @@ const TILES: BuyTile[] = [
     price: INKWELL_DISPLAY_PRICE_PRO,
     compareAtPrice: INKWELL_DISPLAY_PRICE_PRO_LIST,
     badge: 'Best value',
-    priceNote: 'Early access',
+    priceNote: 'Intro pricing',
     forWhom:
-      'For authors who want every export format, advanced layout control, and a toolchain that keeps up with a serious publishing workflow.',
+      'When you need every export format and print-ready layout—not just ebook.',
     bullets: [
       `Everything in Basic, including higher backup space (up to ${CLOUD_LIMIT_PRO_DISPLAY})`,
       'Full export suite (PDF / DOCX / Markdown / plain text)',

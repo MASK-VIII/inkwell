@@ -85,10 +85,11 @@ function beginResolvePrintSpine(
   pending: Map<number, (msg: PrintWorkerCompletionMsg) => void>,
   project: InkwellProject,
   meta: { bookTitle: string; authorName: string },
-): { rev: number; promise: Promise<Manuscript[]>; abort: () => void } {
+  theme: Theme,
+): { rev: number; promise: Promise<PrintSpineResultMsg>; abort: () => void } {
   const rev = nextWorkerRev()
   let rejectOuter: ((reason?: unknown) => void) | undefined
-  const promise = new Promise<Manuscript[]>((resolve, reject) => {
+  const promise = new Promise<PrintSpineResultMsg>((resolve, reject) => {
     rejectOuter = reject
     pending.set(rev, (msg) => {
       pending.delete(rev)
@@ -100,9 +101,9 @@ function beginResolvePrintSpine(
         reject(new Error('Unexpected worker response'))
         return
       }
-      resolve(msg.spine)
+      resolve(msg)
     })
-    sendWorker({ kind: 'resolvePrintSpine', rev, project, meta })
+    sendWorker({ kind: 'resolvePrintSpine', rev, project, meta, theme })
   })
   const abort = () => {
     pending.delete(rev)
@@ -209,6 +210,8 @@ export function PrintReview({
 
   const viewportRef = useRef<HTMLDivElement>(null)
   const pendingHandlers = useRef(new Map<number, (msg: PrintWorkerCompletionMsg) => void>())
+  /** When TOC resolve already produced full pagination, skip duplicate `paginatePrintSpine` if basis key matches. */
+  const resolveLayoutSeedRef = useRef<{ basisKey: string; chapters: Map<number, PrintPage[]> } | null>(null)
   const layoutEpochRef = useRef(0)
   const pendingPageIndexRef = useRef<number | null>(null)
   const [localChapterId, setLocalChapterId] = useState<number | null>(null)
@@ -329,11 +332,21 @@ export function PrintReview({
           }
           return
         }
-        const begun = beginResolvePrintSpine(pendingHandlers.current, project, meta)
+        const begun = beginResolvePrintSpine(pendingHandlers.current, project, meta, theme)
         abortSpine = begun.abort
-        const spine = await begun.promise
+        const result = await begun.promise
         if (!cancelled) {
-          setLayoutSpine(spine)
+          if (result.layoutSeed) {
+            const m = new Map<number, PrintPage[]>()
+            for (const row of result.layoutSeed.chapters) m.set(row.chapterId, row.pages)
+            resolveLayoutSeedRef.current = {
+              basisKey: result.layoutSeed.layoutBasisKey,
+              chapters: m,
+            }
+          } else {
+            resolveLayoutSeedRef.current = null
+          }
+          setLayoutSpine(result.spine)
           setSpineReady(true)
         }
       } catch (e) {
@@ -347,6 +360,7 @@ export function PrintReview({
     })()
     return () => {
       cancelled = true
+      resolveLayoutSeedRef.current = null
       abortSpine?.()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- debounced theme limits worker churn while TOC converges
@@ -445,6 +459,20 @@ export function PrintReview({
     if (layoutSpine.length === 0) return
 
     let cancelled = false
+
+    const seed = resolveLayoutSeedRef.current
+    if (seed) {
+      if (seed.basisKey === layoutBasisKey) {
+        resolveLayoutSeedRef.current = null
+        setChapterPages(new Map(seed.chapters))
+        setAppliedFullLayoutBasisKey(layoutBasisKey)
+        return () => {
+          cancelled = true
+        }
+      }
+      resolveLayoutSeedRef.current = null
+    }
+
     const inflightLocal = new Set<number>()
     const pagesLocal = new Map<number, PrintPage[]>()
 

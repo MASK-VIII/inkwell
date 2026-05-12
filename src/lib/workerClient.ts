@@ -41,6 +41,7 @@ type ResolvePrintSpineReq = {
   rev: number
   project: InkwellProject
   meta: { bookTitle: string; authorName: string }
+  theme: Theme
 }
 
 type PaginatePrintSpineReq = {
@@ -96,6 +97,11 @@ export type PrintSpineResultMsg = {
   kind: 'printSpineResult'
   rev: number
   spine: Manuscript[]
+  /** When present, matches `computePrintLayoutBasisKey(project, theme)` so preview can skip a duplicate full-book pagination. */
+  layoutSeed?: {
+    layoutBasisKey: string
+    chapters: Array<{ chapterId: number; pages: PrintPage[] }>
+  }
 }
 
 export type PrintSpinePagesResultMsg = {

@@ -6,7 +6,8 @@ import { HowItWorksSection } from './HowItWorksSection'
 import { MarketingFooter } from './MarketingFooter'
 import { MarketingJsonLd } from './MarketingJsonLd'
 import { MarketingNav } from './MarketingNav'
-import { HOME_META_DESCRIPTION, HOME_OG_DESCRIPTION } from './marketingSeoConstants'
+import { PhWorkflowStrip } from './PhWorkflowStrip'
+import { HOME_META_DESCRIPTION, HOME_OG_DESCRIPTION, HOME_OG_IMAGE } from './marketingSeoConstants'
 import { PricingSection } from './PricingSection'
 import { ScreenshotsSection } from './ScreenshotsSection'
 import { useMarketingDarkMode } from './useMarketingDarkMode'
@@ -24,6 +25,7 @@ export function MarketingPage() {
     canonicalPath: '/',
     metaDescription: HOME_META_DESCRIPTION,
     ogDescription: HOME_OG_DESCRIPTION,
+    ogImage: HOME_OG_IMAGE,
   })
 
   return (
@@ -31,6 +33,7 @@ export function MarketingPage() {
       <MarketingJsonLd />
       <MarketingNav darkMode={darkMode} onToggleDarkMode={toggle} />
       <HeroSection darkMode={darkMode} />
+      <PhWorkflowStrip />
       <FeaturesSection />
       <HowItWorksSection />
       <ScreenshotsSection darkMode={darkMode} />

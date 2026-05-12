@@ -11,7 +11,7 @@ import type {
   WritingGoals,
 } from '../types'
 import { coerceInkwellFontId } from './fonts/fontCatalog'
-import { isThemePresetId } from './themePresets'
+import { applyThemePreset, isThemePresetId } from './themePresets'
 import {
   coerceChapterTitleStyleId,
   defaultBookAssembly,
@@ -352,12 +352,24 @@ function normalizeStoredTheme(parsedTheme: Partial<Theme> | undefined): Theme {
     }
   }
 
-  return {
+  let themeOut: Theme = {
     print,
     ebook,
     ...(lastPrintInteriorPresetId !== undefined ? { lastPrintInteriorPresetId } : {}),
     ...(lastEbookInteriorPresetId !== undefined ? { lastEbookInteriorPresetId } : {}),
   }
+
+  /**
+   * Books saved before `lastPrintInteriorPresetId` (or with an invalid preset string) can carry
+   * legacy `print` keys from older merges. Choosing "Trade default" in Format resets print to
+   * `defaultTheme().print` while preserving trim + body font — mirror that when no valid print
+   * preset is stored so KDP PDF picks up bold/italic like the preview without a preset toggle.
+   */
+  if (lastPrintInteriorPresetId === undefined) {
+    themeOut = applyThemePreset(themeOut, 'trade_default', 'print')
+  }
+
+  return themeOut
 }
 
 function normalizeProjectV3(parsed: Partial<InkwellProject>, id: string): InkwellProject {

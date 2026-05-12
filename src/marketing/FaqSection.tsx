@@ -13,6 +13,11 @@ type Qa = {
 
 const FAQ: Qa[] = [
   {
+    q: 'How mature is Inkwell right now?',
+    a:
+      'Inkwell 1.0 is built and supported by one person—the core writing loop (projects, chapters, notes, formatting previews, and exports) is stable in daily use. Edge cases still surface; fixes ship quickly and a public roadmap shows what is next. Paid tiers include a 30-day refund so you can judge honestly.',
+  },
+  {
     q: 'Is Inkwell only for beginners?',
     a:
       'No. Free gives everyone the same chapter-first workspace—ideal when you are starting out—while Basic and Pro add cloud backup and publishing exports for authors deep in revisions or shipping multiple books. Everything stays offline-capable on every tier.',
@@ -38,8 +43,8 @@ const FAQ: Qa[] = [
     a: 'Because Inkwell is built by one developer. Paid exports keep the lights on and the updates coming.',
   },
   {
-    q: 'What happens to pricing after early access?',
-    a: `Pro lists at ${INKWELL_DISPLAY_PRICE_PRO_LIST} for new purchases once early access ends. If you buy Pro during early access (${INKWELL_DISPLAY_PRICE_PRO}), you keep lifetime Pro at that tier—your purchase is grandfathered. Basic remains ${INKWELL_DISPLAY_PRICE_BASIC} for new buyers; if you already bought Basic, nothing changes for your license.`,
+    q: 'What happens to Pro pricing after intro pricing ends?',
+    a: `New Pro purchases list at ${INKWELL_DISPLAY_PRICE_PRO_LIST} once intro pricing ends. If you buy Pro at intro (${INKWELL_DISPLAY_PRICE_PRO}), you keep lifetime Pro at that tier—your purchase is grandfathered. Basic remains ${INKWELL_DISPLAY_PRICE_BASIC} for new buyers; if you already bought Basic, nothing changes for your license.`,
   },
   {
     q: 'What is your refund policy?',

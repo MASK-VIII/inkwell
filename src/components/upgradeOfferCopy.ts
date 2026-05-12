@@ -27,7 +27,7 @@ export function upgradeOfferBodyFor(intent: UpgradeOfferIntent): string {
       return `Move from Basic to Pro for ${INKWELL_DISPLAY_PRICE_BASIC_TO_PRO} (one-time upgrade). Continue to checkout to complete your upgrade.`
     case 'pro':
     default:
-      return `Pro (${INKWELL_DISPLAY_PRICE_PRO} early access) unlocks the full export suite (PDF, DOCX, archives, and more) and higher cloud backup (up to ${CLOUD_LIMIT_PRO_DISPLAY}). Continue to secure checkout when you are ready.`
+      return `Pro (${INKWELL_DISPLAY_PRICE_PRO} intro pricing) unlocks the full export suite (PDF, DOCX, archives, and more) and higher cloud backup (up to ${CLOUD_LIMIT_PRO_DISPLAY}). Continue to secure checkout when you are ready.`
   }
 }
 

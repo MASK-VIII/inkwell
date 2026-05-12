@@ -365,7 +365,7 @@ export function defaultTheme(): Theme {
       lineHeight: 1.5,
       hyphenation: true,
       pageNumbers: 'footerCenter',
-      chapterStartsOn: 'right',
+      chapterStartsOn: 'either',
       chapterOpener: 'titleOnly',
       chapterTitleStyleId: 'inherit',
       avoidShortParagraphSplit: true,
