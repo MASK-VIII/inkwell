@@ -256,8 +256,8 @@ let manualInkwellUpdateCheck = false
 let inkwellAutoUpdaterSetupDone = false
 
 /**
- * GitHub Releases auto-update (NSIS). CI must attach `latest.yml` + `.blockmap` next to the installer
- * on the same `v{version}` release (see docs/DESKTOP.md).
+ * GitHub Releases auto-update (NSIS). CI must attach `latest.yml` next to the installer on the same
+ * `v{version}` release (see docs/DESKTOP.md). Full installer downloads only (no differential/blockmap).
  */
 function setupInkwellAutoUpdater() {
   if (inkwellAutoUpdaterSetupDone) return
@@ -274,6 +274,8 @@ function setupInkwellAutoUpdater() {
   inkwellAutoUpdater = autoUpdater
   autoUpdater.autoDownload = true
   autoUpdater.autoInstallOnAppQuit = true
+  // Hand-generated `latest.yml` (see scripts/write-nsis-latest-yml.mjs) omits embedded block-map metadata.
+  autoUpdater.disableDifferentialDownload = true
 
   /** @param {unknown} payload */
   const send = (payload) => {

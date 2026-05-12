@@ -62,3 +62,12 @@ try {
     }
   }
 }
+
+const meta = spawnSync(process.execPath, [join(root, 'scripts', 'write-nsis-latest-yml.mjs')], {
+  cwd: root,
+  stdio: 'inherit',
+  env: process.env,
+})
+if (meta.status !== 0) {
+  process.exit(meta.status ?? 1)
+}
