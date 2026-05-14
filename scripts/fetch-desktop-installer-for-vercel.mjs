@@ -80,6 +80,12 @@ function normalizeInstallerFilename(s) {
   return s.replace(/\s+/g, ' ').trim()
 }
 
+/** True if filename ends with ` Setup <version>.exe` (case-insensitive). Avoids `1.0.0` matching `10.0.0`. */
+function exeEndsWithSetupVersion(name, semver) {
+  const suffix = ` Setup ${semver}.exe`
+  return name.toLowerCase().endsWith(suffix.toLowerCase())
+}
+
 /**
  * @param {{ name?: string; url?: string }[]} assets
  * @returns {{ asset: { name?: string; url?: string } | null; hint: string }}
@@ -103,7 +109,7 @@ function pickInstallerAsset(assets, expectedName, semver) {
   hit = exes.find((a) => (a.name ?? '').toLowerCase() === expectedName.toLowerCase())
   if (hit) return { asset: hit, hint: '' }
 
-  const versionHits = exes.filter((a) => (a.name ?? '').includes(semver) && /setup/i.test(a.name ?? ''))
+  const versionHits = exes.filter((a) => exeEndsWithSetupVersion(a.name ?? '', semver))
   if (versionHits.length === 1) return { asset: versionHits[0], hint: '' }
 
   return {
@@ -191,6 +197,11 @@ async function main() {
       console.warn(
         `[fetch-desktop-installer] release ${tag} not ready yet (attempt ${attempt}/${maxAttempts}); retrying in ${delayMs / 1000}s…`,
       )
+      if (attempt === 1) {
+        console.warn(
+          '[fetch-desktop-installer] hint: tag is created when **Publish desktop installer (master)** or **Release desktop (Windows)** uploads the NSIS asset; this Vercel build will wait up to ~15m then try GET /releases/latest.',
+        )
+      }
       await sleep(delayMs)
       continue
     }

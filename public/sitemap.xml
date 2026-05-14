@@ -8,12 +8,12 @@
   <url>
     <loc>https://inkwell.enterthelimelight.com/pricing</loc>
     <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
+    <priority>0.85</priority>
   </url>
   <url>
     <loc>https://inkwell.enterthelimelight.com/buy</loc>
     <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
+    <priority>0.85</priority>
   </url>
   <url>
     <loc>https://inkwell.enterthelimelight.com/privacy</loc>
@@ -34,5 +34,60 @@
     <loc>https://inkwell.enterthelimelight.com/changelog</loc>
     <changefreq>weekly</changefreq>
     <priority>0.4</priority>
+  </url>
+  <url>
+    <loc>https://inkwell.enterthelimelight.com/guides</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://inkwell.enterthelimelight.com/guides/epub-kindle-kdp-checklist</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.75</priority>
+  </url>
+  <url>
+    <loc>https://inkwell.enterthelimelight.com/guides/docx-for-editors</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.75</priority>
+  </url>
+  <url>
+    <loc>https://inkwell.enterthelimelight.com/guides/print-pdf-self-publishing-basics</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.75</priority>
+  </url>
+  <url>
+    <loc>https://inkwell.enterthelimelight.com/guides/local-first-writing-workflow</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.75</priority>
+  </url>
+  <url>
+    <loc>https://inkwell.enterthelimelight.com/guides/one-time-vs-subscription-writing-tools</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.75</priority>
+  </url>
+  <url>
+    <loc>https://inkwell.enterthelimelight.com/guides/scrivener-alternative-novel-drafting</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.75</priority>
+  </url>
+  <url>
+    <loc>https://inkwell.enterthelimelight.com/guides/cloud-backup-for-manuscripts</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.75</priority>
+  </url>
+  <url>
+    <loc>https://inkwell.enterthelimelight.com/guides/export-anxiety</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.75</priority>
+  </url>
+  <url>
+    <loc>https://inkwell.enterthelimelight.com/guides/chapter-first-outlining</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.75</priority>
+  </url>
+  <url>
+    <loc>https://inkwell.enterthelimelight.com/guides/inkwell-free-vs-basic-vs-pro</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.75</priority>
   </url>
 </urlset>

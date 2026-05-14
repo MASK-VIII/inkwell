@@ -1,6 +1,8 @@
 import { BuyPage } from './BuyPage'
 import { ChangelogPage } from './ChangelogPage'
-import { classifyMarketingPath } from './marketingRouting'
+import { GuideArticlePage } from './guides/GuideArticlePage'
+import { GuidesIndexPage } from './guides/GuidesIndexPage'
+import { parseMarketingPath } from './marketingRouting'
 import { MarketingPage } from './MarketingPage'
 import { NotFoundPage } from './NotFoundPage'
 import { PricingPage } from './PricingPage'
@@ -12,8 +14,8 @@ import { PrivacyPage, RefundPage, TermsPage } from './LegalPage'
  * the app, which is the intentional split.
  */
 export function MarketingApp() {
-  const view = classifyMarketingPath(window.location.pathname)
-  switch (view) {
+  const parsed = parseMarketingPath(window.location.pathname)
+  switch (parsed.view) {
     case 'landing':
       return <MarketingPage />
     case 'pricing':
@@ -28,6 +30,10 @@ export function MarketingApp() {
       return <RefundPage />
     case 'changelog':
       return <ChangelogPage />
+    case 'guides_index':
+      return <GuidesIndexPage />
+    case 'guide':
+      return <GuideArticlePage slug={parsed.guideSlug} />
     case 'not_found':
     default:
       return <NotFoundPage />

@@ -1,0 +1,44 @@
+export default function LocalFirstWritingWorkflowBody() {
+  return (
+    <>
+      <p>
+        <strong>Local-first</strong> means your manuscript’s natural home is the device you are on—not a server you
+        must appease before the next sentence. Cloud becomes an option for sync and backup when you choose it, not a
+        prerequisite to open the app.
+      </p>
+
+      <h2>Why authors notice</h2>
+      <ul>
+        <li>Cafés, cabins, and red-eye flights still happen—offline is not an edge case for novels.</li>
+        <li>Long projects span months; tools that nag for connectivity add friction on tired days.</li>
+        <li>When you do go online, sync should feel like insurance—not a performance.</li>
+      </ul>
+
+      <h2>A simple workflow map</h2>
+      <ol>
+        <li>Draft locally until the story moves—chapters, notes, and reordering in one place.</li>
+        <li>Preview layout when you are ready to see the book as a book—not on every keystroke.</li>
+        <li>Export when there is a real receiver: you, an editor, a store, a printer.</li>
+      </ol>
+
+      <h2>Where Inkwell fits</h2>
+      <p>
+        Inkwell keeps the full writing workspace free and local-first; Basic adds optional cloud library sync/backup and
+        EPUB; Pro adds the full export suite and deeper formatting for print and submissions. The through-line is the
+        same arc: <em>Draft. Format. Publish.</em> (<a href="/">homepage</a>, <a href="/pricing">pricing</a>).
+      </p>
+
+      <h2>Related guides</h2>
+      <p>
+        <a href="/guides/cloud-backup-for-manuscripts">Cloud backup for manuscripts</a>,{' '}
+        <a href="/guides/one-time-vs-subscription-writing-tools">one-time vs subscription tools</a>,{' '}
+        <a href="/guides/inkwell-free-vs-basic-vs-pro">Free vs Basic vs Pro</a>.
+      </p>
+
+      <p>
+        <a href="/app#bookshelf">Open Inkwell free</a>—no signup to start—or browse <a href="/buy">paid tiers</a> when
+        exports and backup belong in your loop.
+      </p>
+    </>
+  )
+}

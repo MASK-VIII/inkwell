@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import {
   CLOUD_LIMIT_BASIC_DISPLAY,
   CLOUD_LIMIT_PRO_DISPLAY,
@@ -8,14 +9,27 @@ import {
 
 type Qa = {
   q: string
-  a: string
+  a: ReactNode
 }
 
 const FAQ: Qa[] = [
   {
     q: 'How mature is Inkwell right now?',
-    a:
-      'Inkwell 1.0 is built and supported by one person—the core writing loop (projects, chapters, notes, formatting previews, and exports) is stable in daily use. Edge cases still surface; fixes ship quickly and a public roadmap shows what is next. Paid tiers include a 30-day refund so you can judge honestly.',
+    a: (
+      <>
+        Inkwell 1.0 is built and supported by one person—the core writing loop (projects, chapters, notes, formatting
+        previews, and exports) is stable in daily use. Edge cases still surface; fixes ship quickly and a public roadmap
+        shows what is next. Paid tiers include a 30-day refund so you can judge honestly. For evergreen workflow notes,
+        see{' '}
+        <a
+          href="/guides"
+          className="font-medium text-ink underline decoration-walnut/45 underline-offset-2 transition hover:decoration-walnut/70 dark:text-cream dark:decoration-cream/45 dark:hover:decoration-cream/70"
+        >
+          Inkwell guides
+        </a>
+        .
+      </>
+    ),
   },
   {
     q: 'Is Inkwell only for beginners?',
@@ -93,9 +107,9 @@ export function FaqSection() {
                     </svg>
                   </span>
                 </summary>
-                <p className="mt-3 max-w-3xl text-sm leading-relaxed text-walnut/90 dark:text-ink-dark/82">
+                <div className="mt-3 max-w-3xl text-sm leading-relaxed text-walnut/90 dark:text-ink-dark/82">
                   {qa.a}
-                </p>
+                </div>
               </details>
             </li>
           ))}

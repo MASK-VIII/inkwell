@@ -14,7 +14,7 @@
     "dev": "node scripts/generate-changelog.mjs && vite",
     "dev:desktop": "concurrently -k \"cross-env INKWELL_DESKTOP=1 vite\" \"wait-on http://localhost:5173 && cross-env INKWELL_DESKTOP=1 electron electron/main.cjs\"",
     "dev:desktop:debug": "concurrently -k \"cross-env INKWELL_DESKTOP=1 vite\" \"wait-on http://localhost:5173 && cross-env INKWELL_DESKTOP=1 INKWELL_ELECTRON_DEVTOOLS=1 electron electron/main.cjs\"",
-    "build": "node scripts/generate-changelog.mjs && node scripts/fetch-desktop-installer-for-vercel.mjs && tsc -b && vite build",
+    "build": "node scripts/generate-changelog.mjs && node scripts/generate-sitemap.mjs && node scripts/fetch-desktop-installer-for-vercel.mjs && tsc -b && vite build",
     "prebuild:desktop": "node scripts/prepare-desktop-build.mjs",
     "build:desktop": "npm run generate:brand-icons && tsc -b && cross-env INKWELL_DESKTOP=1 vite build && node scripts/run-desktop-pack.mjs",
     "build:desktop:install": "npm run build:desktop && node scripts/launch-desktop-installer.mjs",

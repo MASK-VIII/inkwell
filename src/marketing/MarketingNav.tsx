@@ -33,7 +33,7 @@ export function MarketingNav({ showAnchors = true, darkMode, onToggleDarkMode }:
               <li>
                 <a
                   className="rounded-sm transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-walnut/35 dark:hover:text-cream dark:focus-visible:ring-cream/40"
-                  href="#features"
+                  href="/#features"
                 >
                   Features
                 </a>
@@ -41,7 +41,7 @@ export function MarketingNav({ showAnchors = true, darkMode, onToggleDarkMode }:
               <li>
                 <a
                   className="rounded-sm transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-walnut/35 dark:hover:text-cream dark:focus-visible:ring-cream/40"
-                  href="#how-it-works"
+                  href="/#how-it-works"
                 >
                   How it works
                 </a>
@@ -65,7 +65,15 @@ export function MarketingNav({ showAnchors = true, darkMode, onToggleDarkMode }:
               <li>
                 <a
                   className="rounded-sm transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-walnut/35 dark:hover:text-cream dark:focus-visible:ring-cream/40"
-                  href="#faq"
+                  href="/guides"
+                >
+                  Guides
+                </a>
+              </li>
+              <li>
+                <a
+                  className="rounded-sm transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-walnut/35 dark:hover:text-cream dark:focus-visible:ring-cream/40"
+                  href="/#faq"
                 >
                   FAQ
                 </a>
@@ -73,6 +81,12 @@ export function MarketingNav({ showAnchors = true, darkMode, onToggleDarkMode }:
             </ul>
           )}
           <div className="flex flex-wrap items-center justify-end gap-2">
+            <a
+              href="/guides"
+              className="rounded-sm px-2 py-2 text-sm font-medium text-walnut/90 transition hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-walnut/35 md:hidden dark:text-ink-dark/85 dark:hover:text-cream dark:focus-visible:ring-cream/40"
+            >
+              Guides
+            </a>
             <a
               href="/app#signin"
               className="inline-flex items-center justify-center rounded-full border border-walnut/30 px-4 py-2 text-sm font-medium text-ink transition hover:border-walnut/55 hover:bg-panel-light-muted/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-walnut dark:border-border-dark dark:text-ink-dark dark:hover:border-accent-warm/45 dark:hover:bg-panel-dark/60 dark:focus-visible:outline-cream/50"

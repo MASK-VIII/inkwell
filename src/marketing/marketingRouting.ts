@@ -9,7 +9,8 @@
  * On the production Inkwell subdomain, unknown paths resolve to the same SPA bundle;
  * send those to `/` so visitors always see the landing page unless they are on
  * `/app`, `/pricing`, `/buy`, `/legal/{privacy,terms,refund}`, the legacy
- * `/privacy`, `/terms`, `/refund` aliases, `/changelog` (Roadmap page), or `/downloads/*`
+ * `/privacy`, `/terms`, `/refund` aliases, `/changelog` (Roadmap page), `/guides` and
+ * `/guides/:slug` (SEO guides), or `/downloads/*`
  * (Windows installer — static file when deployed; if the SPA loads instead, treat as landing).
  */
 
@@ -21,7 +22,21 @@ export type MarketingView =
   | 'terms'
   | 'refund'
   | 'changelog'
+  | 'guides_index'
+  | 'guide'
   | 'not_found'
+
+export type ParsedMarketingPath =
+  | { view: 'landing' }
+  | { view: 'pricing' }
+  | { view: 'buy' }
+  | { view: 'privacy' }
+  | { view: 'terms' }
+  | { view: 'refund' }
+  | { view: 'changelog' }
+  | { view: 'guides_index' }
+  | { view: 'guide'; guideSlug: string }
+  | { view: 'not_found' }
 
 /** Canonical hostname for the public marketing + web app deployment. */
 export const INKWELL_MARKETING_HOST = 'inkwell.enterthelimelight.com'
@@ -45,18 +60,30 @@ export function pathIsApp(pathname: string): boolean {
   return pathname === APP_PATH_PREFIX || pathname.startsWith(`${APP_PATH_PREFIX}/`)
 }
 
-export function classifyMarketingPath(pathname: string): MarketingView {
+export function parseMarketingPath(pathname: string): ParsedMarketingPath {
   const normalized = pathname.replace(/\/+$/, '') || '/'
-  if (normalized === '' || normalized === '/') return 'landing'
-  if (normalized === '/pricing') return 'pricing'
-  if (normalized === '/buy') return 'buy'
+  if (normalized === '' || normalized === '/') return { view: 'landing' }
+  if (normalized === '/pricing') return { view: 'pricing' }
+  if (normalized === '/buy') return { view: 'buy' }
   // Canonical legal paths under `/legal/*` plus back-compat aliases at the root.
-  if (normalized === '/legal/privacy' || normalized === '/privacy') return 'privacy'
-  if (normalized === '/legal/terms' || normalized === '/terms') return 'terms'
-  if (normalized === '/legal/refund' || normalized === '/refund') return 'refund'
-  if (normalized === '/changelog') return 'changelog'
-  if (normalized === '/downloads' || normalized.startsWith('/downloads/')) return 'landing'
-  return 'not_found'
+  if (normalized === '/legal/privacy' || normalized === '/privacy') return { view: 'privacy' }
+  if (normalized === '/legal/terms' || normalized === '/terms') return { view: 'terms' }
+  if (normalized === '/legal/refund' || normalized === '/refund') return { view: 'refund' }
+  if (normalized === '/changelog') return { view: 'changelog' }
+  if (normalized === '/downloads' || normalized.startsWith('/downloads/')) return { view: 'landing' }
+  if (normalized === '/guides') return { view: 'guides_index' }
+  if (normalized.startsWith('/guides/')) {
+    const rest = normalized.slice('/guides/'.length)
+    if (!rest || rest.includes('/')) return { view: 'not_found' }
+    return { view: 'guide', guideSlug: rest }
+  }
+  return { view: 'not_found' }
+}
+
+/** @deprecated Prefer parseMarketingPath when you need `/guides/:slug`. */
+export function classifyMarketingPath(pathname: string): MarketingView {
+  const parsed = parseMarketingPath(pathname)
+  return parsed.view
 }
 
 export function isInkwellMarketingHostname(hostname: string): boolean {
@@ -84,7 +111,7 @@ export function shouldRedirectInkwellMarketingUnknownPathToLanding(): boolean {
   if (isDesktopShell()) return false
   const pathname = window.location.pathname
   if (pathIsApp(pathname)) return false
-  return classifyMarketingPath(pathname) === 'not_found'
+  return parseMarketingPath(pathname).view === 'not_found'
 }
 
 export function redirectInkwellMarketingToLandingRoot(): void {

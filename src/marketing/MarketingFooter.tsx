@@ -23,7 +23,7 @@ export function MarketingFooter() {
               <li>
                 <a
                   className="rounded-sm transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-walnut/35 dark:hover:text-cream dark:focus-visible:ring-cream/40"
-                  href="#features"
+                  href="/#features"
                 >
                   Features
                 </a>
@@ -31,7 +31,7 @@ export function MarketingFooter() {
               <li>
                 <a
                   className="rounded-sm transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-walnut/35 dark:hover:text-cream dark:focus-visible:ring-cream/40"
-                  href="#how-it-works"
+                  href="/#how-it-works"
                 >
                   How it works
                 </a>
@@ -39,7 +39,15 @@ export function MarketingFooter() {
               <li>
                 <a
                   className="rounded-sm transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-walnut/35 dark:hover:text-cream dark:focus-visible:ring-cream/40"
-                  href="#faq"
+                  href="/guides"
+                >
+                  Guides
+                </a>
+              </li>
+              <li>
+                <a
+                  className="rounded-sm transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-walnut/35 dark:hover:text-cream dark:focus-visible:ring-cream/40"
+                  href="/#faq"
                 >
                   FAQ
                 </a>
