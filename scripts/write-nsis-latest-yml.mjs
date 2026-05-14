@@ -65,6 +65,11 @@ async function main() {
   })
   let exeName = matches[0]?.n ?? null
   if (exeName == null) {
+    const head = productName.trim().replace(/\s+/g, '.')
+    const dotCandidate = `${head}.Setup.${version}.exe`
+    exeName = exes.find((n) => n.toLowerCase() === dotCandidate.toLowerCase()) ?? null
+  }
+  if (exeName == null) {
     console.error(
       '[write-nsis-latest-yml] No NSIS .exe in release/. Expected something like',
       JSON.stringify(expectedName),

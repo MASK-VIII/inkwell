@@ -87,6 +87,18 @@ function exeEndsWithSetupVersion(name, semver) {
 }
 
 /**
+ * NSIS artifact sometimes ships as `Product.Setup.1.2.3.exe` (dots) instead of `Product Setup 1.2.3.exe` (spaces).
+ * @param {string} expectedName e.g. `Inkwell Setup 1.0.0.exe`
+ */
+function dotSeparatedSetupExeName(expectedName) {
+  const m = expectedName.match(/^(.+?)\s+Setup\s+(.+)$/i)
+  if (!m) return null
+  const head = m[1].trim().replace(/\s+/g, '.')
+  const tail = m[2].trim()
+  return `${head}.Setup.${tail}`
+}
+
+/**
  * @param {{ name?: string; url?: string }[]} assets
  * @returns {{ asset: { name?: string; url?: string } | null; hint: string }}
  */
@@ -108,6 +120,12 @@ function pickInstallerAsset(assets, expectedName, semver) {
 
   hit = exes.find((a) => (a.name ?? '').toLowerCase() === expectedName.toLowerCase())
   if (hit) return { asset: hit, hint: '' }
+
+  const dotName = dotSeparatedSetupExeName(expectedName)
+  if (dotName) {
+    hit = exes.find((a) => (a.name ?? '').toLowerCase() === dotName.toLowerCase())
+    if (hit) return { asset: hit, hint: '' }
+  }
 
   const versionHits = exes.filter((a) => exeEndsWithSetupVersion(a.name ?? '', semver))
   if (versionHits.length === 1) return { asset: versionHits[0], hint: '' }
