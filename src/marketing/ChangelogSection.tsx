@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { humanizeChangelogTitle } from './changelogDisplay'
 
 /** Add roadmap bullets here when ready (shown under Coming soon). */
-const COMING_SOON: string[] = []
+const COMING_SOON: string[] = ['Series bible expansion']
 
 type ChangelogItem = {
   kind: 'changelog' | 'feat' | 'fix'
