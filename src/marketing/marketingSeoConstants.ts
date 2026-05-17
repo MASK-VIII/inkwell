@@ -9,4 +9,4 @@ export const HOME_OG_DESCRIPTION =
   'Draft, format, publish in one app—local-first for novels, optional cloud sync, EPUB or full print exports. One-time purchases (not a subscription). Try free with no signup.'
 
 /** Social preview: real UI screenshot (cache-bust when replacing asset). */
-export const HOME_OG_IMAGE = `${MARKETING_SITE_URL}/marketing/chapter-in-progress-light.png?v=3`
+export const HOME_OG_IMAGE = `${MARKETING_SITE_URL}/marketing/chapter-in-progress-dark.png?v=4`
