@@ -21,6 +21,7 @@ import {
 } from '../types'
 import { idbDelete, idbGet, idbSet, isIndexedDbAvailable } from './storage/projectIdb'
 import { hashStringDjb2 } from './hash'
+import { applyBookMasterPages, ensureBuiltInTitlePage, isMasterPage } from './masterPages'
 import { countWordsInDoc, todayLocalISODate } from './wordCount'
 
 const STORAGE_KEY_V1 = 'inkwell-manuscripts-v1'
@@ -37,8 +38,11 @@ const STORAGE_PINNED_PROJECT_NOTES = 'inkwell-pinned-project-notes-v1'
 const STORAGE_PROJECT_CHILD_PINS = 'inkwell-project-child-pins-v1'
 /** Per-project master id → stable order of unpinned child note ids (shelf / BookTools). */
 const STORAGE_PROJECT_CHILD_UNPINNED_ORDER = 'inkwell-project-child-unpinned-order-v1'
+const STORAGE_DELETED_PROJECTS = 'inkwell-deleted-projects-v1'
 /** Full snapshots are large; keep the cap modest for typical ~5MB localStorage quotas. */
 const HISTORY_MAX_ENTRIES = 35
+const DELETED_MAX_ENTRIES = 12
+const DELETED_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
 const HISTORY_REPLACE_WITHIN_MS = 12_000
 /** Compressed payloads; plain JSON (legacy) has no prefix. */
 const LZ_PREFIX = 'iwz1:'
@@ -225,18 +229,19 @@ function seedChapters(): Manuscript[] {
 }
 
 function seedBookProject(id: string): InkwellProject {
-  return withAlignedGoals({
-    version: 3,
-    id,
-    kind: 'book',
-    linkedBookId: null,
-    book: defaultBookMeta(),
-    goals: defaultWritingGoals(),
-    chapters: seedChapters(),
-    theme: defaultTheme(),
-    assembly: defaultBookAssembly(),
-    seriesBible: [],
-  })
+  const base = withAlignedGoals({
+      version: 3,
+      id,
+      kind: 'book',
+      linkedBookId: null,
+      book: defaultBookMeta(),
+      goals: defaultWritingGoals(),
+      chapters: seedChapters(),
+      theme: defaultTheme(),
+      assembly: defaultBookAssembly(),
+      seriesBible: [],
+    })
+  return applyBookMasterPages(ensureBuiltInTitlePage(base))
 }
 
 export function totalWordsInChapters(chapters: Manuscript[]): number {
@@ -388,7 +393,7 @@ function normalizeProjectV3(parsed: Partial<InkwellProject>, id: string): Inkwel
   const assemblyDefaults = defaultBookAssembly()
   const parsedAssembly = (parsed.assembly ?? {}) as Partial<InkwellProject['assembly']>
 
-  return withAlignedGoals({
+  const base = withAlignedGoals({
     version: 3,
     id,
     kind,
@@ -404,6 +409,7 @@ function normalizeProjectV3(parsed: Partial<InkwellProject>, id: string): Inkwel
     seriesBible: normalizeSeriesBible(parsed.seriesBible),
     exportExtras: parsed.exportExtras && typeof parsed.exportExtras === 'object' ? parsed.exportExtras : undefined,
   })
+  return kind === 'book' ? applyBookMasterPages(base) : base
 }
 
 /** Import / archive normalization (public alias). */
@@ -883,6 +889,37 @@ export function readOpenProjectIdFromLocation(): string | null {
 }
 
 /**
+ * Preferred project id for this tab: tab session beats stale `?project=` URL, then active id, then index.
+ */
+export function resolveOpenProjectId(): string | null {
+  const tabId = getTabSessionProjectId()
+  if (tabId) return tabId
+  const fromUrl = readOpenProjectIdFromLocation()
+  if (fromUrl) return fromUrl
+  const active = getActiveProjectId()
+  if (active) return active
+  const idx = loadIndex()
+  if (idx.projects.length > 0) {
+    const id = idx.projects.slice().sort((a, b) => b.updatedAt - a.updatedAt)[0]!.id
+    return id
+  }
+  return null
+}
+
+/** Update `?project=` in the address bar without changing pathname, other query keys, or hash. */
+export function syncOpenProjectQueryParam(projectId: string | null): void {
+  if (typeof window === 'undefined') return
+  try {
+    const u = new URL(window.location.href)
+    if (projectId) u.searchParams.set(INKWELL_OPEN_PROJECT_QUERY_KEY, projectId)
+    else u.searchParams.delete(INKWELL_OPEN_PROJECT_QUERY_KEY)
+    window.history.replaceState(null, '', `${u.pathname}${u.search}${u.hash}`)
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
  * Full URL to open a book or note in another tab (same origin; project data is read from localStorage there).
  */
 export function buildInkwellUrlForProject(projectId: string): string {
@@ -957,6 +994,17 @@ export function resolveResumeChapterId(project: InkwellProject): number | null {
   return project.chapters[0]?.id ?? null
 }
 
+/** Shelf opens: resume last body chapter, skipping built-in Contents / master pages (shared ids like -9002). */
+export function resolveResumeBodyChapterId(project: InkwellProject): number | null {
+  const remembered = getLastOpenChapterId(project.id)
+  if (remembered != null) {
+    const ch = project.chapters.find((c) => c.id === remembered)
+    if (ch && !isMasterPage(ch)) return remembered
+  }
+  const body = project.chapters.find((c) => !isMasterPage(c))
+  return body?.id ?? project.chapters[0]?.id ?? null
+}
+
 export function loadProject(id: string): InkwellProject | null {
   try {
     const raw =
@@ -1027,7 +1075,7 @@ export function saveProject(project: InkwellProject): InkwellProject {
   const metaTitle =
     normalized.kind === 'note'
       ? deriveNoteMetaTitle(normalized)
-      : normalized.book.title.trim() || normalized.chapters[0]?.title || 'Untitled book'
+      : normalized.book.title.trim() || 'Untitled book'
   const shelfCoverUrl =
     normalized.kind === 'book' &&
     typeof normalized.book.coverImageDataUrl === 'string' &&
@@ -1199,7 +1247,9 @@ export function saveManuscripts(manuscripts: Manuscript[]) {
 }
 
 export function nextManuscriptId(chapters: Manuscript[]): number {
-  return chapters.reduce((max, m) => Math.max(max, m.id), 0) + 1
+  const positive = chapters.filter((c) => c.id > 0).map((c) => c.id)
+  const max = positive.length > 0 ? Math.max(...positive) : 0
+  return max + 1
 }
 
 export function createBookProject(options?: { activate?: boolean }): InkwellProject {
@@ -1402,11 +1452,148 @@ export function deleteProject(id: string): void {
   forgetOpenChapter(id)
 }
 
+export type DeletedProjectMeta = {
+  id: string
+  deletedAt: number
+  kind: ProjectKind
+  title: string
+  linkedBookId: string | null
+}
+
+type StoredDeletedProjects = {
+  version: 1
+  entries: DeletedProjectMeta[]
+  projectsById: Record<string, InkwellProject>
+}
+
+function deletedProjectTitle(project: InkwellProject): string {
+  return project.kind === 'note' ? deriveNoteMetaTitle(project) : project.book.title.trim() || 'Untitled book'
+}
+
+function loadDeletedProjectsRaw(): StoredDeletedProjects {
+  try {
+    const raw = localStorage.getItem(STORAGE_DELETED_PROJECTS)
+    if (!raw) return { version: 1, entries: [], projectsById: {} }
+    const parsed = decodeFromStorage(raw) as Partial<StoredDeletedProjects>
+    if (parsed?.version === 1 && Array.isArray(parsed.entries) && parsed.projectsById) {
+      return {
+        version: 1,
+        entries: parsed.entries as DeletedProjectMeta[],
+        projectsById: parsed.projectsById as Record<string, InkwellProject>,
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return { version: 1, entries: [], projectsById: {} }
+}
+
+function saveDeletedProjectsRaw(next: StoredDeletedProjects): void {
+  let working = next
+  for (let attempt = 0; attempt < DELETED_MAX_ENTRIES + 5; attempt++) {
+    try {
+      localStorage.setItem(STORAGE_DELETED_PROJECTS, encodeForStorage(working))
+      return
+    } catch (e) {
+      if (!isQuotaExceeded(e)) return
+      if (working.entries.length === 0) {
+        try {
+          localStorage.removeItem(STORAGE_DELETED_PROJECTS)
+        } catch {
+          /* ignore */
+        }
+        return
+      }
+      const dropped = working.entries.pop()!
+      const nextProjectsById = { ...working.projectsById }
+      delete nextProjectsById[dropped.id]
+      working = { version: 1, entries: working.entries, projectsById: nextProjectsById }
+    }
+  }
+}
+
+function pruneDeletedProjects(raw: StoredDeletedProjects): StoredDeletedProjects {
+  const cutoff = Date.now() - DELETED_MAX_AGE_MS
+  const kept = raw.entries
+    .filter((entry) => entry.deletedAt >= cutoff && raw.projectsById[entry.id])
+    .sort((a, b) => b.deletedAt - a.deletedAt)
+    .slice(0, DELETED_MAX_ENTRIES)
+  const projectsById: Record<string, InkwellProject> = {}
+  for (const entry of kept) {
+    const blob = raw.projectsById[entry.id]
+    if (blob) projectsById[entry.id] = blob
+  }
+  return { version: 1, entries: kept, projectsById }
+}
+
+/** Store a project snapshot after `deleteProject` so it can be restored from the bookshelf. */
+export function archiveDeletedProject(project: InkwellProject): void {
+  try {
+    const normalized = normalizeProjectV3(project, project.id)
+    const deletedAt = Date.now()
+    const entry: DeletedProjectMeta = {
+      id: normalized.id,
+      deletedAt,
+      kind: normalized.kind,
+      title: deletedProjectTitle(normalized),
+      linkedBookId: normalized.kind === 'note' ? normalized.linkedBookId ?? null : null,
+    }
+    const raw = pruneDeletedProjects(loadDeletedProjectsRaw())
+    const nextEntries = [entry, ...raw.entries.filter((row) => row.id !== normalized.id)]
+    const nextProjectsById = { ...raw.projectsById, [normalized.id]: normalized }
+    saveDeletedProjectsRaw(pruneDeletedProjects({ version: 1, entries: nextEntries, projectsById: nextProjectsById }))
+  } catch {
+    /* Best-effort — deletion must not depend on trash fitting. */
+  }
+}
+
+export function listDeletedProjects(): DeletedProjectMeta[] {
+  const raw = loadDeletedProjectsRaw()
+  const pruned = pruneDeletedProjects(raw)
+  if (pruned.entries.length !== raw.entries.length) {
+    saveDeletedProjectsRaw(pruned)
+  }
+  return pruned.entries
+}
+
+export function restoreDeletedProject(id: string): InkwellProject | null {
+  const raw = loadDeletedProjectsRaw()
+  const blob = raw.projectsById[id]
+  if (!blob) return null
+  const normalized = saveProject(blob)
+  const nextEntries = raw.entries.filter((entry) => entry.id !== id)
+  const nextProjectsById = { ...raw.projectsById }
+  delete nextProjectsById[id]
+  saveDeletedProjectsRaw({ version: 1, entries: nextEntries, projectsById: nextProjectsById })
+  if (normalized.kind === 'note' && normalized.linkedBookId) {
+    const parent = loadProject(normalized.linkedBookId)
+    if (parent) registerNoteAttachedUnderMaster(normalized.linkedBookId, normalized.id)
+  }
+  return normalized
+}
+
+export function purgeDeletedProject(id: string): void {
+  const raw = loadDeletedProjectsRaw()
+  if (!raw.projectsById[id] && !raw.entries.some((entry) => entry.id === id)) return
+  const nextEntries = raw.entries.filter((entry) => entry.id !== id)
+  const nextProjectsById = { ...raw.projectsById }
+  delete nextProjectsById[id]
+  saveDeletedProjectsRaw({ version: 1, entries: nextEntries, projectsById: nextProjectsById })
+}
+
 export function ensureAtLeastOneProject(): InkwellProject {
   const active = getActiveProjectId()
   if (active) {
     const p = loadProject(active)
     if (p) return p
+    const idx = loadIndex()
+    if (idx.projects.some((row) => row.id === active)) {
+      // Active id is indexed but blob not loaded yet — do not fall through to most-recent.
+      for (const row of idx.projects) {
+        const candidate = loadProject(row.id)
+        if (candidate) return candidate
+      }
+    }
   }
 
   // If index already has projects, open most recent.

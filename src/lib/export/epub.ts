@@ -72,6 +72,8 @@ function epubTypeAttrForRole(role: ManuscriptSectionRole): string {
       return 'toc'
     case 'title_page':
       return 'titlepage'
+    case 'disclaimer':
+      return ''
     default:
       return ''
   }

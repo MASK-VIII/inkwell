@@ -230,6 +230,36 @@ ${chapterTitleStyleCss}
 .inkwell-ebook-preview .inkwell-footnotes { margin-top: 2em; font-size: 0.9em; }
 .inkwell-ebook-preview .inkwell-footnotes ol { padding-left: 1.25em; }
 .inkwell-ebook-preview .inkwell-footnotes li { margin: 0.5em 0; }
+${
+  ctx.kind === 'epub'
+    ? `
+.inkwell-matter {
+  margin: 0 auto;
+  max-width: ${maxWidthPx}px;
+  padding: 0 0.9rem;
+}
+.inkwell-matter p {
+  margin: ${paraSpaceEm}em 0;
+  text-align: left;
+  text-indent: 0;
+}
+.matter-toc p:first-of-type {
+  font-size: 1.35em;
+  font-weight: 700;
+  text-align: center;
+  margin: 1.5em 0 1em;
+}
+.matter-toc p {
+  margin: 0.35em 0;
+  text-indent: 0;
+}
+.matter-title_page p {
+  text-align: center;
+  text-indent: 0;
+}
+`
+    : ''
+}
 ${dropCapCss}
 `
     .trim()

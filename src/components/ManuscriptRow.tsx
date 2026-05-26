@@ -2,6 +2,7 @@ import { BookOpen, MoreVertical } from 'lucide-react'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { attachInkwellDragGhost } from '../lib/dragGhost'
 import { countWordsInDoc } from '../lib/wordCount'
+import { isContentsPage } from '../lib/masterPages'
 import type { Manuscript } from '../types'
 
 const CHAPTER_DRAG_MIME = 'application/x-inkwell-chapter-id'
@@ -20,6 +21,9 @@ function readChapterDragId(dt: DataTransfer): number | null {
 export type ManuscriptRowProps = {
   manuscript: Manuscript
   active: boolean
+  rowVariant?: 'master' | 'body'
+  allowDelete?: boolean
+  allowDrag?: boolean
   /** Stable callback; avoids per-render closures so rows can memoize. */
   onSelectChapter: (id: number) => void
   onDeleteChapter: (id: number) => void
@@ -32,6 +36,9 @@ export type ManuscriptRowProps = {
 function ManuscriptRowInner({
   manuscript,
   active,
+  rowVariant = 'body',
+  allowDelete = true,
+  allowDrag = true,
   onSelectChapter,
   onDeleteChapter,
   onDropReorder,
@@ -69,8 +76,10 @@ function ManuscriptRowInner({
 
   const wordCount = useMemo(() => countWordsInDoc(manuscript.content), [manuscript.content])
   const displayTitle = manuscript.title?.trim() || 'Untitled section'
-  const showMerge = Boolean(onMergeWithNext && canMergeWithNext)
-  const showSplit = Boolean(onSplitChapter)
+  const showMerge = rowVariant === 'body' && Boolean(onMergeWithNext && canMergeWithNext)
+  const showSplit = rowVariant === 'body' && Boolean(onSplitChapter)
+  const showDelete = allowDelete && !isContentsPage(manuscript)
+  const dragEnabled = allowDrag && !isContentsPage(manuscript)
   const menuId = `inkwell-chapter-menu-${id}`
 
   const menuBtnClass = `inkwell-chapter-row-menu-btn flex h-8 w-8 items-center justify-center rounded-2xl transition-colors ${
@@ -143,15 +152,19 @@ function ManuscriptRowInner({
       <div className="flex min-w-0 items-start gap-1.5">
         <div
           data-chapter-drag-handle
-          draggable
-          aria-label={`Drag to reorder: ${displayTitle}`}
-          title="Drag to reorder"
+          draggable={dragEnabled}
+          aria-label={dragEnabled ? `Drag to reorder: ${displayTitle}` : displayTitle}
+          title={dragEnabled ? 'Drag to reorder' : undefined}
           className={`touch-none mt-0.5 flex h-6 w-6 shrink-0 cursor-grab items-center justify-center rounded-lg border border-transparent active:cursor-grabbing sm:h-7 sm:w-7 sm:rounded-xl ${
             active
               ? 'text-parchment/90 hover:bg-white/10 dark:text-ink/80 dark:hover:bg-black/10'
               : 'text-ink-muted hover:border-dust/80 hover:bg-panel-light-muted/72 dark:text-ink-dark/50 dark:hover:border-border-dark dark:hover:bg-panel-dark/60'
           }`}
           onDragStart={(e) => {
+            if (!dragEnabled) {
+              e.preventDefault()
+              return
+            }
             chapterHadDragRef.current = true
             e.dataTransfer.setData('text/plain', String(id))
             e.dataTransfer.setData(CHAPTER_DRAG_MIME, String(id))
@@ -176,17 +189,31 @@ function ManuscriptRowInner({
         </div>
 
         <div className="min-w-0 flex-1">
-          <p className="break-words font-medium leading-snug">{displayTitle}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="break-words font-medium leading-snug">{displayTitle}</p>
+            {rowVariant === 'master' ? (
+              <span
+                className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                  active
+                    ? 'bg-white/15 text-parchment/90 dark:bg-black/10 dark:text-ink/70'
+                    : 'bg-dust/50 text-ink/60 dark:bg-border-dark dark:text-ink-dark/60'
+                }`}
+              >
+                {isContentsPage(manuscript) ? 'Auto' : 'Master'}
+              </span>
+            ) : null}
+          </div>
           <p
             className={`mt-0.5 text-[11px] tabular-nums ${
               active ? 'text-parchment/70 dark:text-ink/55' : 'text-ink/50 dark:text-ink-dark/50'
             }`}
           >
-            {wordCount.toLocaleString()} words
+            {isContentsPage(manuscript) ? 'Updates with chapters' : `${wordCount.toLocaleString()} words`}
           </p>
         </div>
 
         <div ref={menuRef} data-chapter-row-actions className="relative shrink-0">
+          {(showSplit || showMerge || showDelete) ? (
           <button
             type="button"
             id={`${menuId}-trigger`}
@@ -203,6 +230,7 @@ function ManuscriptRowInner({
           >
             <MoreVertical className="h-4 w-4" aria-hidden />
           </button>
+          ) : null}
           {menuOpen ? (
             <div
               id={menuId}
@@ -241,6 +269,7 @@ function ManuscriptRowInner({
                   Merge with next
                 </button>
               ) : null}
+              {showDelete ? (
               <button
                 type="button"
                 role="menuitem"
@@ -253,6 +282,7 @@ function ManuscriptRowInner({
               >
                 Delete
               </button>
+              ) : null}
             </div>
           ) : null}
         </div>

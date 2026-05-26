@@ -5,12 +5,15 @@ import {
   type MutableRefObject,
   type UIEvent,
 } from 'react'
+import { canDeleteMasterPage, isContentsPage, partitionChaptersForSidebar } from '../lib/masterPages'
 import type { Manuscript } from '../types'
 import { ManuscriptRow } from './ManuscriptRow'
 
 type Props = {
   chapters: Manuscript[]
   currentId: number | null
+  /** When true, group built-in / optional master pages above body chapters. */
+  bookMode?: boolean
   onSelectChapter: (id: number) => void
   onDeleteChapter: (id: number) => void
   onDropReorder: (draggedId: number, targetId: number) => void
@@ -28,9 +31,18 @@ type Props = {
  * Keeps chapter list scroll position when `currentId` changes (selection) or when the parent
  * re-renders with a new React element tree — avoids jumping back to the top after picking a chapter.
  */
+function SectionLabel({ children }: { children: string }) {
+  return (
+    <p className="px-1 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-widest text-ink/45 first:pt-0 dark:text-ink-dark/45">
+      {children}
+    </p>
+  )
+}
+
 export function ChaptersScrollableList({
   chapters,
   currentId,
+  bookMode = false,
   onSelectChapter,
   onDeleteChapter,
   onDropReorder,
@@ -81,6 +93,25 @@ export function ChaptersScrollableList({
     if (el) persistedScrollTopRef.current = el.scrollTop
   }, [persistedScrollTopRef])
 
+  const partitioned = bookMode ? partitionChaptersForSidebar(chapters) : null
+
+  const renderRow = (ms: Manuscript, i: number, list: Manuscript[], variant: 'master' | 'body') => (
+    <ManuscriptRow
+      key={ms.id}
+      manuscript={ms}
+      active={ms.id === currentId}
+      rowVariant={variant}
+      allowDelete={canDeleteMasterPage(ms)}
+      allowDrag={!isContentsPage(ms)}
+      onSelectChapter={onSelectChapter}
+      onDeleteChapter={onDeleteChapter}
+      onDropReorder={onDropReorder}
+      onSplitChapter={onSplitChapter}
+      onMergeWithNext={onMergeWithNext}
+      canMergeWithNext={variant === 'body' && i < list.length - 1}
+    />
+  )
+
   return (
     <div
       ref={listRef}
@@ -88,19 +119,24 @@ export function ChaptersScrollableList({
       onPointerDownCapture={onPointerDownCapture}
       className={className}
     >
-      {chapters.map((ms, i) => (
-        <ManuscriptRow
-          key={ms.id}
-          manuscript={ms}
-          active={ms.id === currentId}
-          onSelectChapter={onSelectChapter}
-          onDeleteChapter={onDeleteChapter}
-          onDropReorder={onDropReorder}
-          onSplitChapter={onSplitChapter}
-          onMergeWithNext={onMergeWithNext}
-          canMergeWithNext={i < chapters.length - 1}
-        />
-      ))}
+      {partitioned ? (
+        <>
+          {partitioned.masterPages.length > 0 ? (
+            <>
+              <SectionLabel>Master pages</SectionLabel>
+              {partitioned.masterPages.map((ms, i) =>
+                renderRow(ms, i, partitioned.masterPages, 'master'),
+              )}
+            </>
+          ) : null}
+          <SectionLabel>Chapters</SectionLabel>
+          {partitioned.bodyChapters.map((ms, i) =>
+            renderRow(ms, i, partitioned.bodyChapters, 'body'),
+          )}
+        </>
+      ) : (
+        chapters.map((ms, i) => renderRow(ms, i, chapters, 'body'))
+      )}
     </div>
   )
 }

@@ -17,7 +17,11 @@ function sanitizeUrl(raw: string, kind: UrlKind): string | null {
   if (!s) return null
 
   // Allow internal anchors (used for footnotes).
-  if (s.startsWith('#')) return s
+  if (s.startsWith('#')) {
+    // Contents in-editor chapter jumps are not exported.
+    if (/^#inkwell-chapter-\d+$/.test(s)) return null
+    return s
+  }
 
   // Allow relative URLs.
   if (s.startsWith('/') || s.startsWith('./') || s.startsWith('../')) return s

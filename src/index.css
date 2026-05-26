@@ -162,6 +162,13 @@ button:not(:disabled):not(.cursor-grab) {
   --inkwell-safe-inset-right: env(safe-area-inset-right, 0px);
   --inkwell-safe-inset-bottom: env(safe-area-inset-bottom, 0px);
   --inkwell-safe-inset-left: env(safe-area-inset-left, 0px);
+  /* Typewriter Lite chrome heights (Write workspace slide transitions) */
+  --inkwell-lite-header-full-h: 5.5rem;
+  --inkwell-lite-toolbar-full-h: 3.375rem;
+  /* Full typewriter: extra room for caret scroll-follow */
+  --inkwell-scroll-follow-pad-bottom: min(24vh, 12rem);
+  /* Write normal / lite: comfortable space below the last line (no scroll-follow) */
+  --inkwell-write-editor-pad-bottom: min(24vh, 9rem);
 }
 
 /* Shorter ramp than full motion, but still a real crossfade (not a hard cut). */
@@ -418,6 +425,43 @@ select {
   transition: color var(--inkwell-theme-bridge-duration) var(--inkwell-theme-bridge-ease);
 }
 
+/* Write workspace header: full height by default; slides away when chapters drawer tucks in */
+.inkwell-chrome-header--write {
+  max-height: var(--inkwell-lite-header-full-h);
+  overflow: hidden;
+  transition:
+    max-height var(--inkwell-panel-motion-duration) var(--inkwell-panel-motion-ease),
+    border-bottom-width var(--inkwell-panel-motion-duration) var(--inkwell-panel-motion-ease);
+}
+
+.inkwell-chrome-header__row {
+  transition: transform var(--inkwell-panel-motion-duration) var(--inkwell-panel-motion-ease);
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+}
+
+.inkwell-manuscript-toolbar {
+  transition:
+    max-height var(--inkwell-panel-motion-duration) var(--inkwell-panel-motion-ease),
+    opacity var(--inkwell-panel-motion-duration) var(--inkwell-panel-motion-ease),
+    border-bottom-width var(--inkwell-panel-motion-duration) var(--inkwell-panel-motion-ease),
+    transform var(--inkwell-panel-motion-duration) var(--inkwell-panel-motion-ease);
+}
+
+.inkwell-manuscript-toolbar__inner {
+  transition: transform var(--inkwell-panel-motion-duration) var(--inkwell-panel-motion-ease);
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+}
+
+html.inkwell-chapters-panel-motion .inkwell-chrome-header--write,
+html.inkwell-chapters-panel-motion .inkwell-chrome-header__row,
+html.inkwell-chapters-panel-motion [data-inkwell-tour='editor-toolbar'],
+html.inkwell-chapters-panel-motion .inkwell-manuscript-toolbar,
+html.inkwell-chapters-panel-motion .inkwell-manuscript-toolbar__inner {
+  will-change: max-height, transform;
+}
+
 /* BookTools drawer motion (uses panel tokens so slide plays under prefers-reduced-motion) */
 .inkwell-drawer-backdrop {
   transition: opacity var(--inkwell-panel-motion-duration) var(--inkwell-panel-motion-ease);
@@ -427,6 +471,22 @@ select {
   transition: transform var(--inkwell-panel-motion-duration) var(--inkwell-panel-motion-ease);
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Panel slides always run at full duration — same under OS reduced-motion and play-animations=false. */
+@media (prefers-reduced-motion: reduce) {
+  .inkwell-drawer-backdrop,
+  .inkwell-drawer-panel,
+  .inkwell-chapters-overlay-rail,
+  .inkwell-chapters-overlay-panel,
+  .inkwell-chrome-header--write,
+  .inkwell-chrome-header__row,
+  [data-inkwell-tour='editor-toolbar'],
+  .inkwell-manuscript-toolbar,
+  .inkwell-manuscript-toolbar__inner {
+    transition-duration: var(--inkwell-panel-motion-duration);
+    transition-timing-function: var(--inkwell-panel-motion-ease);
+  }
 }
 
 .inkwell-panel-motion--live {
@@ -799,6 +859,178 @@ html:not(.dark) .inkwell-hub-dropzone:hover {
   z-index: 30;
 }
 
+/* Typewriter modes (Write workspace) */
+html.inkwell-typewriter-full .inkwell-chrome-header,
+html.inkwell-typewriter-full .inkwell-chapters-overlay-clip,
+html.inkwell-typewriter-full .inkwell-wordstat-float-root {
+  display: none !important;
+}
+
+html.inkwell-typewriter-full .inkwell-editor-shell--typewriter-full {
+  box-shadow: none;
+  background: var(--color-parchment);
+}
+
+html.dark.inkwell-typewriter-full .inkwell-editor-shell--typewriter-full {
+  background: var(--color-panel-dark);
+  box-shadow: none;
+}
+
+html.inkwell-typewriter-full .inkwell-editor-shell--typewriter-full {
+  padding: 0.75rem 1rem 1.5rem !important;
+}
+
+@media (min-width: 640px) {
+  html.inkwell-typewriter-full .inkwell-editor-shell--typewriter-full {
+    padding: 1rem 1.5rem 2rem !important;
+  }
+}
+
+/* Lite typewriter: drawer collapsed — app header slides away, toolbar rises into its place */
+html.inkwell-typewriter-lite .inkwell-chrome-header--write {
+  max-height: 0;
+  border-bottom-width: 0;
+  pointer-events: none;
+}
+
+html.inkwell-typewriter-lite .inkwell-chrome-header__row {
+  transform: translate3d(0, -100%, 0);
+}
+
+html.inkwell-typewriter-lite .inkwell-manuscript-toolbar {
+  max-height: var(--inkwell-lite-toolbar-full-h);
+  overflow: hidden;
+}
+
+html.inkwell-typewriter-lite:not(.inkwell-chapters-panel-motion) .inkwell-manuscript-toolbar {
+  position: sticky;
+  top: max(0px, env(safe-area-inset-top, 0px));
+  z-index: 85;
+}
+
+html.inkwell-typewriter-lite .inkwell-chapters-overlay-rail {
+  border-right-color: color-mix(in srgb, var(--color-dust) 40%, transparent);
+  box-shadow: 0 6px 20px -10px rgba(0, 0, 0, 0.12);
+  transition:
+    border-color var(--inkwell-panel-motion-duration) var(--inkwell-panel-motion-ease),
+    box-shadow var(--inkwell-panel-motion-duration) var(--inkwell-panel-motion-ease);
+}
+
+html.dark.inkwell-typewriter-lite .inkwell-chapters-overlay-rail {
+  border-right-color: color-mix(in srgb, var(--color-border-dark) 40%, transparent);
+  box-shadow: 0 8px 24px -12px rgba(0, 0, 0, 0.45);
+}
+
+html.inkwell-typewriter-lite main {
+  background: color-mix(in srgb, var(--color-parchment) 26%, transparent);
+  transition: background-color var(--inkwell-panel-motion-duration) var(--inkwell-panel-motion-ease);
+}
+
+html.dark.inkwell-typewriter-lite main {
+  background: color-mix(in srgb, var(--color-panel-dark) 52%, transparent);
+}
+
+html.inkwell-typewriter-lite .inkwell-editor-shell {
+  transition: box-shadow var(--inkwell-panel-motion-duration) var(--inkwell-panel-motion-ease);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 88%, transparent),
+    inset 0 0 72px -18px rgba(139, 69, 19, 0.22),
+    0 0 0 1px color-mix(in srgb, var(--color-walnut) 14%, transparent),
+    0 14px 40px -16px rgba(44, 36, 31, 0.12),
+    0 0 36px -14px color-mix(in srgb, var(--color-accent-warm) 32%, transparent);
+}
+
+html.dark.inkwell-typewriter-lite .inkwell-editor-shell {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-cream) 16%, transparent),
+    0 0 32px -8px color-mix(in srgb, var(--color-cream) 42%, transparent),
+    inset 0 0 72px -18px rgba(139, 69, 19, 0.28),
+    0 18px 48px -20px rgba(0, 0, 0, 0.72);
+}
+
+html.inkwell-typewriter-lite .tiptap.ProseMirror {
+  min-height: calc(100dvh - 8rem);
+  transition: min-height var(--inkwell-panel-motion-duration) var(--inkwell-panel-motion-ease);
+}
+
+/* Idle hide: toolbar slides away (app header already hidden in lite) */
+html.inkwell-typewriter-lite-idle .inkwell-manuscript-toolbar {
+  max-height: 0;
+  opacity: 0;
+  border-bottom-width: 0;
+  pointer-events: none;
+}
+
+html.inkwell-typewriter-lite-idle .inkwell-manuscript-toolbar__inner {
+  transform: translate3d(0, -100%, 0);
+}
+
+html.inkwell-typewriter-lite-idle .tiptap.ProseMirror {
+  min-height: calc(100dvh - 5rem);
+}
+
+/* Lite ambient polish only — panel slides (drawers + write chrome) use --inkwell-panel-motion-* and stay full speed. */
+@media (prefers-reduced-motion: reduce) {
+  html.inkwell-typewriter-lite .inkwell-editor-shell,
+  html.inkwell-typewriter-lite main,
+  html.inkwell-typewriter-lite .tiptap.ProseMirror {
+    transition: none;
+  }
+}
+
+.inkwell-editor-shell--typewriter-full .tiptap.ProseMirror {
+  max-width: 42rem;
+  min-height: calc(100dvh - 2rem);
+  padding-top: 0.75rem;
+  padding-bottom: var(--inkwell-scroll-follow-pad-bottom);
+}
+
+/* Write workspace (normal + lite): scroll past the last line without caret follow */
+[data-inkwell-tour='editor-toolbar']:not([data-inkwell-format-split])
+  .inkwell-editor-shell:not(.inkwell-editor-shell--typewriter-full)
+  .tiptap.ProseMirror {
+  padding-bottom: var(--inkwell-write-editor-pad-bottom);
+}
+
+.inkwell-typewriter-exit-fab {
+  position: fixed;
+  z-index: 120;
+  right: max(1rem, env(safe-area-inset-right, 0px));
+  bottom: max(1rem, calc(env(safe-area-inset-bottom, 0px) + 0.5rem));
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 9999px;
+  border: 1px solid color-mix(in srgb, var(--color-walnut) 35%, transparent);
+  background: color-mix(in srgb, var(--color-parchment) 94%, white);
+  padding: 0.55rem 1rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-walnut);
+  box-shadow:
+    0 10px 28px -12px rgba(0, 0, 0, 0.35),
+    0 2px 8px -4px rgba(0, 0, 0, 0.2);
+  transition: opacity 0.35s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dark .inkwell-typewriter-exit-fab {
+  border-color: color-mix(in srgb, var(--color-cream) 28%, transparent);
+  background: color-mix(in srgb, var(--color-panel-dark) 92%, black);
+  color: var(--color-accent-warm);
+}
+
+.inkwell-typewriter-exit-fab--hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .inkwell-typewriter-exit-fab {
+    transition: none;
+  }
+}
+
 /* TipTap surface */
 .inkwell-editor-shell {
   background: var(--color-parchment);
@@ -1083,6 +1315,16 @@ html:not(.dark) .inkwell-hub-dropzone:hover {
 
 .dark .tiptap.ProseMirror a {
   color: var(--color-accent-warm);
+}
+
+.inkwell-editor-shell--readonly .tiptap.ProseMirror a[href^='#inkwell-chapter-'] {
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.inkwell-editor-shell--readonly .tiptap.ProseMirror a[href^='#inkwell-chapter-']:hover {
+  text-decoration-thickness: 2px;
 }
 
 .tiptap.ProseMirror img.inkwell-editor-img {

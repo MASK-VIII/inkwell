@@ -18,6 +18,7 @@ import {
   printContentWidthPt,
   printSpineBaseForExport,
 } from '../bookAssembly'
+import { findContentsMaster, hasStoredContentsMaster, syncContentsManuscript } from '../masterPages'
 import { extractPrintBlocks, type PrintBlock, type PrintTextRun } from './extractBlocks'
 import { breakOptionalLigaturesForPrint } from './normalizePrintText'
 import { figureDisplayPts } from './imageDims'
@@ -1497,13 +1498,45 @@ async function paginatePrintExportInner(
 ): Promise<{ pages: PrintPage[]; finalSpine: Manuscript[] }> {
   const theme = layoutTheme ?? project.theme
   const spine = printSpineBaseForExport(project)
+
   if (!project.assembly.includePrintToc) {
-    const pages = await paginateSpineWithFont(spine, theme, fonts, ctx)
-    return { pages, finalSpine: spine }
+    const synced = hasStoredContentsMaster(project)
+      ? syncContentsManuscript({ ...project, chapters: spine })
+      : null
+    const finalSpine = synced?.chapters ?? spine
+    const pages = await paginateSpineWithFont(finalSpine, theme, fonts, ctx)
+    return { pages, finalSpine }
   }
 
   const cw = printContentWidthPt(theme.print)
   const fs = theme.print.fontSizePt
+
+  if (hasStoredContentsMaster(project)) {
+    let workingSpine = spine
+    for (let iter = 0; iter < 12; iter++) {
+      if (iter > 0) await yieldToMain()
+      const pages = await paginateSpineWithFont(workingSpine, theme, fonts, ctx)
+      const starts = firstPageByChapterId(pages, workingSpine)
+      const synced = syncContentsManuscript(
+        { ...project, chapters: workingSpine },
+        {
+          pageByManuscriptId: starts,
+          contentWidthPt: cw,
+          font: fonts.body,
+          fontSizePt: fs,
+        },
+      )
+      const prevContents = findContentsMaster(workingSpine)
+      const nextContents = findContentsMaster(synced.chapters)
+      const prevSig = prevContents ? JSON.stringify(prevContents.content) : ''
+      const nextSig = nextContents ? JSON.stringify(nextContents.content) : ''
+      workingSpine = synced.chapters
+      if (prevSig === nextSig) return { pages, finalSpine: workingSpine }
+    }
+    const pages = await paginateSpineWithFont(workingSpine, theme, fonts, ctx)
+    return { pages, finalSpine: workingSpine }
+  }
+
   let tocMs: Manuscript | null = null
 
   for (let iter = 0; iter < 12; iter++) {

@@ -11,6 +11,8 @@ import { WriterComment } from './extensions/WriterComment'
 import { WriterFootnote } from './extensions/WriterFootnote'
 import { inkwellMentionExtension } from './inkwellMention'
 import { InkwellTabIndent } from './extensions/InkwellTabIndent'
+import { inkwellTypewriterScrollExtension } from './extensions/InkwellTypewriterScroll'
+import type { TypewriterMode } from '../typewriterMode'
 
 export function createManuscriptTipTapExtensions(opts: {
   getMentionItems: () => MentionItem[]
@@ -18,9 +20,18 @@ export function createManuscriptTipTapExtensions(opts: {
   /** Reserved for `[[wikilink]]` suggestion (wired in editor; extension TBD). */
   getWikilinkCandidates?: () => MentionItem[]
   wikilinkMode?: 'live' | 'import'
+  getTypewriterMode?: () => TypewriterMode
+  getScrollRoot?: () => HTMLElement | null
 }) {
   void opts.getWikilinkCandidates
   void opts.wikilinkMode
+  const scrollExt =
+    opts.getTypewriterMode && opts.getScrollRoot
+      ? inkwellTypewriterScrollExtension({
+          getTypewriterMode: opts.getTypewriterMode,
+          getScrollRoot: opts.getScrollRoot,
+        })
+      : null
   return [
     StarterKit.configure({
       paragraph: false,
@@ -53,5 +64,6 @@ export function createManuscriptTipTapExtensions(opts: {
     }),
     /** After mention so @ suggestion can handle Tab first; prevents browser focus trap */
     InkwellTabIndent,
+    ...(scrollExt ? [scrollExt] : []),
   ]
 }

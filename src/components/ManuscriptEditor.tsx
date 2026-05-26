@@ -11,12 +11,17 @@ import {
   type MutableRefObject,
   type ReactNode,
 } from 'react'
+import { parseInkwellChapterLinkHref } from '../lib/masterPages'
 import { createManuscriptTipTapExtensions } from '../lib/tiptap/manuscriptExtensions'
+import type { TypewriterMode } from '../lib/typewriterMode'
 import type { MentionItem } from '../lib/tiptap/mentionUi'
 import { useIsMobileViewport } from '../hooks/useIsMobileViewport'
 import { InkwellEditorLinkMenu, inkwellSafeExternalHref, type InkwellEditorLinkMenuItem } from './InkwellEditorLinkMenu'
 import { MobileFormatSheet } from './MobileFormatSheet'
 import { ManuscriptToolbar } from './ManuscriptToolbar'
+import { WriteChaptersOverlay } from './WriteChaptersOverlay'
+import type { Manuscript } from '../types'
+import type { TransitionEvent } from 'react'
 
 function mentionItemsEqual(a: MentionItem[], b: MentionItem[]): boolean {
   if (a === b) return true
@@ -42,7 +47,12 @@ function inkwellNoteLinkMenuItems(
 type Props = {
   manuscriptId: number
   content: JSONContent
-  onDocumentChange: (json: JSONContent) => void
+  /** Legacy path: serialize doc JSON on each update (e.g. sticky note popout). */
+  onDocumentChange?: (json: JSONContent) => void
+  /** Write path: signal typing only; parent flushes editor JSON on idle (no per-keystroke getJSON). */
+  onTypingActivity?: () => void
+  /** Called on unmount so the parent can flush live ProseMirror content before remount/switch. */
+  onEditorFlush?: () => void
   editorRef: MutableRefObject<Editor | null>
   /** Slimmer word/char line for minimal chrome */
   compactFooterStats?: boolean
@@ -66,8 +76,8 @@ type Props = {
   toolbarVariant?: 'writeMinimal' | 'full' | 'formatSplit'
   /** Shown in the Write toolbar next to Undo/Redo when using `writeMinimal`. */
   onOpenFindReplace?: () => void
-  /** Optional overlay rendered just below the toolbar, layered over the editor shell. Used for the Write Chapters drawer. */
-  leftOverlay?: ReactNode
+  /** Write workspace chapters drawer; rendered over the editor shell (below toolbar). */
+  writeChaptersOverlay?: WriteChaptersOverlayConfig | null
   /** `[[` wikilink picker targets (same shape as @mention items; `id` = note project id). */
   getWikilinkCandidates?: () => MentionItem[]
   /** Linked note from @mention / [[wikilink]]: open floating editor (optional). */
@@ -76,6 +86,32 @@ type Props = {
   onLinkedNoteOpenMain?: (noteProjectId: string) => void
   /** `mention:ch-…` @mention: switch chapter in the current book/note project. */
   onGoToChapter?: (chapterId: number) => void
+  /** Auto-synced sections (e.g. Contents): display in editor but block edits. */
+  readOnly?: boolean
+  /** Rendered inside the scroll shell above the document (e.g. Contents front-matter chips). */
+  editorHeader?: ReactNode
+  /** Resolved Write workspace typewriter mode (off / lite / full). */
+  typewriterMode?: TypewriterMode
+  /** User preference toggle for full typewriter (for toolbar pressed state). */
+  typewriterEnabled?: boolean
+  onToggleTypewriter?: () => void
+}
+
+export type WriteChaptersOverlayConfig = {
+  chapters: Manuscript[]
+  currentId: number | null
+  chaptersAsideCollapsed: boolean
+  chaptersPanelMotionLive: boolean
+  persistedScrollTopRef: MutableRefObject<number>
+  onExpand: () => void
+  onCollapse: () => void
+  onCreateChapter: () => void
+  onSelectChapter: (id: number) => void
+  onDeleteChapter: (id: number) => void
+  onDropReorder: (draggedId: number, targetId: number) => void
+  onSplitChapter?: (id: number) => void
+  onMergeWithNext?: (id: number) => void
+  onPanelTransitionEnd: (e: TransitionEvent<HTMLElement>) => void
 }
 
 function readCssSafeInsetBottomPx(): number {
@@ -114,6 +150,8 @@ function ManuscriptEditorInner({
   manuscriptId,
   content,
   onDocumentChange,
+  onTypingActivity,
+  onEditorFlush,
   editorRef,
   compactFooterStats,
   embedded,
@@ -127,13 +165,21 @@ function ManuscriptEditorInner({
   wordStatStorageKey = null,
   toolbarVariant = 'full',
   onOpenFindReplace,
-  leftOverlay,
+  writeChaptersOverlay,
   getWikilinkCandidates,
   onLinkedNoteOpenPopout,
   onLinkedNoteOpenMain,
   onGoToChapter,
+  readOnly = false,
+  editorHeader,
+  typewriterMode = 'off',
+  typewriterEnabled = false,
+  onToggleTypewriter,
 }: Props) {
   const isMobile = useIsMobileViewport()
+  const isTypewriterFull = typewriterMode === 'full'
+  const [typewriterExitFabVisible, setTypewriterExitFabVisible] = useState(true)
+  const typewriterExitHideTimerRef = useRef<number | null>(null)
   const [mobileFormatOpen, setMobileFormatOpen] = useState(false)
   const minimalBar = toolbarVariant === 'writeMinimal'
   const formatSplitMode = toolbarVariant === 'formatSplit'
@@ -166,16 +212,16 @@ function ManuscriptEditorInner({
   } | null>(null)
 
   /**
-   * TipTap transactions can fire multiple times per keypress. Calling `editor.getJSON()` and
-   * propagating it to app state on every update becomes very expensive for large documents.
-   * Throttle to at most once per animation frame while keeping the most recent editor state.
+   * Legacy popout path: TipTap transactions can fire multiple times per keypress. Throttle
+   * `getJSON()` to at most once per animation frame. The Write workspace uses `onTypingActivity`
+   * instead so ProseMirror owns the live doc until idle flush.
    */
   const latestEditorForUpdateRef = useRef<Editor | null>(null)
   const updateRafRef = useRef<number | null>(null)
   const flushDocumentUpdate = useCallback(() => {
     updateRafRef.current = null
     const ed = latestEditorForUpdateRef.current
-    if (!ed) return
+    if (!ed || !onDocumentChange) return
     onDocumentChange(ed.getJSON())
   }, [onDocumentChange])
 
@@ -188,11 +234,18 @@ function ManuscriptEditorInner({
     }
   }, [])
 
+  useLayoutEffect(() => {
+    return () => {
+      onEditorFlush?.()
+    }
+  }, [onEditorFlush])
+
   const mentionItemsRef = useRef(mentionItems)
   const getWikilinkCandidatesRef = useRef(getWikilinkCandidates)
   const onLinkedNoteOpenPopoutRef = useRef(onLinkedNoteOpenPopout)
   const onLinkedNoteOpenMainRef = useRef(onLinkedNoteOpenMain)
   const onGoToChapterRef = useRef(onGoToChapter)
+  const typewriterModeRef = useRef(typewriterMode)
 
   useLayoutEffect(() => {
     mentionItemsRef.current = mentionItems
@@ -200,13 +253,40 @@ function ManuscriptEditorInner({
     onLinkedNoteOpenPopoutRef.current = onLinkedNoteOpenPopout
     onLinkedNoteOpenMainRef.current = onLinkedNoteOpenMain
     onGoToChapterRef.current = onGoToChapter
+    typewriterModeRef.current = typewriterMode
   }, [
     mentionItems,
     getWikilinkCandidates,
     onLinkedNoteOpenPopout,
     onLinkedNoteOpenMain,
     onGoToChapter,
+    typewriterMode,
   ])
+
+  useEffect(() => {
+    if (!isTypewriterFull) return
+    const showFab = () => {
+      setTypewriterExitFabVisible(true)
+      if (typewriterExitHideTimerRef.current != null) {
+        window.clearTimeout(typewriterExitHideTimerRef.current)
+      }
+      typewriterExitHideTimerRef.current = window.setTimeout(() => {
+        setTypewriterExitFabVisible(false)
+        typewriterExitHideTimerRef.current = null
+      }, 2800)
+    }
+    showFab()
+    window.addEventListener('pointermove', showFab)
+    window.addEventListener('keydown', showFab)
+    return () => {
+      window.removeEventListener('pointermove', showFab)
+      window.removeEventListener('keydown', showFab)
+      if (typewriterExitHideTimerRef.current != null) {
+        window.clearTimeout(typewriterExitHideTimerRef.current)
+        typewriterExitHideTimerRef.current = null
+      }
+    }
+  }, [isTypewriterFull])
 
   useEffect(() => {
     setFollowMenu(null)
@@ -233,8 +313,11 @@ function ManuscriptEditorInner({
         mentionMode: 'live',
         getWikilinkCandidates: () => getWikilinkCandidatesRef.current?.() ?? [],
         wikilinkMode: 'live',
+        getTypewriterMode: () => typewriterModeRef.current,
+        getScrollRoot: () => shellRef.current,
       }),
       content,
+      editable: !readOnly,
       editorProps: {
         attributes: {
           class: 'tiptap',
@@ -291,6 +374,14 @@ function ManuscriptEditorInner({
             const anchor = el.closest('a[href]') as HTMLAnchorElement | null
             if (anchor?.closest('.tiptap')) {
               const href = anchor.getAttribute('href') ?? ''
+              const linkedChapterId = parseInkwellChapterLinkHref(href)
+              const goCh = onGoToChapterRef.current
+              if (linkedChapterId != null && goCh) {
+                event.preventDefault()
+                event.stopPropagation()
+                goCh(linkedChapterId)
+                return true
+              }
               const safe = inkwellSafeExternalHref(href)
               if (safe) {
                 event.preventDefault()
@@ -319,8 +410,13 @@ function ManuscriptEditorInner({
           },
         },
       },
-      onUpdate: ({ editor }) => {
-        latestEditorForUpdateRef.current = editor
+      onUpdate: ({ editor: ed }) => {
+        if (readOnly) return
+        if (onTypingActivity) {
+          onTypingActivity()
+          return
+        }
+        latestEditorForUpdateRef.current = ed
         if (updateRafRef.current != null) return
         updateRafRef.current = window.requestAnimationFrame(flushDocumentUpdate)
         // Intentionally no toolbar bump here: normal typing moves the selection,
@@ -329,9 +425,22 @@ function ManuscriptEditorInner({
     },
     // Mention list must NOT be a dependency: parents rebuild the array whenever project
     // state updates (each keystroke). Extensions read fresh items via getMentionItems + ref.
-    [manuscriptId],
+    [manuscriptId, readOnly],
   )
   /* eslint-enable react-hooks/refs */
+
+  const readOnlyContentSigRef = useRef('')
+  useLayoutEffect(() => {
+    if (!editor || !readOnly) return
+    const sig = JSON.stringify(content)
+    if (sig === readOnlyContentSigRef.current) return
+    readOnlyContentSigRef.current = sig
+    editor.commands.setContent(content, { emitUpdate: false })
+  }, [editor, readOnly, content])
+
+  useEffect(() => {
+    if (!readOnly) readOnlyContentSigRef.current = ''
+  }, [manuscriptId, readOnly])
 
   useEffect(() => {
     editorRef.current = editor
@@ -521,7 +630,7 @@ function ManuscriptEditorInner({
       data-inkwell-tour="editor-toolbar"
       {...(formatSplitMode ? { 'data-inkwell-format-split': true } : {})}
     >
-      {!formatSplitMode && !isMobile ?
+      {!formatSplitMode && !isMobile && !isTypewriterFull ?
         <ManuscriptToolbar
           manuscriptId={manuscriptId}
           editor={editor}
@@ -529,16 +638,42 @@ function ManuscriptEditorInner({
           embedded={embedded}
           bumpToolbar={bumpToolbar}
           onOpenFindReplace={onOpenFindReplace}
+          typewriterEnabled={typewriterEnabled}
+          onToggleTypewriter={onToggleTypewriter}
         />
       : null}
 
-      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      {leftOverlay}
+      <div className="inkwell-write-editor-stack relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      {writeChaptersOverlay && !isTypewriterFull ?
+        <WriteChaptersOverlay
+          isMobile={isMobile}
+          chapters={writeChaptersOverlay.chapters}
+          currentId={writeChaptersOverlay.currentId}
+          chaptersAsideCollapsed={writeChaptersOverlay.chaptersAsideCollapsed}
+          chaptersPanelMotionLive={writeChaptersOverlay.chaptersPanelMotionLive}
+          persistedScrollTopRef={writeChaptersOverlay.persistedScrollTopRef}
+          onExpand={writeChaptersOverlay.onExpand}
+          onCollapse={writeChaptersOverlay.onCollapse}
+          onCreateChapter={writeChaptersOverlay.onCreateChapter}
+          onSelectChapter={writeChaptersOverlay.onSelectChapter}
+          onDeleteChapter={writeChaptersOverlay.onDeleteChapter}
+          onDropReorder={writeChaptersOverlay.onDropReorder}
+          onSplitChapter={writeChaptersOverlay.onSplitChapter}
+          onMergeWithNext={writeChaptersOverlay.onMergeWithNext}
+          onPanelTransitionEnd={writeChaptersOverlay.onPanelTransitionEnd}
+        />
+      : null}
       <div
         ref={shellRef}
-        className={`inkwell-editor-shell relative min-h-0 flex-1 overflow-auto ${shellPad} ${formatSplitMode ? 'inkwell-editor-shell--format-split' : ''}${isMobile && !formatSplitMode ? ' inkwell-editor-shell--mobile-notoolbar' : ''}`}
+        className={`inkwell-editor-shell relative min-h-0 flex-1 overflow-auto ${shellPad} ${formatSplitMode ? 'inkwell-editor-shell--format-split' : ''}${isMobile && !formatSplitMode ? ' inkwell-editor-shell--mobile-notoolbar' : ''}${isTypewriterFull ? ' inkwell-editor-shell--typewriter-full' : ''}${readOnly ? ' inkwell-editor-shell--readonly' : ''}`}
       >
-        {floatPos !== null && !formatSplitMode && !isMobile ? (
+        {editorHeader ? <div className="pointer-events-auto">{editorHeader}</div> : null}
+        {readOnly ? (
+          <p className="mx-auto mb-4 max-w-[720px] px-2 text-center text-[11px] text-ink/50 dark:text-ink-dark/50 sm:px-4">
+            Updates automatically from your chapters.
+          </p>
+        ) : null}
+        {floatPos !== null && !formatSplitMode && !isMobile && !isTypewriterFull ? (
           <div className="sticky top-2 z-30 flex h-0 w-full justify-end overflow-visible pr-2 pt-1 pointer-events-none">
             <div
               ref={floatClusterRef}
@@ -587,8 +722,11 @@ function ManuscriptEditorInner({
         ) : null}
         {showChapterTitleOnPage && onChapterTitleChange ? (
           <div
-            className={`mx-auto max-w-[720px] ${
-              formatSplitMode ? 'mb-3 px-1 sm:mb-4' : embedded ? 'mb-5 px-1' : 'mb-8 px-2 sm:px-4'
+            className={`mx-auto ${
+              isTypewriterFull ? 'mb-6 max-w-[42rem] px-2 pt-[min(6vh,2.75rem)] sm:mb-7 sm:px-4'
+              : formatSplitMode ? 'mb-3 max-w-[720px] px-1 sm:mb-4'
+              : embedded ? 'mb-5 max-w-[720px] px-1'
+              : 'mb-8 max-w-[720px] px-2 sm:px-4'
             }`}
           >
             <label className="sr-only" htmlFor={`inkwell-chapter-title-${manuscriptId}`}>
@@ -653,7 +791,43 @@ function ManuscriptEditorInner({
           onClose={() => setFollowMenu(null)}
         />
       : null}
+
+      {isTypewriterFull && onToggleTypewriter ?
+        <button
+          type="button"
+          className={`inkwell-typewriter-exit-fab${typewriterExitFabVisible ? '' : ' inkwell-typewriter-exit-fab--hidden'}`}
+          onClick={onToggleTypewriter}
+          aria-label="Exit typewriter mode"
+          title="Exit typewriter (Esc)"
+        >
+          Exit typewriter
+        </button>
+      : null}
     </div>
+  )
+}
+
+function writeChaptersOverlayEqual(
+  a: WriteChaptersOverlayConfig | null | undefined,
+  b: WriteChaptersOverlayConfig | null | undefined,
+): boolean {
+  if (a === b) return true
+  if (!a || !b) return !a && !b
+  return (
+    a.chapters === b.chapters &&
+    a.currentId === b.currentId &&
+    a.chaptersAsideCollapsed === b.chaptersAsideCollapsed &&
+    a.chaptersPanelMotionLive === b.chaptersPanelMotionLive &&
+    a.persistedScrollTopRef === b.persistedScrollTopRef &&
+    a.onExpand === b.onExpand &&
+    a.onCollapse === b.onCollapse &&
+    a.onCreateChapter === b.onCreateChapter &&
+    a.onSelectChapter === b.onSelectChapter &&
+    a.onDeleteChapter === b.onDeleteChapter &&
+    a.onDropReorder === b.onDropReorder &&
+    a.onSplitChapter === b.onSplitChapter &&
+    a.onMergeWithNext === b.onMergeWithNext &&
+    a.onPanelTransitionEnd === b.onPanelTransitionEnd
   )
 }
 
@@ -662,6 +836,8 @@ export const ManuscriptEditor = memo(ManuscriptEditorInner, (prev, next) => {
   return (
     prev.manuscriptId === next.manuscriptId &&
     prev.onDocumentChange === next.onDocumentChange &&
+    prev.onTypingActivity === next.onTypingActivity &&
+    prev.onEditorFlush === next.onEditorFlush &&
     prev.editorRef === next.editorRef &&
     prev.compactFooterStats === next.compactFooterStats &&
     prev.embedded === next.embedded &&
@@ -675,10 +851,18 @@ export const ManuscriptEditor = memo(ManuscriptEditorInner, (prev, next) => {
     prev.wordStatStorageKey === next.wordStatStorageKey &&
     prev.toolbarVariant === next.toolbarVariant &&
     prev.onOpenFindReplace === next.onOpenFindReplace &&
-    prev.leftOverlay === next.leftOverlay &&
+    writeChaptersOverlayEqual(prev.writeChaptersOverlay, next.writeChaptersOverlay) &&
     prev.getWikilinkCandidates === next.getWikilinkCandidates &&
     prev.onLinkedNoteOpenPopout === next.onLinkedNoteOpenPopout &&
     prev.onLinkedNoteOpenMain === next.onLinkedNoteOpenMain &&
-    prev.onGoToChapter === next.onGoToChapter
+    prev.onGoToChapter === next.onGoToChapter &&
+    prev.readOnly === next.readOnly &&
+    prev.editorHeader === next.editorHeader &&
+    (prev.readOnly
+      ? JSON.stringify(prev.content) === JSON.stringify(next.content)
+      : true) &&
+    prev.typewriterMode === next.typewriterMode &&
+    prev.typewriterEnabled === next.typewriterEnabled &&
+    prev.onToggleTypewriter === next.onToggleTypewriter
   )
 })

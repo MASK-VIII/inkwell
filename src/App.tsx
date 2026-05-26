@@ -1,4 +1,5 @@
 import {
+  AlignVerticalSpaceAround,
   BookOpen,
   ChevronDown,
   ChevronLeft,
@@ -55,8 +56,9 @@ import { SyncConflictModal } from './components/SyncConflictModal'
 import { SyncStatusStrip } from './components/SyncStatusStrip'
 import { ShelfLinkedNotesList } from './components/ShelfLinkedNotesList'
 import { StickyNotePopout } from './components/book-tools/StickyNotePopout'
-import { ManuscriptEditor } from './components/ManuscriptEditor'
+import { ManuscriptEditor, type WriteChaptersOverlayConfig } from './components/ManuscriptEditor'
 import { ChaptersScrollableList } from './components/ChaptersScrollableList'
+import { ContentsEditorBanner } from './components/ContentsEditorBanner'
 import { FormatPreviewModeBar } from './components/FormatPreviewModeBar'
 import { devMarkChaptersToggleEnd, devMarkChaptersToggleStart } from './lib/dev/chaptersOverlayPerf'
 import {
@@ -79,6 +81,7 @@ import {
 import { attachInkwellDragGhost } from './lib/dragGhost'
 import { NOTE_DRAG_MIME, NOTE_DRAG_TEXT_PREFIX, readShelfDragNoteId } from './lib/shelfDrag'
 import {
+  archiveDeletedProject,
   createBookProject,
   createNoteProject,
   createShelfProjectWithMasterNote,
@@ -89,6 +92,7 @@ import {
   hydrateInkwellStorage,
   buildInkwellUrlForProject,
   listBookMetas,
+  listDeletedProjects,
   listLinkedNotesForBook,
   listLinkedNotesForBookInShelfOrder,
   listLooseNoteMetas,
@@ -110,14 +114,19 @@ import {
   listProjectHistory,
   loadProjectSnapshot,
   clearProjectHistory,
+  purgeDeletedProject,
+  restoreDeletedProject,
   getPinnedChildNoteIdsForProject,
-  getTabSessionProjectId,
   loadProjectIndex,
   readOpenProjectIdFromLocation,
   rememberOpenChapter,
+  resolveOpenProjectId,
+  resolveResumeBodyChapterId,
   resolveResumeChapterId,
   saveProject,
+  setActiveProjectId,
   setTabSessionProjectId,
+  syncOpenProjectQueryParam,
   totalWordsInChapters,
   wouldCreateNoteAttachmentCycle,
 } from './lib/manuscripts'
@@ -143,6 +152,7 @@ import { cloudLibraryQuotaBytes } from './lib/inkwellEntitlements'
 import { useInkwellLibrarySync } from './lib/sync/useInkwellLibrarySync'
 import { useInkwellEntitlements } from './hooks/useInkwellEntitlements'
 import { useIsMobileViewport } from './hooks/useIsMobileViewport'
+import { useLiteTypewriterChrome } from './hooks/useLiteTypewriterChrome'
 import {
   appendInkwellUserToCheckoutUrl,
   getPaddleCheckoutEnv,
@@ -167,7 +177,24 @@ import {
   type ImportArchiveResult,
 } from './lib/projectArchive'
 import { estimateLibraryFootprint } from './lib/libraryFootprint'
+import {
+  readTypewriterEnabledFromStorage,
+  resolveTypewriterMode,
+  writeTypewriterEnabledToStorage,
+} from './lib/typewriterMode'
 import { mergeDocContents, splitDocAtTopLevelIndex } from './lib/chapterSplit'
+import {
+  addOptionalMasterPage,
+  applyBookMasterPages,
+  canDeleteMasterPage,
+  findTitleMaster,
+  isContentsPage,
+  isTitlePage,
+  isValidMasterReorder,
+  syncBookMetaFromTitlePage,
+  syncTitlePageContentFromBook,
+  type MasterPageCatalogEntry,
+} from './lib/masterPages'
 import type { NotesTourStepId } from './lib/notesTutorialSteps'
 import type { TourStepId } from './lib/tutorialSteps'
 import { applyThemePreset, type ThemePresetId } from './lib/themePresets'
@@ -213,8 +240,19 @@ function RouteWorkspaceFallback() {
 const THEME_KEY = 'inkwell-theme'
 const CHAPTERS_ASIDE_COLLAPSED_KEY = 'inkwell-chapters-aside-collapsed'
 const FORMAT_THEME_ASIDE_COLLAPSED_KEY = 'inkwell-format-theme-aside-collapsed'
-/** Delay before writing the open book to localStorage after typing stops (keystrokes only update React state). */
+/** Delay before writing the open book to localStorage after typing stops. */
 const PERSIST_IDLE_MS = 450
+
+function runWhenIdle(cb: () => void, timeout = 2000): void {
+  if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+    ;(window as unknown as { requestIdleCallback: (fn: () => void, opts?: { timeout?: number }) => number }).requestIdleCallback(
+      cb,
+      { timeout },
+    )
+  } else {
+    globalThis.setTimeout(cb, 0)
+  }
+}
 
 type DeletedSnapshot = Manuscript & { originalIndex: number }
 
@@ -456,36 +494,30 @@ function projectIdIsIndexed(id: string): boolean {
 function readInitialEditorSession(): {
   project: InkwellProject
   currentId: number | null
+  pendingProjectId: string | null
 } {
-  const fromUrl = readOpenProjectIdFromLocation()
-  if (fromUrl) {
-    const p = loadProject(fromUrl)
+  const preferredId = resolveOpenProjectId()
+  if (preferredId) {
+    setTabSessionProjectId(preferredId)
+    const p = loadProject(preferredId)
     if (p) {
-      setTabSessionProjectId(fromUrl)
-      return { project: p, currentId: resolveResumeChapterId(p) }
+      setActiveProjectId(p.id)
+      return { project: p, currentId: resolveResumeChapterId(p), pendingProjectId: null }
     }
-    // Project blob may still be loading from IndexedDB; index is already in localStorage.
-    if (projectIdIsIndexed(fromUrl)) {
-      const fallback = ensureAtLeastOneProject()
-      return { project: fallback, currentId: resolveResumeChapterId(fallback) }
-    }
-  }
-  const tabId = getTabSessionProjectId()
-  if (tabId) {
-    const p = loadProject(tabId)
-    if (p) {
-      setTabSessionProjectId(p.id)
-      return { project: p, currentId: resolveResumeChapterId(p) }
-    }
-    if (projectIdIsIndexed(tabId)) {
-      const fallback = ensureAtLeastOneProject()
-      return { project: fallback, currentId: resolveResumeChapterId(fallback) }
+    if (projectIdIsIndexed(preferredId)) {
+      setActiveProjectId(preferredId)
+      const placeholder = ensureAtLeastOneProject()
+      return {
+        project: placeholder,
+        currentId: resolveResumeChapterId(placeholder),
+        pendingProjectId: preferredId,
+      }
     }
     setTabSessionProjectId(null)
   }
   const project = ensureAtLeastOneProject()
   setTabSessionProjectId(project.id)
-  return { project, currentId: resolveResumeChapterId(project) }
+  return { project, currentId: resolveResumeChapterId(project), pendingProjectId: null }
 }
 
 export default function App() {
@@ -507,6 +539,7 @@ export default function App() {
     }
   })
   const [chaptersPanelMotionLive, setChaptersPanelMotionLive] = useState(false)
+  const [typewriterEnabled, setTypewriterEnabled] = useState(() => readTypewriterEnabledFromStorage())
   /** Survives Write `leftOverlay` remounts so chapter list scroll isn’t lost on selection. */
   const writeChaptersListScrollTopRef = useRef(0)
   const workspaceChaptersListScrollTopRef = useRef(0)
@@ -559,7 +592,7 @@ export default function App() {
   useThemeShine(bookshelfBrandRef)
   useThemeShine(writeHeaderBrandRef)
   const lastDeletedRef = useRef<DeletedSnapshot | null>(null)
-  const lastDeletedProjectRef = useRef<{ blob: InkwellProject } | null>(null)
+  const lastDeletedProjectSnapshotRef = useRef<{ id: string; blob: InkwellProject } | null>(null)
   const newProjectMenuRef = useRef<HTMLDivElement | null>(null)
   const docxShelfInputRef = useRef<HTMLInputElement | null>(null)
   const libraryShelfInputRef = useRef<HTMLInputElement | null>(null)
@@ -573,8 +606,8 @@ export default function App() {
   const [shelfDropHoverNotesSection, setShelfDropHoverNotesSection] = useState(false)
   const [shelfDropHoverProjectsSection, setShelfDropHoverProjectsSection] = useState(false)
   const [expandedShelfParentId, setExpandedShelfParentId] = useState<string | null>(null)
-  const [, setShelfPinRev] = useState(0)
-  const [, setShelfUiTick] = useState(0)
+  const [shelfPinRev, setShelfPinRev] = useState(0)
+  const [shelfUiTick, setShelfUiTick] = useState(0)
   const [shelfDropHoverTrash, setShelfDropHoverTrash] = useState(false)
   const [shelfProjectChildDropTarget, setShelfProjectChildDropTarget] = useState<{
     masterId: string
@@ -589,6 +622,7 @@ export default function App() {
 
   const editorRef = useRef<Editor | null>(null)
   const projectRef = useRef(project)
+  const currentIdRef = useRef(currentId)
   const supabasePublicConfig = useMemo(() => getInkwellSupabasePublicConfig(), [])
   const inkwellEntitlements = useInkwellEntitlements(supabasePublicConfig)
   const isMobile = useIsMobileViewport()
@@ -653,6 +687,10 @@ export default function App() {
   const prevProjectIdForEditorRef = useRef(project.id)
   /** Avoid syncing sessionStorage from a provisional `project` until IDB hydration — wrong id would overwrite the tab binding. */
   const tabSessionSyncReadyRef = useRef(false)
+  /** Shelf click before IDB hydrate: open this id once `loadProject` can read the blob. */
+  const pendingOpenProjectIdRef = useRef<string | null>(boot.pendingProjectId)
+  /** Suppress chapter-change cleanup from calling setProject during openProject flushSync. */
+  const suppressChapterCleanupSetProjectRef = useRef(false)
 
   const chapters = project.chapters
 
@@ -737,7 +775,36 @@ export default function App() {
     return items
   }, [project.book.authorName, project.book.title, chapterMentionTitlesKey, linkedNotesForBookPanel])
   const isNote = project.kind === 'note'
+
+  const typewriterMode = useMemo(
+    () => resolveTypewriterMode(route, isNote, typewriterEnabled, chaptersAsideCollapsed),
+    [route, isNote, typewriterEnabled, chaptersAsideCollapsed],
+  )
+
+  const { notifyTyping: notifyLiteTypewriterTyping } = useLiteTypewriterChrome(typewriterMode)
+
+  const toggleTypewriter = useCallback(() => {
+    setTypewriterEnabled((prev) => {
+      const next = !prev
+      writeTypewriterEnabledToStorage(next)
+      return next
+    })
+  }, [])
+
+  useEffect(() => {
+    if (typewriterMode !== 'full') return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return
+      if (bookToolsOpen || findReplaceOpen || gettingStartedTourOpen || notesTourOpen) return
+      toggleTypewriter()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [typewriterMode, bookToolsOpen, findReplaceOpen, gettingStartedTourOpen, notesTourOpen, toggleTypewriter])
+
   const current = chapters.find((m) => m.id === currentId) ?? null
+  const currentIsContents = Boolean(current && !isNote && isContentsPage(current))
+
   const currentChapterIndex = useMemo(() => {
     if (currentId == null) return -1
     return chapters.findIndex((c) => c.id === currentId)
@@ -771,6 +838,7 @@ export default function App() {
       countWordsInDoc(liveCh.content)
     )
   }, [chapters, deferredProject.chapters, currentId, deferredBaseBookWords])
+  const deferredLiveTotalBookWords = useDeferredValue(liveTotalBookWords)
   const totalBookWords = useMemo(
     () => totalWordsInChapters(deferredProject.chapters),
     [deferredProject.chapters],
@@ -833,8 +901,24 @@ export default function App() {
   }, [darkMode])
 
   useLayoutEffect(() => {
+    document.documentElement.classList.toggle('inkwell-typewriter-full', typewriterMode === 'full')
+    document.documentElement.classList.toggle('inkwell-typewriter-lite', typewriterMode === 'lite')
+  }, [typewriterMode])
+
+  useLayoutEffect(() => {
+    document.documentElement.classList.toggle(
+      'inkwell-chapters-panel-motion',
+      chaptersPanelMotionLive && route === 'write',
+    )
+  }, [chaptersPanelMotionLive, route])
+
+  useLayoutEffect(() => {
     projectRef.current = project
   }, [project])
+
+  useLayoutEffect(() => {
+    currentIdRef.current = currentId
+  }, [currentId])
 
   useLayoutEffect(() => {
     if (!tabSessionSyncReadyRef.current) return
@@ -874,7 +958,10 @@ export default function App() {
       if (!tryDiscardFormatDraftsIfNeeded(from, next)) return
       routeRef.current = next
       setRouteState(next)
-      if (typeof window !== 'undefined') window.location.hash = routeToHash(next)
+      if (typeof window !== 'undefined') {
+        if (next === 'bookshelf') syncOpenProjectQueryParam(null)
+        window.location.hash = routeToHash(next)
+      }
     },
     [tryDiscardFormatDraftsIfNeeded],
   )
@@ -1160,13 +1247,88 @@ export default function App() {
     }
   }, [])
 
+  const clearHistoryIdleTimer = useCallback(() => {
+    if (historyTimerRef.current != null) {
+      window.clearTimeout(historyTimerRef.current)
+      historyTimerRef.current = null
+    }
+  }, [])
+
+  const saveProjectRefIfIndexed = useCallback((): InkwellProject | null => {
+    if (!projectIdIsIndexed(projectRef.current.id)) return null
+    const saved = saveProject(projectRef.current)
+    projectRef.current = saved
+    return saved
+  }, [])
+
+  /** Merge live ProseMirror JSON into projectRef only (no React setState). */
+  const flushEditorContentToProjectRef = useCallback((): boolean => {
+    const ed = editorRef.current
+    const chapterId = currentIdRef.current
+    if (!ed || chapterId === null) return false
+    const prev = projectRef.current
+    const active = prev.chapters.find((m) => m.id === chapterId)
+    if (!active || isContentsPage(active)) return false
+    const json = ed.getJSON()
+    if (!prev.chapters.some((m) => m.id === chapterId)) return false
+    let next = {
+      ...prev,
+      chapters: prev.chapters.map((m) => (m.id === chapterId ? { ...m, content: json } : m)),
+    }
+    if (isTitlePage(active)) {
+      next = syncBookMetaFromTitlePage(next)
+    }
+    projectRef.current = next
+    return true
+  }, [])
+
+  /** Merge live ProseMirror JSON into project state (and projectRef) without persisting to disk. */
+  const flushEditorContentToProject = useCallback((): boolean => {
+    const ed = editorRef.current
+    const chapterId = currentIdRef.current
+    if (!ed || chapterId === null) return false
+    const prev = projectRef.current
+    const active = prev.chapters.find((m) => m.id === chapterId)
+    if (!active || isContentsPage(active)) return false
+    const json = ed.getJSON()
+    if (!prev.chapters.some((m) => m.id === chapterId)) return false
+    let next = {
+      ...prev,
+      chapters: prev.chapters.map((m) => (m.id === chapterId ? { ...m, content: json } : m)),
+    }
+    if (isTitlePage(active)) {
+      next = syncBookMetaFromTitlePage(next)
+    }
+    projectRef.current = next
+    startTransition(() => setProject(next))
+    return true
+  }, [])
+
+  /** Persist projectRef to disk without updating React state (safe before openProject). */
+  const persistProjectRefToDisk = useCallback((): InkwellProject => {
+    clearPersistIdleTimer()
+    clearHistoryIdleTimer()
+    flushEditorContentToProjectRef()
+    const saved = saveProjectRefIfIndexed()
+    if (saved) return saved
+    return projectRef.current
+  }, [clearHistoryIdleTimer, clearPersistIdleTimer, flushEditorContentToProjectRef, saveProjectRefIfIndexed])
+
   /** Persist the in-memory book to localStorage and align goals; clears any pending debounced save. */
   const syncPersistedState = useCallback(() => {
     clearPersistIdleTimer()
+    if (!projectIdIsIndexed(projectRef.current.id)) {
+      const next = ensureAtLeastOneProject()
+      projectRef.current = next
+      setProject(next)
+      return next
+    }
+    flushEditorContentToProject()
     const saved = saveProject(projectRef.current)
+    projectRef.current = saved
     setProject(saved)
     return saved
-  }, [clearPersistIdleTimer])
+  }, [clearPersistIdleTimer, flushEditorContentToProject])
 
   const profileMenuGoToCloudSignIn = useCallback(() => {
     syncPersistedState()
@@ -1216,33 +1378,35 @@ export default function App() {
     }
     persistIdleTimerRef.current = window.setTimeout(() => {
       persistIdleTimerRef.current = null
-      setProject((prev) => saveProject(prev))
-      cloudSyncNotifyRef.current()
+      flushEditorContentToProject()
+      runWhenIdle(() => {
+        const saved = saveProjectRefIfIndexed()
+        if (!saved) return
+        setProject(saved)
+        cloudSyncNotifyRef.current()
+      })
     }, PERSIST_IDLE_MS)
-  }, [])
+  }, [flushEditorContentToProject, saveProjectRefIfIndexed])
 
   const recordHistorySoon = useCallback((label: string) => {
     // Debounced "idle" snapshot: it should feel automatic but not spam storage.
     const now = Date.now()
     historyLastRecordAtRef.current = now
-    if (historyTimerRef.current) window.clearTimeout(historyTimerRef.current)
+    clearHistoryIdleTimer()
     historyTimerRef.current = window.setTimeout(() => {
       const run = () => {
+        if (!projectIdIsIndexed(projectRef.current.id)) return
+        flushEditorContentToProject()
         const entry = pushProjectHistorySnapshot(projectRef.current, { label })
         if (entry) bumpHistory()
       }
-      // Keep the expensive JSON stringify + storage work off the critical typing path when possible.
-      if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-        ;(window as unknown as { requestIdleCallback: (cb: () => void, opts?: { timeout?: number }) => number })
-          .requestIdleCallback(run, { timeout: 1500 })
-      } else {
-        globalThis.setTimeout(run, 0)
-      }
+      runWhenIdle(run, 1500)
     }, 2500)
-  }, [bumpHistory])
+  }, [bumpHistory, clearHistoryIdleTimer, flushEditorContentToProject])
 
   // Ensure we have at least one baseline snapshot per book.
   useEffect(() => {
+    if (!projectIdIsIndexed(project.id)) return
     if (listProjectHistory(project.id).length === 0) {
       const entry = pushProjectHistorySnapshot(projectRef.current, { label: 'Initial', force: true })
       if (entry) bumpHistory()
@@ -1253,11 +1417,11 @@ export default function App() {
   useEffect(() => {
     const flush = (label: string) => {
       clearPersistIdleTimer()
-      if (historyTimerRef.current) {
-        window.clearTimeout(historyTimerRef.current)
-        historyTimerRef.current = null
-      }
+      clearHistoryIdleTimer()
+      if (!projectIdIsIndexed(projectRef.current.id)) return
+      flushEditorContentToProject()
       const saved = saveProject(projectRef.current)
+      projectRef.current = saved
       setProject(saved)
       const entry = pushProjectHistorySnapshot(saved, { label })
       if (entry) bumpHistory()
@@ -1272,14 +1436,20 @@ export default function App() {
       document.removeEventListener('visibilitychange', onVis)
       window.removeEventListener('beforeunload', onBeforeUnload)
     }
-  }, [bumpHistory, clearPersistIdleTimer])
+  }, [bumpHistory, clearHistoryIdleTimer, clearPersistIdleTimer, flushEditorContentToProject])
 
   useLayoutEffect(() => {
     return () => {
       clearPersistIdleTimer()
-      setProject((prev) => saveProject(prev))
+      flushEditorContentToProjectRef()
+      if (!projectIdIsIndexed(projectRef.current.id)) return
+      const saved = saveProject(projectRef.current)
+      projectRef.current = saved
+      if (!suppressChapterCleanupSetProjectRef.current) {
+        setProject(saved)
+      }
     }
-  }, [currentId, clearPersistIdleTimer])
+  }, [currentId, clearPersistIdleTimer, flushEditorContentToProjectRef])
 
   const persistProject = useCallback(
     (next: InkwellProject) => {
@@ -1291,22 +1461,39 @@ export default function App() {
   )
 
   const openProject = useCallback(
-    (id: string, opts?: { chapterId?: number | null }) => {
-      syncPersistedState()
+    (id: string, opts?: { chapterId?: number | null; fromShelf?: boolean }) => {
+      suppressChapterCleanupSetProjectRef.current = true
+      persistProjectRefToDisk()
+      setTabSessionProjectId(id)
+      setActiveProjectId(id)
       const p = loadProject(id)
-      if (!p) return
-      setProject(p)
+      if (!p) {
+        suppressChapterCleanupSetProjectRef.current = false
+        if (projectIdIsIndexed(id)) pendingOpenProjectIdRef.current = id
+        return
+      }
+      pendingOpenProjectIdRef.current = null
+      syncOpenProjectQueryParam(id)
       const forced = opts?.chapterId
       const nextId =
-        forced != null && p.chapters.some((c) => c.id === forced) ? forced : resolveResumeChapterId(p)
-      setCurrentId(nextId)
+        forced != null && p.chapters.some((c) => c.id === forced)
+          ? forced
+          : opts?.fromShelf
+            ? resolveResumeBodyChapterId(p)
+            : resolveResumeChapterId(p)
+      flushSync(() => {
+        setProject(p)
+        setCurrentId(nextId)
+      })
+      projectRef.current = p
+      suppressChapterCleanupSetProjectRef.current = false
       setEbookEditOpen(false)
       navigateRoute('write')
       const force = listProjectHistory(p.id).length === 0
       const entry = pushProjectHistorySnapshot(p, { label: 'Opened', force })
       if (entry) bumpHistory()
     },
-    [bumpHistory, navigateRoute, syncPersistedState],
+    [bumpHistory, navigateRoute, persistProjectRefToDisk],
   )
 
   const goToChapterFromEditor = useCallback(
@@ -1357,7 +1544,7 @@ export default function App() {
   const commitBookMeta = useCallback(
     (book: BookMeta) => {
       startTransition(() => {
-        setProject((prev) => saveProject({ ...prev, book }))
+        setProject((prev) => saveProject(syncTitlePageContentFromBook({ ...prev, book })))
       })
       recordHistorySoon('Auto')
     },
@@ -1462,7 +1649,10 @@ export default function App() {
   const patchAssembly = useCallback(
     (patch: Partial<BookAssembly>) => {
       startTransition(() => {
-        setProject((prev) => saveProject({ ...prev, assembly: { ...prev.assembly, ...patch } }))
+        setProject((prev) => {
+          const next = { ...prev, assembly: { ...prev.assembly, ...patch } }
+          return saveProject(prev.kind === 'book' ? applyBookMasterPages(next) : next)
+        })
       })
       recordHistorySoon('Auto')
     },
@@ -1529,9 +1719,48 @@ export default function App() {
   useEffect(() => {
     void hydrateInkwellStorage().then(() => {
       tabSessionSyncReadyRef.current = true
-      const next = readInitialEditorSession()
-      setProject(next.project)
-      setCurrentId(next.currentId)
+
+      const applyLoaded = (loaded: InkwellProject, chapterOverride?: number | null) => {
+        const previousProjectId = projectRef.current.id
+        setProject(loaded)
+        setCurrentId((cur) => {
+          if (chapterOverride != null && loaded.chapters.some((c) => c.id === chapterOverride)) {
+            return chapterOverride
+          }
+          if (
+            previousProjectId === loaded.id &&
+            cur != null &&
+            loaded.chapters.some((c) => c.id === cur)
+          ) {
+            return cur
+          }
+          return resolveResumeChapterId(loaded)
+        })
+      }
+
+      const pending = pendingOpenProjectIdRef.current
+      if (pending) {
+        const loaded = loadProject(pending)
+        if (loaded) {
+          pendingOpenProjectIdRef.current = null
+          syncOpenProjectQueryParam(pending)
+          applyLoaded(loaded, resolveResumeBodyChapterId(loaded))
+          setEbookEditOpen(false)
+          navigateRouteBaseRef.current('write')
+          return
+        }
+      }
+
+      const id = resolveOpenProjectId() ?? pendingOpenProjectIdRef.current ?? projectRef.current.id
+      const refreshed = id ? loadProject(id) : null
+      if (refreshed) {
+        applyLoaded(refreshed)
+        return
+      }
+
+      const fallback = ensureAtLeastOneProject()
+      setProject(fallback)
+      setCurrentId(resolveResumeChapterId(fallback))
     })
   }, [])
 
@@ -1897,29 +2126,45 @@ export default function App() {
     ],
   )
 
-  const updateCurrentContent = useCallback(
-    (json: JSONContent) => {
-      if (currentId === null) return
-      startTransition(() => {
-        setProject((prev) => ({
-          ...prev,
-          chapters: prev.chapters.map((m) => (m.id === currentId ? { ...m, content: json } : m)),
-        }))
-      })
-      scheduleIdlePersist()
-      recordHistorySoon('Auto')
-    },
-    [currentId, recordHistorySoon, scheduleIdlePersist],
-  )
+  const onTypingActivity = useCallback(() => {
+    const chapterId = currentIdRef.current
+    const active =
+      chapterId != null ? projectRef.current.chapters.find((m) => m.id === chapterId) : undefined
+    if (active && isTitlePage(active)) {
+      const beforeTitle = projectRef.current.book.title
+      flushEditorContentToProjectRef()
+      if (projectRef.current.book.title !== beforeTitle) {
+        startTransition(() => setProject(projectRef.current))
+      }
+    }
+    scheduleIdlePersist()
+    recordHistorySoon('Auto')
+    notifyLiteTypewriterTyping()
+  }, [flushEditorContentToProjectRef, recordHistorySoon, scheduleIdlePersist, notifyLiteTypewriterTyping])
 
   const updateCurrentTitle = useCallback(
     (title: string) => {
       if (currentId === null) return
       startTransition(() => {
-        setProject((prev) => ({
-          ...prev,
-          chapters: prev.chapters.map((m) => (m.id === currentId ? { ...m, title } : m)),
-        }))
+        setProject((prev) => {
+          const active = prev.chapters.find((m) => m.id === currentId)
+          const withTitles =
+            active && isContentsPage(active)
+              ? {
+                  ...prev,
+                  assembly: { ...prev.assembly, printTocTitle: title },
+                  chapters: prev.chapters.map((m) => (m.id === currentId ? { ...m, title } : m)),
+                }
+              : {
+                  ...prev,
+                  chapters: prev.chapters.map((m) => (m.id === currentId ? { ...m, title } : m)),
+                }
+          let next = prev.kind === 'book' ? applyBookMasterPages(withTitles) : withTitles
+          if (prev.kind === 'book' && active && isTitlePage(active)) {
+            next = syncBookMetaFromTitlePage(next)
+          }
+          return next
+        })
       })
       scheduleIdlePersist()
       recordHistorySoon('Auto')
@@ -1960,6 +2205,7 @@ export default function App() {
       const index = ch.findIndex((m) => m.id === id)
       if (index === -1) return
       const removed = ch[index]
+      if (!canDeleteMasterPage(removed)) return
       lastDeletedRef.current = { ...removed, originalIndex: index }
       const nextChapters = ch.filter((m) => m.id !== id)
       persistProject({ ...proj, chapters: nextChapters })
@@ -1988,6 +2234,7 @@ export default function App() {
       if (draggedId === targetId) return
       const proj = projectRef.current
       const ch = proj.chapters
+      if (!isValidMasterReorder(ch, draggedId, targetId)) return
       const draggedIndex = ch.findIndex((m) => m.id === draggedId)
       const targetIndex = ch.findIndex((m) => m.id === targetId)
       if (draggedIndex === -1 || targetIndex === -1) return
@@ -2000,6 +2247,26 @@ export default function App() {
     },
     [persistProject, recordHistorySoon, showToast],
   )
+
+  const addMasterPageFromContents = useCallback(
+    (entry: MasterPageCatalogEntry) => {
+      const { project: next, added, reason } = addOptionalMasterPage(projectRef.current, entry.kind)
+      if (!added) {
+        if (reason === 'duplicate') showToast(`${entry.label} is already in this book`)
+        return
+      }
+      persistProject(next)
+      const inserted = next.chapters.find((m) => m.masterKind === entry.kind)
+      if (inserted) setCurrentId(inserted.id)
+      showToast(`${entry.label} added`)
+    },
+    [persistProject, showToast],
+  )
+
+  const contentsEditorHeader = useMemo(() => {
+    if (!currentIsContents) return undefined
+    return <ContentsEditorBanner project={project} onAddMasterPage={addMasterPageFromContents} />
+  }, [currentIsContents, project, addMasterPageFromContents])
 
   const createManuscript = () => {
     clearPersistIdleTimer()
@@ -2123,12 +2390,14 @@ export default function App() {
   const exportTxt = useCallback(() => {
     if (!requireEntitlement('pro')) return
     try {
-      const text = buildPlaintextExport(project)
+      flushEditorContentToProject()
+      const p = projectRef.current
+      const text = buildPlaintextExport(p)
       const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `${slugDownload(project.book.title.trim() || chapters[0]?.title || 'book')}.txt`
+      a.download = `${slugDownload(p.book.title.trim() || p.chapters[0]?.title || 'book')}.txt`
       a.click()
       URL.revokeObjectURL(url)
       showToast('Exported plain text')
@@ -2136,27 +2405,28 @@ export default function App() {
       showToast('Text export failed')
     }
   }, [
-    project,
-    chapters,
     showToast,
     requireEntitlement,
+    flushEditorContentToProject,
   ])
 
   const exportBookArchive = useCallback(async () => {
     if (!requireEntitlement('pro')) return
     try {
-      const blob = await exportProjectZip(project)
+      flushEditorContentToProject()
+      const p = projectRef.current
+      const blob = await exportProjectZip(p)
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `${slugDownload(project.book.title.trim() || 'book')}.inkwell.zip`
+      a.download = `${slugDownload(p.book.title.trim() || 'book')}.inkwell.zip`
       a.click()
       URL.revokeObjectURL(url)
       showToast('Book backup downloaded')
     } catch {
       showToast('Backup export failed')
     }
-  }, [project, showToast, requireEntitlement])
+  }, [showToast, requireEntitlement, flushEditorContentToProject])
 
   const exportFullLibrary = useCallback(async () => {
     if (!requireEntitlement('pro')) return
@@ -2589,28 +2859,89 @@ export default function App() {
   }, [project.id, bumpHistory, showToast])
 
   const undoDeleteProject = useCallback(() => {
-    const snap = lastDeletedProjectRef.current
-    if (!snap?.blob) return
-    lastDeletedProjectRef.current = null
-    saveProject(snap.blob)
+    const snap = lastDeletedProjectSnapshotRef.current
+    if (!snap) return
+    lastDeletedProjectSnapshotRef.current = null
+    const restored = restoreDeletedProject(snap.id) ?? saveProject(snap.blob)
+    if (!restored) {
+      showToast('Could not restore project')
+      setShelfUiTick((n) => n + 1)
+      return
+    }
+    setShelfUiTick((n) => n + 1)
     showToast('Project restored')
   }, [showToast])
+
+  const detachEditorFromDeletedProject = useCallback(
+    (deletedId: string) => {
+      if (projectRef.current.id !== deletedId) return
+      const next = ensureAtLeastOneProject()
+      const nextChapterId = resolveResumeChapterId(next)
+      projectRef.current = next
+      currentIdRef.current = nextChapterId
+      setProject(next)
+      setCurrentId(nextChapterId)
+    },
+    [],
+  )
+
+  const removeShelfProjectFromDevice = useCallback(
+    (id: string) => {
+      clearPersistIdleTimer()
+      clearHistoryIdleTimer()
+      const blob = loadProject(id) ?? (projectRef.current.id === id ? projectRef.current : null)
+      clearProjectChildPins(id)
+      removeChildNoteFromAllProjectPins(id)
+      deleteProject(id)
+      detachEditorFromDeletedProject(id)
+      if (blob) {
+        lastDeletedProjectSnapshotRef.current = { id: blob.id, blob }
+        archiveDeletedProject(blob)
+      } else {
+        lastDeletedProjectSnapshotRef.current = null
+      }
+      return blob
+    },
+    [clearHistoryIdleTimer, clearPersistIdleTimer, detachEditorFromDeletedProject],
+  )
+
+  const restoreDeletedShelfProject = useCallback(
+    (id: string) => {
+      const restored = restoreDeletedProject(id)
+      if (!restored) {
+        showToast('Could not restore — it may have been removed.')
+        setShelfUiTick((n) => n + 1)
+        return
+      }
+      if (lastDeletedProjectSnapshotRef.current?.id === id) {
+        lastDeletedProjectSnapshotRef.current = null
+      }
+      setShelfUiTick((n) => n + 1)
+      const label =
+        restored.kind === 'book' ? 'Book restored'
+        : restored.linkedBookId ? 'Note restored'
+        : 'Project restored'
+      showToast(label)
+    },
+    [showToast],
+  )
+
+  const purgeDeletedShelfProject = useCallback(
+    (id: string) => {
+      if (!window.confirm('Permanently delete this? It cannot be recovered.')) return
+      purgeDeletedProject(id)
+      setShelfUiTick((n) => n + 1)
+      showToast('Deleted permanently')
+    },
+    [showToast],
+  )
 
   const deleteShelfProject = useCallback(
     (id: string, e: React.MouseEvent) => {
       e.stopPropagation()
       setShelfDropHoverTrash(false)
       if (!window.confirm('Delete this project from this device?')) return
-      const blob = loadProject(id)
-      clearProjectChildPins(id)
-      removeChildNoteFromAllProjectPins(id)
-      deleteProject(id)
-      lastDeletedProjectRef.current = blob ? { blob } : null
-      if (project.id === id) {
-        const next = ensureAtLeastOneProject()
-        setProject(next)
-        setCurrentId(resolveResumeChapterId(next))
-      }
+      removeShelfProjectFromDevice(id)
       setOpenNoteMenuId(null)
       showToast(
         <span className="flex flex-wrap items-center gap-2">
@@ -2625,24 +2956,16 @@ export default function App() {
         </span>,
         4500,
       )
+      setShelfUiTick((n) => n + 1)
     },
-    [project.id, showToast, undoDeleteProject],
+    [project.id, removeShelfProjectFromDevice, showToast, undoDeleteProject],
   )
 
   const deleteShelfProjectById = useCallback(
     (id: string) => {
       setShelfDropHoverTrash(false)
       if (!window.confirm('Delete this project from this device?')) return
-      const blob = loadProject(id)
-      clearProjectChildPins(id)
-      removeChildNoteFromAllProjectPins(id)
-      deleteProject(id)
-      lastDeletedProjectRef.current = blob ? { blob } : null
-      if (project.id === id) {
-        const next = ensureAtLeastOneProject()
-        setProject(next)
-        setCurrentId(resolveResumeChapterId(next))
-      }
+      removeShelfProjectFromDevice(id)
       setOpenNoteMenuId(null)
       showToast(
         <span className="flex flex-wrap items-center gap-2">
@@ -2657,8 +2980,9 @@ export default function App() {
         </span>,
         4500,
       )
+      setShelfUiTick((n) => n + 1)
     },
-    [project.id, showToast, undoDeleteProject],
+    [project.id, removeShelfProjectFromDevice, showToast, undoDeleteProject],
   )
 
   /** Collapse an expanded book card when it no longer has linked notes. */
@@ -2676,15 +3000,7 @@ export default function App() {
       const blob = loadProject(noteId)
       const formerParentId =
         blob?.kind === 'note' && blob.linkedBookId ? String(blob.linkedBookId) : null
-      clearProjectChildPins(noteId)
-      removeChildNoteFromAllProjectPins(noteId)
-      deleteProject(noteId)
-      lastDeletedProjectRef.current = blob ? { blob } : null
-      if (project.id === noteId) {
-        const next = ensureAtLeastOneProject()
-        setProject(next)
-        setCurrentId(resolveResumeChapterId(next))
-      }
+      removeShelfProjectFromDevice(noteId)
       setOpenNoteMenuId(null)
       if (formerParentId) collapseBookCardIfNoLinkedNotes(formerParentId)
       showToast(
@@ -2702,7 +3018,7 @@ export default function App() {
       )
       setShelfUiTick((n) => n + 1)
     },
-    [collapseBookCardIfNoLinkedNotes, project.id, showToast, undoDeleteProject],
+    [collapseBookCardIfNoLinkedNotes, project.id, removeShelfProjectFromDevice, showToast, undoDeleteProject],
   )
 
   const convertProjectHubToBook = useCallback(() => {
@@ -2763,7 +3079,7 @@ export default function App() {
   const spawnProjectOnShelf = useCallback(() => {
     syncPersistedState()
     const p = createShelfProjectWithMasterNote()
-    openProject(p.id)
+    openProject(p.id, { fromShelf: true })
     setShelfUiTick((n) => n + 1)
   }, [syncPersistedState, openProject])
 
@@ -2877,7 +3193,7 @@ export default function App() {
         shelfNoteHadDragRef.current = false
         return
       }
-      openProject(noteId)
+      openProject(noteId, { fromShelf: true })
     },
     [openProject],
   )
@@ -3105,6 +3421,7 @@ export default function App() {
   )
 
   const shelfMetas = listProjects()
+  const shelfDeletedProjects = useMemo(() => listDeletedProjects(), [shelfUiTick])
   const shelfBooks = listBookMetas(shelfMetas)
   const shelfProjectNotes = listProjectNoteMetas(shelfMetas)
   const shelfLooseNotes = listLooseNoteMetas(shelfMetas)
@@ -3118,99 +3435,50 @@ export default function App() {
             !wouldCreateNoteAttachmentCycle(stickNoteId, m.id),
         )
 
-  const writeChaptersOverlay = useMemo(() => {
-    if (isNote || route !== 'write') return null
-    if (isMobile && chaptersAsideCollapsed) return null
-    return (
-      <div
-        data-inkwell-tour="write-chapters"
-        className={`inkwell-chapters-overlay-clip ${FORMAT_WORKSPACE_SIDE_PANEL_WIDTH_CLASS} pointer-events-none absolute left-0 top-0 z-40 isolate h-full min-w-0 shrink-0 overflow-hidden ${
-          chaptersAsideCollapsed ? 'inkwell-chapters-overlay-clip--collapsed' : 'inkwell-chapters-overlay-clip--expanded'
-        }`}
-      >
-          <aside
-            className={`inkwell-chapters-overlay-rail pointer-events-auto absolute left-0 top-0 z-20 flex h-full shrink-0 flex-col items-center gap-2 rounded-r-2xl border-r border-dust bg-panel-light-strong/92 py-3 shadow-xl backdrop-blur-sm dark:border-border-dark dark:bg-panel-dark/90 sm:py-4 ${FORMAT_WORKSPACE_SIDE_RAIL_WIDTH_CLASS}${chaptersPanelMotionLive ? ' inkwell-panel-motion--live' : ''}`}
-          >
-            <button
-              type="button"
-              onClick={() => setChaptersAsideCollapsedPersisted(false)}
-              className="inkwell-btn-icon-sm"
-              aria-label="Expand chapters list"
-              title="Show chapters"
-            >
-              <ChevronRight className="h-4 w-4" strokeWidth={2.25} />
-            </button>
-            <button
-              type="button"
-              onClick={createManuscript}
-              className="inkwell-btn-chapter-new-sm"
-              aria-label="New chapter"
-              title="New chapter"
-            >
-              <Plus className="h-4 w-4" strokeWidth={2.5} />
-            </button>
-          </aside>
-          <aside
-            className={`inkwell-chapters-overlay-panel absolute left-0 top-0 z-10 flex h-full shrink-0 flex-col rounded-r-2xl border-r border-dust bg-panel-light-strong/92 shadow-2xl backdrop-blur-sm dark:border-border-dark dark:bg-panel-dark/90 ${FORMAT_WORKSPACE_SIDE_PANEL_WIDTH_CLASS}${chaptersPanelMotionLive ? ' inkwell-panel-motion--live' : ''}`}
-            onTransitionEnd={onChaptersPanelTransitionEnd}
-          >
-            <div className="flex items-center gap-1.5 border-b border-dust px-3 py-3 dark:border-border-dark sm:gap-2 sm:px-5 sm:py-5">
-              <div className="flex min-w-0 flex-1 items-center gap-2">
-                <h2 className="min-w-0 truncate text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
-                  Chapters
-                </h2>
-                <button
-                  type="button"
-                  onClick={createManuscript}
-                  className="inkwell-btn-chapter-new-xs"
-                  aria-label="New chapter"
-                  title="New chapter"
-                >
-                  <Plus className="h-4 w-4" strokeWidth={2.5} />
-                </button>
-              </div>
-              <button
-                type="button"
-                onClick={() => setChaptersAsideCollapsedPersisted(true)}
-                className="inkwell-btn-icon-xs"
-                aria-label="Collapse chapters list"
-                title="Collapse chapters"
-              >
-                <ChevronLeft className="h-4 w-4" strokeWidth={2.25} />
-              </button>
-            </div>
-            <ChaptersScrollableList
-              chapters={chapters}
-              currentId={currentId}
-              onSelectChapter={selectChapter}
-              onDeleteChapter={deleteChapter}
-              onDropReorder={onReorder}
-              onSplitChapter={splitChapterAtCursor}
-              onMergeWithNext={mergeChapterWithNext}
-              persistedScrollTopRef={writeChaptersListScrollTopRef}
-            />
-            <p className="mt-auto border-t border-dust px-3 py-3 text-[11px] leading-snug text-ink/55 dark:border-border-dark dark:text-ink-dark/55 sm:px-5">
-              Drag a section by its book icon. Split uses the cursor position in the open section.
-            </p>
-          </aside>
-      </div>
-    )
+  const writeChaptersOverlayVisible = !isNote && route === 'write'
+
+  const expandWriteChaptersAside = useCallback(
+    () => setChaptersAsideCollapsedPersisted(false),
+    [setChaptersAsideCollapsedPersisted],
+  )
+  const collapseWriteChaptersAside = useCallback(
+    () => setChaptersAsideCollapsedPersisted(true),
+    [setChaptersAsideCollapsedPersisted],
+  )
+
+  const writeChaptersOverlayConfig = useMemo((): WriteChaptersOverlayConfig | null => {
+    if (!writeChaptersOverlayVisible) return null
+    return {
+      chapters,
+      currentId,
+      chaptersAsideCollapsed,
+      chaptersPanelMotionLive,
+      persistedScrollTopRef: writeChaptersListScrollTopRef,
+      onExpand: expandWriteChaptersAside,
+      onCollapse: collapseWriteChaptersAside,
+      onCreateChapter: createManuscript,
+      onSelectChapter: selectChapter,
+      onDeleteChapter: deleteChapter,
+      onDropReorder: onReorder,
+      onSplitChapter: splitChapterAtCursor,
+      onMergeWithNext: mergeChapterWithNext,
+      onPanelTransitionEnd: onChaptersPanelTransitionEnd,
+    }
   }, [
-    isNote,
-    route,
-    isMobile,
-    chaptersAsideCollapsed,
-    chaptersPanelMotionLive,
-    onChaptersPanelTransitionEnd,
+    writeChaptersOverlayVisible,
     chapters,
     currentId,
-    setChaptersAsideCollapsedPersisted,
+    chaptersAsideCollapsed,
+    chaptersPanelMotionLive,
+    expandWriteChaptersAside,
+    collapseWriteChaptersAside,
     createManuscript,
     selectChapter,
     deleteChapter,
     onReorder,
     splitChapterAtCursor,
     mergeChapterWithNext,
+    onChaptersPanelTransitionEnd,
   ])
 
   const librarySyncOptions = useMemo(
@@ -3670,7 +3938,7 @@ export default function App() {
                       syncPersistedState()
                       const p = createBookProject()
                       setProject(p)
-                      setCurrentId(p.chapters[0]?.id ?? null)
+                      setCurrentId(findTitleMaster(p.chapters)?.id ?? resolveResumeBodyChapterId(p))
                       setEbookEditOpen(false)
                       navigateRoute('write')
                       setNewProjectMenuOpen(false)
@@ -3738,7 +4006,7 @@ export default function App() {
                             }
                             const p = createBookProject()
                             setProject(p)
-                            setCurrentId(p.chapters[0]?.id ?? null)
+                            setCurrentId(findTitleMaster(p.chapters)?.id ?? resolveResumeBodyChapterId(p))
                             setEbookEditOpen(false)
                             navigateRoute('write')
                           }}
@@ -3754,7 +4022,7 @@ export default function App() {
                             setShelfNewImportSubmenuOpen(false)
                             syncPersistedState()
                             const p = createShelfProjectWithMasterNote()
-                            openProject(p.id)
+                            openProject(p.id, { fromShelf: true })
                             setShelfUiTick((n) => n + 1)
                           }}
                         >
@@ -3774,7 +4042,7 @@ export default function App() {
                             }
                             const p = createNoteProject()
                             setProject(p)
-                            setCurrentId(p.chapters[0]?.id ?? null)
+                            setCurrentId(findTitleMaster(p.chapters)?.id ?? resolveResumeBodyChapterId(p))
                             setEbookEditOpen(false)
                             navigateRoute('write')
                           }}
@@ -3908,7 +4176,7 @@ export default function App() {
                   }
                   const p = createNoteProject()
                   setProject(p)
-                  setCurrentId(p.chapters[0]?.id ?? null)
+                  setCurrentId(findTitleMaster(p.chapters)?.id ?? resolveResumeBodyChapterId(p))
                   setEbookEditOpen(false)
                   navigateRoute('write')
                 }}
@@ -3972,20 +4240,12 @@ export default function App() {
                         href={buildInkwellUrlForProject(p.id)}
                         onClick={(e) => {
                           e.preventDefault()
-                          if (kidsOrdered.length > 0) {
-                            setExpandedShelfParentId((cur) => (cur === p.id ? null : p.id))
-                          } else {
-                            openProject(p.id)
-                          }
+                          openProject(p.id, { fromShelf: true })
                         }}
                         onKeyDown={(e) => {
                           if (e.key !== 'Enter' && e.key !== ' ') return
                           e.preventDefault()
-                          if (kidsOrdered.length > 0) {
-                            setExpandedShelfParentId((cur) => (cur === p.id ? null : p.id))
-                          } else {
-                            openProject(p.id)
-                          }
+                          openProject(p.id, { fromShelf: true })
                         }}
                         className="min-w-0 flex-1 cursor-pointer rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-cream focus-visible:ring-offset-2 focus-visible:ring-offset-parchment dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark"
                       >
@@ -4061,13 +4321,13 @@ export default function App() {
                             href={buildInkwellUrlForProject(p.id)}
                             onClick={(e) => {
                               e.preventDefault()
-                              openProject(p.id)
+                              openProject(p.id, { fromShelf: true })
                               setExpandedShelfParentId(null)
                             }}
                             onKeyDown={(e) => {
                               if (e.key !== 'Enter' && e.key !== ' ') return
                               e.preventDefault()
-                              openProject(p.id)
+                              openProject(p.id, { fromShelf: true })
                               setExpandedShelfParentId(null)
                             }}
                             className="block w-full cursor-pointer rounded-2xl border border-dust bg-panel-light/88 px-4 py-3 text-left outline-none transition-colors hover:bg-panel-light-strong dark:border-border-dark dark:bg-panel-dark/70 dark:hover:bg-panel-dark/90 focus-visible:ring-2 focus-visible:ring-cream focus-visible:ring-offset-2 focus-visible:ring-offset-parchment dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark"
@@ -4133,8 +4393,12 @@ export default function App() {
                             <a
                               key={n.id}
                               href={buildInkwellUrlForProject(n.id)}
-                              onClick={(e) => e.preventDefault()}
-                              className="block truncate text-xs text-ink-muted dark:text-ink-dark/55"
+                              onClick={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                tryOpenShelfNote(n.id)
+                              }}
+                              className="block truncate text-xs text-ink-muted hover:text-ink dark:text-ink-dark/55 dark:hover:text-ink-dark"
                             >
                               {n.title || 'Untitled note'}
                             </a>
@@ -4211,12 +4475,12 @@ export default function App() {
                         href={buildInkwellUrlForProject(p.id)}
                         onClick={(e) => {
                           e.preventDefault()
-                          setExpandedShelfParentId((cur) => (cur === p.id ? null : p.id))
+                          openProject(p.id, { fromShelf: true })
                         }}
                         onKeyDown={(e) => {
                           if (e.key !== 'Enter' && e.key !== ' ') return
                           e.preventDefault()
-                          setExpandedShelfParentId((cur) => (cur === p.id ? null : p.id))
+                          openProject(p.id, { fromShelf: true })
                         }}
                         className="min-w-0 flex-1 cursor-pointer rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-cream focus-visible:ring-offset-2 focus-visible:ring-offset-parchment dark:focus-visible:ring-cream dark:focus-visible:ring-offset-panel-dark"
                       >
@@ -4343,8 +4607,12 @@ export default function App() {
                             <a
                               key={n.id}
                               href={buildInkwellUrlForProject(n.id)}
-                              onClick={(e) => e.preventDefault()}
-                              className="block truncate text-xs text-ink-muted dark:text-ink-dark/55"
+                              onClick={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                tryOpenShelfNote(n.id)
+                              }}
+                              className="block truncate text-xs text-ink-muted hover:text-ink dark:text-ink-dark/55 dark:hover:text-ink-dark"
                             >
                               {n.title || 'Untitled note'}
                             </a>
@@ -4505,6 +4773,58 @@ export default function App() {
             </div>
           </section>
 
+          {shelfDeletedProjects.length > 0 ? (
+            <section className="mt-8 space-y-3 sm:mt-10" aria-label="Recently deleted">
+              <div className="flex flex-wrap items-end justify-between gap-2">
+                <h2 className="text-xs font-semibold uppercase tracking-widest text-walnut dark:text-accent-warm">
+                  Recently deleted
+                </h2>
+                <p className="text-xs text-ink-muted dark:text-ink-dark/55">
+                  Kept on this device for 30 days ({shelfDeletedProjects.length})
+                </p>
+              </div>
+              <ul className="space-y-2">
+                {shelfDeletedProjects.map((entry) => {
+                  const kindLabel =
+                    entry.kind === 'book' ? 'Book'
+                    : entry.linkedBookId ? 'Note'
+                    : 'Project'
+                  return (
+                    <li
+                      key={entry.id}
+                      className="flex flex-col gap-3 rounded-2xl border border-dust/90 bg-panel-light/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-border-dark dark:bg-panel-dark/45"
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate font-medium text-ink dark:text-ink-dark">
+                          {entry.title}
+                        </div>
+                        <div className="mt-0.5 text-xs text-ink-muted dark:text-ink-dark/55">
+                          {kindLabel} · Deleted {new Date(entry.deletedAt).toLocaleString()}
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 flex-wrap gap-2">
+                        <button
+                          type="button"
+                          className="rounded-xl bg-ink px-3 py-1.5 text-xs font-semibold text-parchment hover:bg-walnut dark:bg-cream dark:text-ink dark:hover:bg-accent-warm"
+                          onClick={() => restoreDeletedShelfProject(entry.id)}
+                        >
+                          Restore
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded-xl border border-dust px-3 py-1.5 text-xs font-medium text-ink/80 hover:bg-dust/30 dark:border-border-dark dark:text-ink-dark/80 dark:hover:bg-border-dark/50"
+                          onClick={() => purgeDeletedShelfProject(entry.id)}
+                        >
+                          Delete forever
+                        </button>
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            </section>
+          ) : null}
+
           {stickNoteId ? (
             <div
               className="fixed inset-0 z-[200] flex items-center justify-center bg-ink/35 p-4 backdrop-blur-[1px] dark:bg-black/50"
@@ -4623,8 +4943,8 @@ export default function App() {
         </div>
       ) : (
         <>
-          <header className="inkwell-chrome-header sticky top-0 z-[90] border-b border-dust bg-panel-light-strong/92 backdrop-blur-md dark:border-border-dark dark:bg-panel-dark/90">
-            <div className="flex w-full min-h-[3.25rem] items-stretch sm:min-h-[3.5rem]">
+          <header className="inkwell-chrome-header inkwell-chrome-header--write sticky top-0 z-[90] border-b border-dust bg-panel-light-strong/92 backdrop-blur-md dark:border-border-dark dark:bg-panel-dark/90">
+            <div className="inkwell-chrome-header__row flex w-full min-h-[3.25rem] items-stretch sm:min-h-[3.5rem]">
               <div
                 className={`inkwell-theme-bridge flex min-w-0 flex-1 items-center justify-start bg-panel-light/88 py-2 sm:py-3 dark:bg-panel-dark/70 ${
                   !isNote && (isFormatWorkspace || route === 'publish') ? 'pl-0 sm:pl-0' : 'pl-3 sm:pl-5'
@@ -4695,7 +5015,7 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="flex min-h-[3.25rem] shrink-0 flex-col items-center justify-center px-1 py-2 max-[390px]:px-0.5 sm:px-4 sm:py-3 sm:min-h-[3.5rem]">
+              <div className="inkwell-chrome-header__title-col flex min-h-[3.25rem] shrink-0 flex-col items-center justify-center px-1 py-2 max-[390px]:px-0.5 sm:px-4 sm:py-3 sm:min-h-[3.5rem]">
                 <div className="min-w-0 w-full max-w-[min(44rem,100%)]">
                   {isNote ? (
                     <input
@@ -4708,7 +5028,7 @@ export default function App() {
                     />
                   ) : route === 'write' ? (
                     <div
-                      className="truncate px-3 py-2 text-center text-base font-semibold text-ink dark:text-ink-dark sm:px-4 sm:text-lg"
+                      className="inkwell-write-header-title truncate px-3 py-2 text-center text-base font-semibold text-ink dark:text-ink-dark sm:px-4 sm:text-lg"
                       title={project.book.title.trim() || 'Untitled book'}
                     >
                       {project.book.title.trim() || 'Untitled book'}
@@ -4802,6 +5122,21 @@ export default function App() {
                           <Search className="h-4 w-4 shrink-0" strokeWidth={2.25} />
                           Find in document
                         </button>
+                        {!isNote ?
+                          <button
+                            type="button"
+                            role="menuitem"
+                            aria-pressed={typewriterEnabled}
+                            className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50"
+                            onClick={() => {
+                              setWriteMobileOverflowOpen(false)
+                              toggleTypewriter()
+                            }}
+                          >
+                            <AlignVerticalSpaceAround className="h-4 w-4 shrink-0" strokeWidth={2.25} />
+                            {typewriterEnabled ? 'Exit typewriter mode' : 'Typewriter mode'}
+                          </button>
+                        : null}
                         {isNote ?
                           <button
                             type="button"
@@ -5136,6 +5471,7 @@ export default function App() {
                       ) : null}
                     </div>
                     <ChaptersScrollableList
+                      bookMode={!isNote}
                       chapters={chapters}
                       currentId={currentId}
                       onSelectChapter={selectChapter}
@@ -5191,21 +5527,24 @@ export default function App() {
                           key={`${current.id}-${editorEpoch}`}
                           manuscriptId={current.id}
                           content={current.content}
-                          onDocumentChange={updateCurrentContent}
+                          onTypingActivity={onTypingActivity}
+                          onEditorFlush={flushEditorContentToProject}
                           editorRef={editorRef}
                           toolbarVariant="formatSplit"
                           compactFooterStats
                           chapterTitle={current.title}
                           onChapterTitleChange={updateCurrentTitle}
                           showChapterTitleOnPage
+                          readOnly={currentIsContents}
+                          editorHeader={contentsEditorHeader}
                           mentionItems={mentionItems}
                           getWikilinkCandidates={() => wikilinkItemsRef.current}
                           onLinkedNoteOpenPopout={openLinkedNotePopout}
                           onLinkedNoteOpenMain={openProject}
                           onGoToChapter={goToChapterFromEditor}
-                          totalBookWords={liveTotalBookWords}
+                          totalBookWords={deferredLiveTotalBookWords}
                           statsBookLabel={isNote ? 'Entire note' : 'Entire book'}
-                          statsScopeLabel={isNote ? 'Note' : 'Chapter'}
+                          statsScopeLabel={currentIsContents ? 'Contents' : isNote ? 'Note' : 'Chapter'}
                           wordStatStorageKey={project.id}
                         />
                       ) : (
@@ -5295,7 +5634,8 @@ export default function App() {
                   key={`${current.id}-${editorEpoch}`}
                   manuscriptId={current.id}
                   content={current.content}
-                  onDocumentChange={updateCurrentContent}
+                  onTypingActivity={onTypingActivity}
+                  onEditorFlush={flushEditorContentToProject}
                   editorRef={editorRef}
                   toolbarVariant={route === 'write' ? 'writeMinimal' : 'full'}
                   onOpenFindReplace={route === 'write' ? openFindReplaceModal : undefined}
@@ -5303,16 +5643,21 @@ export default function App() {
                   chapterTitle={current.title}
                   onChapterTitleChange={updateCurrentTitle}
                   showChapterTitleOnPage
+                  readOnly={currentIsContents}
+                  editorHeader={contentsEditorHeader}
                   mentionItems={mentionItems}
                   getWikilinkCandidates={() => wikilinkItemsRef.current}
                   onLinkedNoteOpenPopout={openLinkedNotePopout}
                   onLinkedNoteOpenMain={openProject}
                   onGoToChapter={goToChapterFromEditor}
-                  totalBookWords={liveTotalBookWords}
+                  totalBookWords={deferredLiveTotalBookWords}
                   statsBookLabel={isNote ? 'Entire note' : 'Entire book'}
-                  statsScopeLabel={isNote ? 'Note' : 'Chapter'}
+                  statsScopeLabel={currentIsContents ? 'Contents' : isNote ? 'Note' : 'Chapter'}
                   wordStatStorageKey={project.id}
-                  leftOverlay={writeChaptersOverlay}
+                  writeChaptersOverlay={writeChaptersOverlayConfig}
+                  typewriterMode={typewriterMode}
+                  typewriterEnabled={typewriterEnabled}
+                  onToggleTypewriter={route === 'write' && !isNote ? toggleTypewriter : undefined}
                 />
               ) : (
                 <div className="flex flex-1 items-center justify-center p-8 font-serif text-lg text-walnut/80 dark:text-accent-warm/80">
@@ -5389,7 +5734,7 @@ export default function App() {
                     syncPersistedState()
                     const p = createNoteProject({ linkedBookId: shelfParentIdForLinkedNotes })
                     setProject(p)
-                    setCurrentId(p.chapters[0]?.id ?? null)
+                    setCurrentId(findTitleMaster(p.chapters)?.id ?? resolveResumeBodyChapterId(p))
                     setEbookEditOpen(false)
                     setBookToolsOpen(false)
                     navigateRoute('write')

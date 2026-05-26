@@ -12,6 +12,7 @@ const FRONT_ROLES: ManuscriptSectionRole[] = [
   'foreword',
   'preface',
   'introduction',
+  'disclaimer',
   'other_front',
 ]
 
@@ -83,7 +84,7 @@ export function displayChapterLabel(
   return title
 }
 
-function tocLineText(
+export function tocLineText(
   title: string,
   page: number,
   contentWidthPt: number,
@@ -144,9 +145,14 @@ export function buildPrintTocManuscript(
   }
 }
 
-/** Insert synthetic TOC after front matter when enabled. */
+function spineHasStoredContentsPage(spine: Manuscript[]): boolean {
+  return spine.some((m) => m.masterKind === 'contents' || m.id === -9002)
+}
+
+/** Insert synthetic TOC after front matter when enabled (skipped when a stored Contents master exists). */
 export function insertPrintTocInSpine(project: InkwellProject, spine: Manuscript[], toc: Manuscript | null): Manuscript[] {
   if (!toc || !project.assembly.includePrintToc) return spine
+  if (spineHasStoredContentsPage(spine)) return spine
   const idx = firstBodyIndex(spine)
   return [...spine.slice(0, idx), toc, ...spine.slice(idx)]
 }

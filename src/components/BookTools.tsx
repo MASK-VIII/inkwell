@@ -832,12 +832,12 @@ function BookToolsInner({
           {!isNote && isFormat && assembly && onAssemblyChange ? (
             <CollapsibleSection
               title="Book structure"
-              description="Print TOC and how chapter titles appear in exports."
+              description="Contents page and how chapter titles appear in exports."
               defaultOpen={false}
             >
               <div className="space-y-3 rounded-xl bg-parchment/60 p-4 dark:bg-panel-dark/50">
                 <label className="flex items-center justify-between gap-3">
-                  <span className="text-sm text-ink dark:text-ink-dark">Printable table of contents</span>
+                  <span className="text-sm text-ink dark:text-ink-dark">Page numbers in Contents (print)</span>
                   <input
                     type="checkbox"
                     checked={assembly.includePrintToc}
@@ -868,8 +868,9 @@ function BookToolsInner({
                   </select>
                 </label>
                 <p className="text-[11px] text-ink/55 dark:text-ink-dark/55">
-                  Front matter exports before body chapters when sections carry role metadata; print TOC uses page
-                  numbers from the PDF layout.
+                  The Contents master page is always included and updates from your chapter list. Optional front matter
+                  (title, copyright, etc.) can be added from the banner above Contents in the editor. Page numbers are
+                  filled in when you format for print.
                 </p>
               </div>
             </CollapsibleSection>

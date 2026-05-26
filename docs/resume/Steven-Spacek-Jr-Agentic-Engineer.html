@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Steven Spacek Jr — Agentic Engineer</title>
+  <style>
+    @page { size: letter; margin: 0.55in 0.6in; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Segoe UI", Calibri, Arial, sans-serif;
+      font-size: 9.5pt;
+      line-height: 1.35;
+      color: #1a1a1a;
+      max-width: 7.4in;
+      margin: 0 auto;
+      padding: 0.1in 0;
+    }
+    h1 {
+      font-size: 17pt;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 2px;
+    }
+    .contact {
+      font-size: 9pt;
+      color: #444;
+      margin-bottom: 10px;
+    }
+    .contact a { color: #2c5282; text-decoration: none; }
+    h2 {
+      font-size: 9.5pt;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #2d3748;
+      border-bottom: 1px solid #cbd5e0;
+      padding-bottom: 2px;
+      margin: 9px 0 5px;
+    }
+    p.summary { margin-bottom: 4px; }
+    ul { margin: 0 0 4px 1.15em; padding: 0; }
+    li { margin-bottom: 2px; }
+    .skills {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2px 16px;
+      font-size: 9pt;
+      margin-bottom: 2px;
+    }
+    .skills dt { font-weight: 600; display: inline; }
+    .skills dt::after { content: ": "; font-weight: 600; }
+    .skills dd { display: inline; margin: 0; }
+    .project-title {
+      font-weight: 700;
+      font-size: 10pt;
+      margin-bottom: 1px;
+    }
+    .project-meta {
+      font-size: 8.5pt;
+      color: #555;
+      font-style: italic;
+      margin-bottom: 4px;
+    }
+    .tagline {
+      font-size: 8.5pt;
+      color: #4a5568;
+      margin-top: 6px;
+      border-left: 3px solid #718096;
+      padding-left: 8px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Steven Spacek Jr</h1>
+  <p class="contact">
+    <a href="https://inkwell.enterthelimelight.com">inkwell.enterthelimelight.com</a>
+    · Local-first writing workspace (solo build, Cursor agentic workflow)
+  </p>
+
+  <h2>Summary</h2>
+  <p class="summary">
+    Engineer who ships production software through <strong>AI-agent workflows</strong> (Cursor Agent/Composer,
+    MCP tool use, and human-in-the-loop review). Built <strong>Inkwell</strong> end to end—a local-first writing
+    workspace with print/ebook export, Electron desktop releases, Supabase cloud sync, and CI/CD—by decomposing
+    work into agent-sized tasks, constraining outputs with skills and docs, and verifying with tests and pipelines.
+  </p>
+
+  <h2>Agentic Engineering</h2>
+  <ul>
+    <li><strong>Agent-orchestrated delivery:</strong> Scoped features in natural language; iterated across TypeScript/React, SQL migrations, Deno Edge Functions, and GitHub Actions until tests and installers were green.</li>
+    <li><strong>MCP &amp; tool use:</strong> Integrated <strong>Supabase MCP</strong> for schema work, migrations, and debugging instead of manual-only dashboard flows.</li>
+    <li><strong>Context engineering:</strong> Authored agent-readable specs (<code>docs/CLOUD_SYNC.md</code>, print/ebook parity matrix, migration comments) so agents implemented sync conflicts, entitlements, and export rules without re-deriving product logic.</li>
+    <li><strong>Skills as guardrails:</strong> Applied Supabase/Postgres best-practice <strong>agent skills</strong> (RLS, indexing, security) to steer generated SQL and reviews toward production-safe patterns.</li>
+    <li><strong>Verification loops:</strong> Used Vitest and CI (desktop matrix builds, release publish, bundle checks) as acceptance criteria for agent-generated changes.</li>
+    <li><strong>Bounded subsystems:</strong> Structured a large React surface into modules (sync engine, print worker pipeline, entitlements) so agents could modify one area without destabilizing the app.</li>
+  </ul>
+
+  <h2>Technical Skills</h2>
+  <dl class="skills">
+    <dt>Frontend</dt><dd>React 19, TypeScript, Vite, Tailwind, TipTap (mentions, wikilinks)</dd>
+    <dt>Desktop</dt><dd>Electron, custom protocol, IPC trust, safeStorage auth, electron-updater</dd>
+    <dt>Backend</dt><dd>Supabase Auth, Postgres RLS, Storage, RPC, Edge Functions (Deno)</dd>
+    <dt>Sync</dt><dd>Local-first storage, revision concurrency, conflict UI, durable sync queue</dd>
+    <dt>Export</dt><dd>EPUB/HTML, KDP PDF pipeline, Web Workers, layout fingerprinting</dd>
+    <dt>Delivery</dt><dd>GitHub Actions, Vitest, ESLint, Paddle webhooks, Vercel deploy hooks</dd>
+  </dl>
+
+  <h2>Featured Project — Inkwell</h2>
+  <p class="project-title">Inkwell — Local-first writing workspace</p>
+  <p class="project-meta">Founder / builder · Cursor (agentic development) · 2025–2026 · ~99 commits shipped to production</p>
+  <ul>
+    <li><strong>Product:</strong> Chapter-first manuscripts, linked notes, print &amp; ebook formatting, optional cloud library backup; marketing/SEO and tiered subscriptions (Basic/Pro).</li>
+    <li><strong>Cloud sync:</strong> Supabase Storage for library zips, <code>library_heads</code> revision table, RPC push with optimistic concurrency and explicit conflict resolution (keep device / use cloud / download both).</li>
+    <li><strong>Desktop:</strong> Windows/macOS Electron app with secure auth storage, deep links, auto-update via GitHub Releases, and CI that validates cloud credentials in production bundles.</li>
+    <li><strong>Print/ebook engine:</strong> Shared TipTap mark model, worker-based spine pagination, PDF preflight tests, documented parity matrix for maintainability.</li>
+    <li><strong>Monetization:</strong> Paddle Billing checkout and signed webhooks → <code>user_entitlements</code> with tier-aware storage policies.</li>
+  </ul>
+  <p class="tagline">
+    <strong>Stack:</strong> TypeScript, React, Vite, Electron, Supabase, Paddle, Vitest, GitHub Actions
+  </p>
+
+</body>
+</html>

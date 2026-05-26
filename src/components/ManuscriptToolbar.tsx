@@ -29,6 +29,7 @@ import {
   AlignJustify,
   AlignLeft,
   AlignRight,
+  AlignVerticalSpaceAround,
   ALargeSmall,
   AtSign,
   Bold,
@@ -128,6 +129,8 @@ export type ManuscriptToolbarProps = {
   embedded?: boolean
   bumpToolbar: () => void
   onOpenFindReplace?: () => void
+  typewriterEnabled?: boolean
+  onToggleTypewriter?: () => void
 }
 
 const OVERFLOW_DROP_ID = 'overflow-zone'
@@ -555,6 +558,8 @@ export function ManuscriptToolbar({
   embedded,
   bumpToolbar,
   onOpenFindReplace,
+  typewriterEnabled = false,
+  onToggleTypewriter,
 }: ManuscriptToolbarProps) {
   const [layout, setLayout] = useState<ToolbarLayoutState>(() => loadToolbarLayout())
   const [customizing, setCustomizing] = useState(false)
@@ -1214,21 +1219,23 @@ export function ManuscriptToolbar({
   return (
     <>
     <div
-      className={`relative z-[70] flex flex-nowrap items-center gap-2 border-b border-dust bg-panel-light-muted/72 dark:border-border-dark dark:bg-panel-dark/50 ${shellPad}`}
+      className={`inkwell-manuscript-toolbar relative z-[70] flex flex-nowrap items-center gap-2 border-b border-dust bg-panel-light-muted/72 dark:border-border-dark dark:bg-panel-dark/50 ${shellPad}`}
     >
-      <div className="flex min-w-0 flex-1 items-center gap-2">
-        <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-2" data-inkwell-tour="editor-toolbar-bar">
-          <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-2">
-            {toolbarInner}
-          </div>
+      <div className="inkwell-manuscript-toolbar__inner flex w-full min-w-0 flex-nowrap items-center gap-2">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-2" data-inkwell-tour="editor-toolbar-bar">
+            <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-2">
+              {toolbarInner}
+            </div>
 
-          <div
-            className="flex shrink-0 items-center gap-2 border-l border-dust/80 pl-3 dark:border-border-dark/90"
-            data-inkwell-tour="editor-toolbar-customize"
-          >
+            <div
+              className="flex shrink-0 items-center gap-2 border-l border-dust/80 pl-3 dark:border-border-dark/90"
+              data-inkwell-tour="editor-toolbar-customize"
+            >
             <button
               type="button"
-              className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-walnut/35 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment dark:focus-visible:ring-accent-warm/40 dark:focus-visible:ring-offset-panel-dark ${
+              aria-pressed={customizing}
+              className={`inkwell-toolbar-customize-btn rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-walnut/35 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment dark:focus-visible:ring-accent-warm/40 dark:focus-visible:ring-offset-panel-dark ${
                 customizing
                   ? 'border-walnut bg-walnut/10 text-walnut dark:border-accent-warm dark:bg-accent-warm/15 dark:text-accent-warm'
                   : 'border-dust text-ink/80 hover:bg-dust/25 dark:border-border-dark dark:text-ink-dark/85 dark:hover:bg-border-dark/40'
@@ -1259,19 +1266,28 @@ export function ManuscriptToolbar({
                 Reset to default
               </button>
             ) : null}
+            </div>
           </div>
         </div>
-      </div>
 
-      <input
-        ref={imageInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(e) => onPickImage(e.target.files)}
-      />
-
-      <div className="ml-auto flex shrink-0 flex-wrap items-center gap-2 border-l border-transparent pl-1 sm:border-dust/60 sm:pl-3 dark:sm:border-border-dark/80">
+        <div className="ml-auto flex shrink-0 flex-wrap items-center gap-2 border-l border-transparent pl-1 sm:border-dust/60 sm:pl-3 dark:sm:border-border-dark/80">
+          {minimalBar && onToggleTypewriter ? (
+            <button
+              type="button"
+              aria-pressed={typewriterEnabled}
+              className={`flex h-9 shrink-0 items-center gap-2 rounded-2xl border px-2.5 text-sm font-medium transition-colors sm:h-10 sm:px-3 ${
+                typewriterEnabled
+                  ? 'border-walnut/40 bg-walnut/10 text-walnut dark:border-accent-warm/45 dark:bg-accent-warm/15 dark:text-accent-warm'
+                  : 'border-dust bg-panel-light-strong/85 text-ink hover:bg-panel-light-strong dark:border-border-dark dark:bg-panel-dark/80 dark:text-ink-dark dark:hover:bg-panel-dark'
+              }`}
+              title="Typewriter mode — hide chrome and keep the cursor centered"
+              aria-label="Typewriter mode"
+              onClick={onToggleTypewriter}
+            >
+              <AlignVerticalSpaceAround className="h-4 w-4 shrink-0" strokeWidth={2.25} />
+              <span className="hidden sm:inline">Typewriter</span>
+            </button>
+          ) : null}
           {minimalBar && onOpenFindReplace ? (
             <button
               type="button"
@@ -1311,6 +1327,15 @@ export function ManuscriptToolbar({
             <Redo2 className="h-4 w-4" strokeWidth={2.25} />
           </button>
         </div>
+      </div>
+
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => onPickImage(e.target.files)}
+      />
     </div>
 
       {editor ?
