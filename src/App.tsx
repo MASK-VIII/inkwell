@@ -606,7 +606,7 @@ export default function App() {
   const [shelfDropHoverNotesSection, setShelfDropHoverNotesSection] = useState(false)
   const [shelfDropHoverProjectsSection, setShelfDropHoverProjectsSection] = useState(false)
   const [expandedShelfParentId, setExpandedShelfParentId] = useState<string | null>(null)
-  const [shelfPinRev, setShelfPinRev] = useState(0)
+  const [, setShelfPinRev] = useState(0)
   const [shelfUiTick, setShelfUiTick] = useState(0)
   const [shelfDropHoverTrash, setShelfDropHoverTrash] = useState(false)
   const [shelfProjectChildDropTarget, setShelfProjectChildDropTarget] = useState<{
