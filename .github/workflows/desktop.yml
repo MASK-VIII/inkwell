@@ -17,6 +17,19 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      VITE_INKWELL_CLOUD_SYNC: '1'
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+      VITE_PADDLE_CLIENT_TOKEN: ${{ secrets.VITE_PADDLE_CLIENT_TOKEN }}
+      VITE_PADDLE_ENVIRONMENT: ${{ secrets.VITE_PADDLE_ENVIRONMENT }}
+      VITE_PADDLE_PRICE_ID_BASIC: ${{ secrets.VITE_PADDLE_PRICE_ID_BASIC }}
+      VITE_PADDLE_PRICE_ID_PRO: ${{ secrets.VITE_PADDLE_PRICE_ID_PRO }}
+      VITE_PADDLE_PRICE_ID_UPGRADE: ${{ secrets.VITE_PADDLE_PRICE_ID_UPGRADE }}
+      VITE_PADDLE_EDGE_CHECKOUT: ${{ secrets.VITE_PADDLE_EDGE_CHECKOUT }}
+      VITE_PADDLE_CHECKOUT_EBOOK_SUITE: ${{ secrets.VITE_PADDLE_CHECKOUT_EBOOK_SUITE }}
+      VITE_PADDLE_CHECKOUT_PRO: ${{ secrets.VITE_PADDLE_CHECKOUT_PRO }}
+      VITE_PADDLE_CHECKOUT_UPGRADE: ${{ secrets.VITE_PADDLE_CHECKOUT_UPGRADE }}
 
     steps:
       - uses: actions/checkout@v4
@@ -32,11 +45,6 @@ jobs:
       # When repository secrets are set, installers include cloud login (same VITE_* names as .env.local).
       # Fork PRs usually omit secrets → offline-only build (still green).
       - name: Build desktop bundle
-        env:
-          VITE_INKWELL_CLOUD_SYNC: '1'
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         shell: bash
         run: npm run build:desktop
 
