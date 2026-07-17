@@ -63,8 +63,8 @@ export function GuideLayout({ darkMode, onToggleDarkMode, title, description, cr
         <aside className="mt-14 rounded-2xl border border-dust/70 bg-panel-light-muted/50 p-6 dark:border-border-dark dark:bg-panel-dark/60">
           <p className="font-serif text-lg text-ink dark:text-ink-dark">Try Inkwell on your manuscript</p>
           <p className="mt-2 text-sm leading-relaxed text-walnut/85 dark:text-ink-dark/78">
-            Start writing free in the browser with no signup, or jump to pricing when you are ready for sync, EPUB, or
-            the full export suite.
+            Start writing free in the browser with no signup—every export format is included, and your
+            work stays on your device.
           </p>
           <div className="mt-5 flex flex-wrap gap-3">
             <a
@@ -74,16 +74,10 @@ export function GuideLayout({ darkMode, onToggleDarkMode, title, description, cr
               Start writing free
             </a>
             <a
-              href="/pricing"
+              href="/guides"
               className="inline-flex items-center justify-center rounded-full border border-walnut/30 px-5 py-2.5 text-sm font-medium text-ink transition hover:border-walnut/55 dark:border-border-dark dark:text-ink-dark dark:hover:border-accent-warm/45"
             >
-              See pricing
-            </a>
-            <a
-              href="/buy"
-              className="inline-flex items-center justify-center rounded-full border border-walnut/30 px-5 py-2.5 text-sm font-medium text-ink transition hover:border-walnut/55 dark:border-border-dark dark:text-ink-dark dark:hover:border-accent-warm/45"
-            >
-              Buy now
+              More guides
             </a>
           </div>
         </aside>

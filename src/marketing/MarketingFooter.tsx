@@ -124,7 +124,7 @@ export function MarketingFooter() {
                 >
                   support@enterthelimelight.com
                 </a>
-                <span className="mt-0.5 block text-xs text-walnut/65 dark:text-ink-dark/55">Help &amp; billing</span>
+                <span className="mt-0.5 block text-xs text-walnut/65 dark:text-ink-dark/55">Help</span>
               </li>
               <li>
                 <a

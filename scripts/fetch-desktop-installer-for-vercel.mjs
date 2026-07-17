@@ -154,7 +154,17 @@ async function downloadAsset(apiAssetUrl, token, destFile) {
   await writeFile(destFile, buf)
 }
 
+function isSiteUnavailable() {
+  const raw = process.env.VITE_SITE_UNAVAILABLE?.trim()
+  return raw === '1' || raw?.toLowerCase() === 'true'
+}
+
 async function main() {
+  if (isSiteUnavailable()) {
+    console.log('[fetch-desktop-installer] skipped (VITE_SITE_UNAVAILABLE=1)')
+    return
+  }
+
   if (process.env.INKWELL_SKIP_DESKTOP_INSTALLER_FETCH === '1') {
     console.log('[fetch-desktop-installer] skipped (INKWELL_SKIP_DESKTOP_INSTALLER_FETCH=1)')
     return

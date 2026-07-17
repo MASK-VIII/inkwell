@@ -14,13 +14,13 @@ export function PricingPage() {
   const { darkMode, toggle } = useMarketingDarkMode()
 
   useMarketingPageHead({
-    title: 'Pricing \u2014 Inkwell',
+    title: 'Pricing \u2014 Inkwell (free)',
     canonicalPath: '/pricing',
-    ogTitle: 'Inkwell pricing — Basic, Pro, and free local writing',
+    ogTitle: 'Inkwell pricing — free, all features included',
     metaDescription:
-      'Inkwell pricing: free offline novel writing; Basic adds cloud backup and EPUB; Pro adds PDF, DOCX, and the full export suite. One-time purchases, lifetime updates.',
+      'Inkwell is free: offline-first novel writing with formatting previews and the full export suite (EPUB, PDF, DOCX, Markdown). No account, no subscription.',
     ogDescription:
-      'Compare Inkwell Basic vs Pro: local-first free tier, cloud sync and EPUB on Basic, full print and ebook exports on Pro. Pick the tier that matches your publishing workflow.',
+      'Inkwell is free to use—local-first writing, formatting previews, and every export format included. No tiers, no signup, no subscription.',
   })
 
   return (

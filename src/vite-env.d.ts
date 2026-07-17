@@ -12,6 +12,8 @@ interface ImportMetaEnv {
   readonly VITE_ENABLE_LEGACY_BACKUP?: string
   /** When truthy, enables Supabase-backed library sync (requires URL + anon key). */
   readonly VITE_INKWELL_CLOUD_SYNC?: string
+  /** When truthy, Inkwell runs as a free local-only app: no cloud, no accounts, all exports unlocked. */
+  readonly VITE_INKWELL_LOCAL_ONLY?: string
   /** HTTPS URL to the Windows desktop installer (e.g. GitHub Release asset). Shown on the sign-in screen in web builds when set. */
   readonly VITE_INKWELL_DESKTOP_DOWNLOAD_URL?: string
   /** Optional `Owner/repo` for default GitHub latest-download URL when `git remote` is unavailable at build time. */

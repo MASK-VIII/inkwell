@@ -11,7 +11,7 @@ export function CtaSection() {
           Ready to write?
         </h2>
         <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-walnut/85 dark:text-ink-dark/80">
-          Draft, format, publish—start a manuscript in under a minute, locally on your device, no sign-up required. Upgrade when you want cloud backup and EPUB (Basic) or the full export suite (Pro); both paid tiers include lifetime updates.
+          Draft, format, publish—start a manuscript in under a minute, locally on your device, no sign-up required. Every export format is included, free.
         </p>
         <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
           <a
@@ -31,12 +31,6 @@ export function CtaSection() {
               Download app
             </a>
           : null}
-          <a
-            href="/app?checkout=basic#signin"
-            className="inline-flex items-center justify-center rounded-full border border-walnut/30 px-6 py-3 text-base font-medium text-ink transition hover:border-walnut/60 hover:bg-panel-light-muted/70 dark:border-border-dark dark:text-ink-dark dark:hover:border-accent-warm/45 dark:hover:bg-panel-dark/60"
-          >
-            Buy now
-          </a>
           <a
             href="mailto:contact@enterthelimelight.com"
             className="inline-flex items-center justify-center rounded-full border border-walnut/30 px-6 py-3 text-base font-medium text-ink transition hover:border-walnut/60 hover:bg-panel-light-muted/70 dark:border-border-dark dark:text-ink-dark dark:hover:border-accent-warm/45 dark:hover:bg-panel-dark/60"

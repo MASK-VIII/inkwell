@@ -27,7 +27,7 @@ const FEATURES: Feature[] = [
   {
     title: 'Draft, format, publish\u2014in one app',
     body:
-      'Preview print and ebook layouts while you write. Basic unlocks EPUB export; Pro adds PDF, DOCX, Markdown, and plain text—everything downloads to your machine.',
+      'Preview print and ebook layouts while you write, then export EPUB, PDF, DOCX, Markdown, or plain text—everything downloads to your machine.',
   },
 ]
 
@@ -41,7 +41,7 @@ export function FeaturesSection() {
             For the first-time author and the pro.
           </h2>
           <p className="mt-4 text-base leading-relaxed text-walnut/85 dark:text-ink-dark/80">
-            Whether you are drafting your first manuscript or your next indie release, Inkwell keeps the same draft—format—publish rhythm through the months when ideas become books—whether you are hobby writing or self-publishing. Try it locally on the Free tier with no sign-up—everything below works without an account until you choose paid exports or cloud backup (see pricing for what Basic vs Pro unlock).
+            Whether you are drafting your first manuscript or your next indie release, Inkwell keeps the same draft—format—publish rhythm through the months when ideas become books—whether you are hobby writing or self-publishing. Everything below is free and works without an account, locally on your device.
           </p>
         </div>
 

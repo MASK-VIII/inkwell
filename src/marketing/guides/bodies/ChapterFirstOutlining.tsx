@@ -24,8 +24,7 @@ export default function ChapterFirstOutliningBody() {
       <h2>Related guides</h2>
       <p>
         <a href="/guides/local-first-writing-workflow">Local-first workflow</a>,{' '}
-        <a href="/guides/scrivener-alternative-novel-drafting">binder-first drafting</a>,{' '}
-        <a href="/guides/inkwell-free-vs-basic-vs-pro">Free vs Basic vs Pro</a>.
+        <a href="/guides/scrivener-alternative-novel-drafting">binder-first drafting</a>.
       </p>
 
       <p>

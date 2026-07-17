@@ -1,5 +1,3 @@
-import { INKWELL_DISPLAY_PRICE_PRO } from '../../pricingCopy'
-
 export default function PrintPdfSelfPublishingBasicsBody() {
   return (
     <>
@@ -30,14 +28,14 @@ export default function PrintPdfSelfPublishingBasicsBody() {
       <h2>A grounded expectation</h2>
       <p>
         Tools differ in how much “reflow shop” polish you get out of the box. Inkwell focuses on the author arc—draft,
-        format, publish—with serious export paths on Pro. If you need boutique print refinement for every edge case,
-        pair Inkwell with a specialist workflow where it makes sense—honesty keeps refunds low and readers happy.
+        format, publish—with serious export paths built in. If you need boutique print refinement for every edge case,
+        pair Inkwell with a specialist workflow where it makes sense.
       </p>
 
       <h2>Where Inkwell fits</h2>
       <p>
-        Pro unlocks the full export suite, including print-oriented PDF workflows alongside DOCX/Markdown/plain text (
-        <a href="/pricing">see pricing</a>). Start free locally, then upgrade when print is in scope.
+        The full export suite is included free—print-oriented PDF workflows alongside EPUB, DOCX, Markdown, and plain
+        text. Draft locally, preview the interior, and export when print is in scope.
       </p>
 
       <h2>Related guides</h2>
@@ -48,8 +46,7 @@ export default function PrintPdfSelfPublishingBasicsBody() {
       </p>
 
       <p>
-        <a href="/buy">Buy Pro</a> when you are ready ({INKWELL_DISPLAY_PRICE_PRO} intro pricing today), or{' '}
-        <a href="/app#bookshelf">open the app free</a> and draft until exports deserve the upgrade.
+        <a href="/app#bookshelf">Open the app free</a> and draft until print is the next milestone.
       </p>
     </>
   )

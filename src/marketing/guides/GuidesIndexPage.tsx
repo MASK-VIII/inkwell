@@ -12,10 +12,10 @@ export function GuidesIndexPage() {
     title: 'Guides \u2014 Inkwell',
     canonicalPath: '/guides',
     metaDescription:
-      'Evergreen guides for novel drafting, EPUB and DOCX exports, print PDF basics, local-first workflow, and Inkwell tier choices.',
+      'Evergreen guides for novel drafting, EPUB and DOCX exports, print PDF basics, and local-first writing workflows.',
     ogTitle: 'Inkwell guides for authors',
     ogDescription:
-      'Practical writing and publishing guides: exports, backups, pricing clarity, and calmer workflows—without hype.',
+      'Practical writing and publishing guides: exports, backups, and calmer workflows—without hype.',
     ogImage: HOME_OG_IMAGE,
   })
 
@@ -29,7 +29,7 @@ export function GuidesIndexPage() {
         </h1>
         <p className="mt-4 text-base leading-relaxed text-walnut/88 dark:text-ink-dark/82">
           Short, specific articles on exports, backups, and calm workflows—written for indie authors shipping digital
-          or print. Each guide links back to <a href="/pricing">pricing</a> when tiers matter.
+          or print. Everything they describe is free in Inkwell.
         </p>
 
         <ul className="mt-10 space-y-4">

@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#0f1113" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f8f1e3" media="(prefers-color-scheme: light)" />
+    <title>Inkwell — Temporarily unavailable</title>
+    <meta
+      name="description"
+      content="Inkwell is temporarily unavailable. Purchases and downloads are paused."
+    />
+    <style>
+      :root {
+        color-scheme: light dark;
+        --ink: #2c241f;
+        --parchment: #f8f1e3;
+        --walnut: #8b4513;
+        --dust: #d4c3a8;
+        --panel-dark: #0f1113;
+        --ink-dark: #f7e7c2;
+        --border-dark: #2a2f34;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+      }
+
+      body {
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      @media (prefers-color-scheme: light) {
+        body {
+          color: var(--ink);
+          background: var(--parchment);
+        }
+      }
+
+      @media (prefers-color-scheme: dark) {
+        body {
+          color: var(--ink-dark);
+          background: var(--panel-dark);
+        }
+      }
+
+      .page {
+        display: flex;
+        min-height: 100vh;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem 1.5rem;
+      }
+
+      .card {
+        max-width: 32rem;
+        text-align: center;
+      }
+
+      .mark {
+        font-family: Georgia, 'Times New Roman', serif;
+        font-size: clamp(2rem, 6vw, 2.75rem);
+        font-weight: 400;
+        letter-spacing: -0.02em;
+        margin: 0 0 1rem;
+      }
+
+      @media (prefers-color-scheme: light) {
+        .mark {
+          color: var(--walnut);
+        }
+      }
+
+      @media (prefers-color-scheme: dark) {
+        .mark {
+          color: var(--ink-dark);
+        }
+      }
+
+      h1 {
+        font-family: Georgia, 'Times New Roman', serif;
+        font-size: clamp(1.35rem, 4vw, 1.75rem);
+        font-weight: 400;
+        margin: 0 0 1rem;
+      }
+
+      p {
+        margin: 0 0 0.75rem;
+        font-size: 1.05rem;
+      }
+
+      .muted {
+        font-size: 0.95rem;
+        opacity: 0.78;
+      }
+
+      @media (prefers-color-scheme: light) {
+        .rule {
+          border: 0;
+          border-top: 1px solid color-mix(in srgb, var(--dust) 70%, transparent);
+          margin: 1.75rem 0;
+        }
+      }
+
+      @media (prefers-color-scheme: dark) {
+        .rule {
+          border: 0;
+          border-top: 1px solid color-mix(in srgb, var(--border-dark) 80%, transparent);
+          margin: 1.75rem 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <div class="card">
+        <p class="mark">Inkwell</p>
+        <h1>Temporarily unavailable</h1>
+        <p>
+          Inkwell is not open to the public right now. Purchases, sign-in, and downloads are
+          paused.
+        </p>
+        <p class="muted">Thank you for your patience. We will be back when Inkwell is ready again.</p>
+        <hr class="rule" />
+        <p class="muted">Enter the Limelight</p>
+      </div>
+    </main>
+  </body>
+</html>

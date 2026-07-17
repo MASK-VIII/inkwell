@@ -1,6 +1,8 @@
 /**
  * Env-gated Supabase sync (see docs/CLOUD_SYNC.md). Off unless explicitly enabled.
  */
+import { isInkwellLocalOnlyMode } from '../localPersonalMode'
+
 export type InkwellSupabasePublicConfig = {
   url: string
   anonKey: string
@@ -12,6 +14,7 @@ function truthyFlag(raw: string | undefined): boolean {
 }
 
 export function isInkwellCloudSyncFeatureEnabled(): boolean {
+  if (isInkwellLocalOnlyMode()) return false
   return truthyFlag(import.meta.env.VITE_INKWELL_CLOUD_SYNC)
 }
 

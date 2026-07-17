@@ -1,0 +1,11 @@
+release
+release-build
+ebuild-out
+inkwell-pack
+build
+node_modules
+dist
+.git
+.vercel
+*.exe
+electron/**/*.asar

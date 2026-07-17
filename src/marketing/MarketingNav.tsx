@@ -49,14 +49,6 @@ export function MarketingNav({ showAnchors = true, darkMode, onToggleDarkMode }:
               <li>
                 <a
                   className="rounded-sm transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-walnut/35 dark:hover:text-cream dark:focus-visible:ring-cream/40"
-                  href="/pricing"
-                >
-                  Pricing
-                </a>
-              </li>
-              <li>
-                <a
-                  className="rounded-sm transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-walnut/35 dark:hover:text-cream dark:focus-visible:ring-cream/40"
                   href="/changelog"
                 >
                   Roadmap
@@ -88,16 +80,10 @@ export function MarketingNav({ showAnchors = true, darkMode, onToggleDarkMode }:
               Guides
             </a>
             <a
-              href="/app#signin"
-              className="inline-flex items-center justify-center rounded-full border border-walnut/30 px-4 py-2 text-sm font-medium text-ink transition hover:border-walnut/55 hover:bg-panel-light-muted/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-walnut dark:border-border-dark dark:text-ink-dark dark:hover:border-accent-warm/45 dark:hover:bg-panel-dark/60 dark:focus-visible:outline-cream/50"
-            >
-              Log in
-            </a>
-            <a
-              href="/buy"
+              href="/app#bookshelf"
               className="inline-flex items-center justify-center rounded-full bg-ink px-4 py-2 text-sm font-medium text-parchment shadow-sm transition hover:bg-walnut focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-walnut dark:bg-accent-warm dark:text-panel-dark dark:hover:bg-cream"
             >
-              Buy now
+              Open Inkwell
             </a>
           </div>
           <button

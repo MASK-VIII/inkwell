@@ -1,18 +1,10 @@
 import { HOME_META_DESCRIPTION, MARKETING_SITE_URL } from './marketingSeoConstants'
-import { INKWELL_DISPLAY_PRICE_BASIC, INKWELL_DISPLAY_PRICE_PRO } from './pricingCopy'
-
-function stripUsdSymbol(price: string): string {
-  return price.replace(/^\$/, '').trim()
-}
 
 /**
  * Homepage structured data (SoftwareApplication + WebSite + Organization).
  * Mount only on `/` marketing landing.
  */
 export function MarketingJsonLd() {
-  const basic = stripUsdSymbol(INKWELL_DISPLAY_PRICE_BASIC)
-  const pro = stripUsdSymbol(INKWELL_DISPLAY_PRICE_PRO)
-
   const graph = {
     '@context': 'https://schema.org',
     '@graph': [
@@ -42,17 +34,10 @@ export function MarketingJsonLd() {
         offers: [
           {
             '@type': 'Offer',
-            name: 'Inkwell Basic',
-            price: basic,
+            name: 'Inkwell',
+            price: '0',
             priceCurrency: 'USD',
-            description: 'One-time purchase: cloud library sync and EPUB export.',
-          },
-          {
-            '@type': 'Offer',
-            name: 'Inkwell Pro',
-            price: pro,
-            priceCurrency: 'USD',
-            description: 'One-time purchase (intro pricing): full export suite including PDF and DOCX.',
+            description: 'Free: full writing workspace and every export format (EPUB, PDF, DOCX, Markdown).',
           },
         ],
       },

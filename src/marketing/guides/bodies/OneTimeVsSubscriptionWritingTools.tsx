@@ -1,5 +1,3 @@
-import { INKWELL_DISPLAY_PRICE_BASIC, INKWELL_DISPLAY_PRICE_PRO, INKWELL_DISPLAY_PRICE_PRO_LIST } from '../../pricingCopy'
-
 export default function OneTimeVsSubscriptionWritingToolsBody() {
   return (
     <>
@@ -25,21 +23,18 @@ export default function OneTimeVsSubscriptionWritingToolsBody() {
 
       <h2>How Inkwell prices</h2>
       <p>
-        Inkwell’s paid tiers are <strong>one-time purchases</strong> with lifetime app updates on Basic and Pro. Pro is
-        at intro pricing today ({INKWELL_DISPLAY_PRICE_PRO}); new purchases move to list price ({INKWELL_DISPLAY_PRICE_PRO_LIST}
-        ) later—buyers during intro keep their tier (
-        <a href="/pricing">pricing</a>, <a href="/#faq">FAQ</a>). Basic is {INKWELL_DISPLAY_PRICE_BASIC} for new buyers.
+        Inkwell skips the question entirely: it is <strong>free</strong>. The full writing workspace and
+        every export format are included, with no subscription and no account (<a href="/#faq">FAQ</a>).
       </p>
 
       <h2>Related guides</h2>
       <p>
-        <a href="/guides/inkwell-free-vs-basic-vs-pro">Free vs Basic vs Pro</a>,{' '}
-        <a href="/guides/local-first-writing-workflow">local-first workflow</a>,{' '}
+        <a href="/guides/local-first-writing-workflow">Local-first workflow</a>,{' '}
         <a href="/guides/scrivener-alternative-novel-drafting">Scrivener-class drafting</a>.
       </p>
 
       <p>
-        Try <a href="/app#bookshelf">Inkwell free</a>, then <a href="/buy">buy</a> when exports belong in your budget.
+        Try <a href="/app#bookshelf">Inkwell free</a>—no signup, every export included.
       </p>
     </>
   )

@@ -64,9 +64,9 @@ export const GUIDES: readonly GuideDef[] = [
   },
   {
     slug: 'cloud-backup-for-manuscripts',
-    title: 'Cloud backup for manuscripts (without drama)',
+    title: 'Backing up your manuscripts (without drama)',
     description:
-      'What library backup is for, how limits are thought about in Inkwell, and habits that keep restores boring.',
+      'What a library backup is for, how Inkwell packages your whole library as a portable archive, and habits that keep restores boring.',
     dateModified: '2026-05-07',
     Body: laz(() => import('./bodies/CloudBackupForManuscripts')),
   },
@@ -74,7 +74,7 @@ export const GUIDES: readonly GuideDef[] = [
     slug: 'export-anxiety',
     title: 'Export anxiety: smaller loops, safer milestones',
     description:
-      'Make the scary step routine—preview earlier, export dated junk files, and lean on refund windows when you pay.',
+      'Make the scary step routine—preview earlier, export dated junk files, and let free exports turn milestones into practice.',
     dateModified: '2026-05-07',
     Body: laz(() => import('./bodies/ExportAnxiety')),
   },
@@ -85,14 +85,6 @@ export const GUIDES: readonly GuideDef[] = [
       'Keep the spine of the book in chapters and notes—light outlines that survive reordering and late rewrites.',
     dateModified: '2026-05-07',
     Body: laz(() => import('./bodies/ChapterFirstOutlining')),
-  },
-  {
-    slug: 'inkwell-free-vs-basic-vs-pro',
-    title: 'Inkwell Free vs Basic vs Pro (plain English)',
-    description:
-      'What each tier unlocks—local drafting, EPUB + backup on Basic, full exports on Pro—plus refunds and intro pricing in one place.',
-    dateModified: '2026-05-07',
-    Body: laz(() => import('./bodies/InkwellFreeVsBasicVsPro')),
   },
 ]
 

@@ -1,5 +1,6 @@
 import { User } from 'lucide-react'
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
+import { isInkwellLocalOnlyMode } from '../lib/localPersonalMode'
 
 export type InkwellProfileMenuProps = {
   userEmail: string | null
@@ -71,6 +72,7 @@ function InkwellProfileMenuInner({
     setOpen(!open)
   }, [onRequestExclusiveOpen, setOpen, open])
 
+  const localOnly = isInkwellLocalOnlyMode()
   const align = menuAlign === 'left' ? 'left-0' : 'right-0'
   const itemClass =
     'block w-full rounded-lg px-3 py-2 text-left text-sm text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50'
@@ -101,13 +103,15 @@ function InkwellProfileMenuInner({
             <div className="min-w-0 flex-1 pt-0.5">
               <p className="truncate text-sm font-semibold text-ink dark:text-ink-dark">Inkwell writer</p>
               <p className="truncate text-xs text-ink/60 dark:text-ink-dark/60">
-                {userEmail ? userEmail : 'Signed in on this device only'}
+                {userEmail ? userEmail
+                : localOnly ? 'Your library lives on this device'
+                : 'Signed in on this device only'}
               </p>
             </div>
           </div>
           <div className="border-t border-dust/80 dark:border-border-dark" />
           <div className="px-1 py-1">
-            {!userEmail && onGoToSignIn ?
+            {!localOnly && !userEmail && onGoToSignIn ?
               <button
                 type="button"
                 role="menuitem"
@@ -122,7 +126,7 @@ function InkwellProfileMenuInner({
             : null}
             {showLibraryHubLink ?
               <>
-                {onGoToAccount ?
+                {!localOnly && onGoToAccount ?
                   <button
                     type="button"
                     role="menuitem"
@@ -174,17 +178,19 @@ function InkwellProfileMenuInner({
                 Sign out of cloud only
               </button>
             : null}
-            <button
-              type="button"
-              role="menuitem"
-              className="block w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-red-700 hover:bg-dust/30 dark:text-red-300 dark:hover:bg-border-dark/50"
-              onClick={() => {
-                close()
-                onAppSignOut()
-              }}
-            >
-              Sign out
-            </button>
+            {!localOnly ?
+              <button
+                type="button"
+                role="menuitem"
+                className="block w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-red-700 hover:bg-dust/30 dark:text-red-300 dark:hover:bg-border-dark/50"
+                onClick={() => {
+                  close()
+                  onAppSignOut()
+                }}
+              >
+                Sign out
+              </button>
+            : null}
           </div>
         </div>
       : null}

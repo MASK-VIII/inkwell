@@ -17,7 +17,7 @@ const STEPS: Step[] = [
   {
     title: 'Publish',
     body:
-      'When the manuscript is ready, export the file you need: EPUB for ebooks, or a full export suite in Pro for print and submissions.',
+      'When the manuscript is ready, export the file you need: EPUB for ebooks, or print-ready PDF, DOCX, and Markdown for print and submissions.',
   },
 ]
 

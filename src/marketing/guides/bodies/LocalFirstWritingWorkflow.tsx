@@ -23,21 +23,19 @@ export default function LocalFirstWritingWorkflowBody() {
 
       <h2>Where Inkwell fits</h2>
       <p>
-        Inkwell keeps the full writing workspace free and local-first; Basic adds optional cloud library sync/backup and
-        EPUB; Pro adds the full export suite and deeper formatting for print and submissions. The through-line is the
-        same arc: <em>Draft. Format. Publish.</em> (<a href="/">homepage</a>, <a href="/pricing">pricing</a>).
+        Inkwell keeps the full writing workspace free and local-first, with formatting previews and every export
+        format (EPUB, print-ready PDF, DOCX, Markdown, plain text) included. The through-line is the same arc:{' '}
+        <em>Draft. Format. Publish.</em> (<a href="/">homepage</a>).
       </p>
 
       <h2>Related guides</h2>
       <p>
-        <a href="/guides/cloud-backup-for-manuscripts">Cloud backup for manuscripts</a>,{' '}
-        <a href="/guides/one-time-vs-subscription-writing-tools">one-time vs subscription tools</a>,{' '}
-        <a href="/guides/inkwell-free-vs-basic-vs-pro">Free vs Basic vs Pro</a>.
+        <a href="/guides/cloud-backup-for-manuscripts">Backing up your manuscripts</a>,{' '}
+        <a href="/guides/one-time-vs-subscription-writing-tools">one-time vs subscription tools</a>.
       </p>
 
       <p>
-        <a href="/app#bookshelf">Open Inkwell free</a>—no signup to start—or browse <a href="/buy">paid tiers</a> when
-        exports and backup belong in your loop.
+        <a href="/app#bookshelf">Open Inkwell free</a>—no signup to start, every export included.
       </p>
     </>
   )

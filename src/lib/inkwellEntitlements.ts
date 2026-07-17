@@ -7,6 +7,7 @@ import {
   INKWELL_CLOUD_QUOTA_BASIC_BYTES,
   INKWELL_CLOUD_QUOTA_PRO_BYTES,
 } from './cloudQuota'
+import { isInkwellLocalOnlyMode } from './localPersonalMode'
 
 export type InkwellTier = 'free' | 'basic' | 'pro'
 export type InkwellEntitlementSourceTier = InkwellTier | 'ebook_suite'
@@ -41,6 +42,18 @@ export function cloudLibraryQuotaBytes(tier: InkwellTier): number | null {
 }
 
 export function computeInkwellGates(row: InkwellEntitlementRow | null): InkwellCapabilityGates {
+  if (isInkwellLocalOnlyMode()) {
+    return {
+      tier: 'pro',
+      canExportEpub: true,
+      canUseProExports: true,
+      canUseCloudSync: false,
+      canUseEbookFormat: true,
+      canUsePrintFormat: true,
+      canUseNoteExportSuite: true,
+    }
+  }
+
   const active = row == null || row.status === 'active'
   const tier: InkwellTier = !active || row == null ? 'free' : normalizeInkwellTier(row.tier)
 

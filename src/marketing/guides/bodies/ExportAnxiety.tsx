@@ -14,10 +14,10 @@ export default function ExportAnxietyBody() {
         <li>Share exports to one trusted reader before the public store—confidence compounds.</li>
       </ul>
 
-      <h2>Remember refunds exist for paid tiers</h2>
+      <h2>Exports cost nothing to practice</h2>
       <p>
-        Inkwell includes a <strong>30-day refund</strong> window on paid tiers so you can judge exports and sync
-        honestly—details on the <a href="/refund">refund policy</a> page.
+        In Inkwell every export format is free, so a throwaway EPUB or PDF costs nothing but a minute—run the loop as
+        often as it takes for the export step to feel routine.
       </p>
 
       <h2>Related guides</h2>
@@ -28,8 +28,7 @@ export default function ExportAnxietyBody() {
       </p>
 
       <p>
-        Start drafting without signup in <a href="/app#bookshelf">Inkwell</a>; when exports are in scope,{' '}
-        <a href="/pricing">compare tiers</a> or <a href="/buy">buy</a> with that refund window in mind.
+        Start drafting without signup in <a href="/app#bookshelf">Inkwell</a>—preview early, export often.
       </p>
     </>
   )

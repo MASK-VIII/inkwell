@@ -148,6 +148,7 @@ import {
 } from './lib/sync/authSession'
 import { getInkwellSupabaseClient } from './lib/sync/supabaseClient'
 import { getInkwellSupabasePublicConfig, isInkwellCloudSyncConfigured } from './lib/sync/syncEnv'
+import { isInkwellLocalOnlyMode } from './lib/localPersonalMode'
 import { cloudLibraryQuotaBytes } from './lib/inkwellEntitlements'
 import { useInkwellLibrarySync } from './lib/sync/useInkwellLibrarySync'
 import { useInkwellEntitlements } from './hooks/useInkwellEntitlements'
@@ -366,6 +367,16 @@ function readInitialDarkMode(): boolean {
 
 function readRouteFromHash(): Route {
   const hash = (typeof window === 'undefined' ? '' : window.location.hash).replace(/^#/, '')
+  // Local-only builds have no sign-in, account, or checkout surfaces; old bookmarks land on the shelf.
+  if (
+    isInkwellLocalOnlyMode() &&
+    ['signin', 'welcome', 'cloud-signin', 'checkout', 'account'].includes(hash)
+  ) {
+    if (typeof window !== 'undefined' && window.location.hash !== '#bookshelf') {
+      replaceStatePreservePathAndSearch('#bookshelf')
+    }
+    return 'bookshelf'
+  }
   if (hash === 'signin' || hash === 'welcome' || hash === 'cloud-signin') return 'signin'
   if (hash === 'account') return 'account'
   if (hash === 'bookshelf') return 'bookshelf'
@@ -461,7 +472,7 @@ function readInitialAppRoute(): Route {
   // Paddle hosted-checkout redirects land on `/app?_ptxn=…` (or back inside the same tab after a
   // refresh, via the per-tab stash flag). Force the celebration onto the Account screen instead of
   // dropping the buyer on the bookshelf with no acknowledgement.
-  if (hasPaddleReturnInBrowser() || hasStashedPaddleReturnInBrowser()) {
+  if (!isInkwellLocalOnlyMode() && (hasPaddleReturnInBrowser() || hasStashedPaddleReturnInBrowser())) {
     if (window.location.hash !== '#account') {
       replaceStatePreservePathAndSearch('#account')
     }
@@ -1363,6 +1374,7 @@ export default function App() {
   )
 
   const onBookshelfSignOut = useCallback(() => {
+    if (isInkwellLocalOnlyMode()) return
     syncPersistedState()
     devClearForceSignInFlag()
     void cloudSignOutRef.current?.()
@@ -1911,6 +1923,7 @@ export default function App() {
 
   const requireEntitlement = useCallback(
     (requiredTier: PaidFeatureTier): boolean => {
+      if (isInkwellLocalOnlyMode()) return true
       if (inkwellEntitlements.loading || inkwellEntitlements.status === 'loading') {
         setPaidFeatureGate({ requiredTier })
         return false
@@ -1960,7 +1973,10 @@ export default function App() {
       const path = window.location.pathname
       const hash = window.location.hash || ''
       window.history.replaceState(null, '', `${path}${qs ? `?${qs}` : ''}${hash}`)
-      queueMicrotask(() => showToast('Purchases require cloud sign-in, which is not configured in this build.', 5000))
+      // Local-only builds are fully free: stale ?checkout= links are cleaned silently.
+      if (!isInkwellLocalOnlyMode()) {
+        queueMicrotask(() => showToast('Purchases require cloud sign-in, which is not configured in this build.', 5000))
+      }
       return
     }
 

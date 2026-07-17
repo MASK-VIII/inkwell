@@ -13,7 +13,7 @@ export function PhWorkflowStrip() {
     },
     {
       title: 'Export when ready',
-      body: 'EPUB on Basic; PDF, DOCX, Markdown, and more on Pro—one-time purchase tiers.',
+      body: 'EPUB, print-ready PDF, DOCX, Markdown, and more—every export included, free.',
     },
   ]
 

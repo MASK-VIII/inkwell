@@ -22,8 +22,8 @@ export default function ScrivenerAlternativeNovelDraftingBody() {
       <h2>Where Inkwell fits</h2>
       <p>
         Inkwell is built around <em>Draft. Format. Publish.</em>: a calm chapter-first workspace, layout previews when
-        you are ready, and paid exports when there is a receiver. It is local-first with optional cloud backup on paid
-        tiers—see <a href="/pricing">pricing</a> and the <a href="/guides/inkwell-free-vs-basic-vs-pro">tier guide</a>.
+        you are ready, and exports when there is a receiver. It is free and local-first—every export format is
+        included, and your library stays on your device.
       </p>
 
       <h2>Related guides</h2>

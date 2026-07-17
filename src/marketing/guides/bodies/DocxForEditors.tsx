@@ -1,5 +1,3 @@
-import { INKWELL_DISPLAY_PRICE_PRO } from '../../pricingCopy'
-
 export default function DocxForEditorsBody() {
   return (
     <>
@@ -25,21 +23,18 @@ export default function DocxForEditorsBody() {
 
       <h2>Where Inkwell fits</h2>
       <p>
-        Full DOCX export sits on <strong>Pro</strong> alongside the broader print/digital export suite (see{' '}
-        <a href="/pricing">pricing</a>). If you only need EPUB for now, Basic may be the better stop—upgrade when you are
-        ready for DOCX/PDF and deeper formatting work.
+        DOCX export is included in Inkwell—free, alongside EPUB, print-ready PDF, Markdown, and plain
+        text. Draft locally, then export the file your editor wants.
       </p>
 
       <h2>Related guides</h2>
       <p>
-        <a href="/guides/print-pdf-self-publishing-basics">Print PDF basics</a>,{' '}
-        <a href="/guides/inkwell-free-vs-basic-vs-pro">Free vs Basic vs Pro</a>, and{' '}
+        <a href="/guides/print-pdf-self-publishing-basics">Print PDF basics</a> and{' '}
         <a href="/guides/export-anxiety">export anxiety</a>.
       </p>
 
       <p>
-        <a href="/app#bookshelf">Start in Inkwell free</a>, or go straight to <a href="/buy">checkout</a> when you want
-        Pro at intro pricing ({INKWELL_DISPLAY_PRICE_PRO} today).
+        <a href="/app#bookshelf">Start in Inkwell free</a>—no signup, every export included.
       </p>
     </>
   )

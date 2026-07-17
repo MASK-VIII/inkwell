@@ -1,3 +1,4 @@
+import { isInkwellLocalOnlyMode } from './localPersonalMode'
 import { loadProjectIndex } from './manuscripts'
 
 const STORAGE_BOOTSTRAP = 'inkwell-bootstrap-v1'
@@ -139,6 +140,7 @@ export function readBootstrap(): InkwellBootstrap {
 
 /** True only when the user explicitly returned to the gate (e.g. Sign out), not for every new profile. */
 export function shouldShowSignIn(bootstrap: InkwellBootstrap): boolean {
+  if (isInkwellLocalOnlyMode()) return false
   return !bootstrap.welcomeDone && bootstrap.preferSignInGate === true
 }
 

@@ -42,3 +42,5 @@ inkwell-pack/
 *.njsproj
 *.sln
 *.sw?
+
+.vercel

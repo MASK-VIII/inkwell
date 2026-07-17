@@ -1,71 +1,12 @@
-import {
-  CLOUD_LIMIT_BASIC_DISPLAY,
-  CLOUD_LIMIT_PRO_DISPLAY,
-  INKWELL_DISPLAY_PRICE_BASIC,
-  INKWELL_DISPLAY_PRICE_PRO,
-  INKWELL_DISPLAY_PRICE_PRO_LIST,
-  pricingCopy,
-} from './pricingCopy'
-
-type Plan = {
-  name: string
-  price: string
-  compareAtPrice?: string
-  badge?: string
-  forWhom: string
-  bullets: string[]
-  cta: { label: string; href: string }
-  finePrint?: string
-}
-
-/** Opens the sign-in screen with the chosen checkout intent attached; post-auth flow opens `UpgradeOfferModal`. */
-const APP_UPGRADE_HREF = {
-  basic: '/app?checkout=basic#signin',
-  pro: '/app?checkout=pro#signin',
-  upgrade: '/app?checkout=upgrade#signin',
-} as const
-
-const PLANS: Record<'basic' | 'pro', Plan> = {
-  basic: {
-    name: 'Basic',
-    price: INKWELL_DISPLAY_PRICE_BASIC,
-    badge: 'One-time',
-    forWhom: 'Everything you need to get your first ebook on the market.',
-    bullets: [
-      'Full writing workspace—the same chapter-first app you can start free on',
-      `Cloud library sync & backup across your devices (up to ${CLOUD_LIMIT_BASIC_DISPLAY} compressed backup)`,
-      'EPUB export',
-      '30-day refund if Inkwell is not the right fit',
-      'Lifetime app updates—included with your one-time purchase',
-      'Offline-first; unlimited local storage on each device',
-    ],
-    cta: { label: 'Unlock Basic', href: APP_UPGRADE_HREF.basic },
-    finePrint: pricingCopy.basicFinePrint,
-  },
-  pro: {
-    name: 'Pro',
-    price: INKWELL_DISPLAY_PRICE_PRO,
-    compareAtPrice: INKWELL_DISPLAY_PRICE_PRO_LIST,
-    badge: 'Intro pricing',
-    forWhom: 'When you need every export format and print-ready layout—not just ebook.',
-    bullets: [
-      `Everything in Basic, including higher backup space (up to ${CLOUD_LIMIT_PRO_DISPLAY})`,
-      'Full export suite (PDF / DOCX / Markdown / plain text)',
-      'Advanced formatting + presets',
-      '30-day refund if Inkwell is not the right fit',
-      'Priority email support',
-    ],
-    cta: { label: 'Go Pro', href: APP_UPGRADE_HREF.pro },
-    finePrint: pricingCopy.proFinePrint,
-  },
-}
+import { Download } from 'lucide-react'
+import { getInkwellDesktopDownloadUrl } from '../lib/marketing/desktopDownloadUrl'
 
 function TrustRow() {
   const items = [
-    { label: 'Free forever', detail: 'Local writing, no signup' },
-    { label: 'No credit card', detail: 'Start instantly' },
-    { label: 'One-time purchases', detail: 'Own your tools' },
-    { label: '30-day refund', detail: 'Full refund on paid tiers—see policy' },
+    { label: 'Free forever', detail: 'The whole app, no paid tiers' },
+    { label: 'No account', detail: 'Start instantly, no signup' },
+    { label: 'All exports included', detail: 'EPUB, PDF, DOCX, Markdown' },
+    { label: 'Local-first', detail: 'Your work stays on your device' },
     { label: 'Unlimited local storage', detail: 'On your device' },
   ]
 
@@ -84,90 +25,13 @@ function TrustRow() {
   )
 }
 
-function PlanCard({
-  plan,
-  featured = false,
-  subtle = false,
-}: {
-  plan: Plan
-  featured?: boolean
-  subtle?: boolean
-}) {
-  return (
-    <div
-      className={[
-        'relative flex h-full flex-col rounded-2xl border p-6 shadow-[0_1px_0_rgba(255,255,255,0.55)_inset] transition',
-        subtle ?
-          'border-dust/60 bg-panel-light-muted/52 hover:border-dust/90 hover:bg-panel-light-muted/68 dark:border-border-dark/70 dark:bg-panel-dark/45 dark:hover:bg-panel-dark/55'
-        : 'border-dust/70 bg-parchment/70 hover:border-walnut/40 hover:bg-parchment dark:border-border-dark dark:bg-panel-dark/60 dark:hover:border-accent-warm/40 dark:hover:bg-panel-dark/75',
-        featured ?
-          'ring-2 ring-walnut/20 dark:ring-cream/20'
-        : 'ring-1 ring-walnut/5 dark:ring-cream/10',
-      ].join(' ')}
-    >
-      {featured && (
-        <div className="absolute -top-3 left-6 rounded-full bg-ink px-3 py-1 text-[0.7rem] font-semibold uppercase tracking-widest text-parchment shadow-sm dark:bg-accent-warm dark:text-panel-dark">
-          Best value
-        </div>
-      )}
-      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
-        <div className="min-w-0 flex-1">
-          <h3 className="font-serif text-2xl leading-tight text-ink dark:text-ink-dark">{plan.name}</h3>
-          <p className="mt-2 text-sm leading-relaxed text-walnut/85 dark:text-ink-dark/78">{plan.forWhom}</p>
-        </div>
-        <div className="shrink-0 text-right sm:min-w-[7.5rem]">
-          <div className="flex flex-wrap items-baseline justify-end gap-2">
-            {plan.compareAtPrice && (
-              <p
-                className="font-serif text-lg leading-none text-walnut/60 line-through decoration-walnut/45 dark:text-ink-dark/55 dark:decoration-ink-dark/40"
-                aria-label={`Previously ${plan.compareAtPrice}`}
-              >
-                {plan.compareAtPrice}
-              </p>
-            )}
-            <p className="font-serif text-3xl leading-none tracking-tight text-ink tabular-nums dark:text-accent-warm sm:text-4xl">
-              {plan.price}
-            </p>
-          </div>
-          {plan.badge && (
-            <p className="mt-2 text-xs font-semibold uppercase tracking-[0.14em] text-walnut/80 dark:text-cream/88">
-              {plan.badge}
-            </p>
-          )}
-        </div>
-      </div>
-
-      <ul className="mt-5 space-y-2.5 text-sm leading-snug text-walnut/90 dark:text-ink-dark/82">
-        {plan.bullets.map((b) => (
-          <li key={b} className="flex gap-2.5">
-            <span
-              className="mt-[0.4rem] h-1.5 w-1.5 shrink-0 rounded-full bg-walnut/50 dark:bg-accent-warm/70"
-              aria-hidden
-            />
-            <span>{b}</span>
-          </li>
-        ))}
-      </ul>
-
-      {plan.finePrint ?
-        <p className="mt-4 text-xs leading-relaxed text-walnut/75 dark:text-ink-dark/68">{plan.finePrint}</p>
-      : null}
-
-      <div className="min-h-4 flex-1" aria-hidden />
-
-      <div className="mt-6">
-        <a
-          href={plan.cta.href}
-          className="inline-flex w-full items-center justify-center rounded-full bg-ink px-6 py-3.5 text-sm font-semibold text-parchment shadow-sm transition hover:bg-walnut focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-walnut sm:w-auto dark:bg-accent-warm dark:text-panel-dark dark:hover:bg-cream"
-        >
-          {plan.cta.label}
-        </a>
-      </div>
-    </div>
-  )
-}
-
+/**
+ * Free-product section (kept at `id="pricing"` so old anchors still land here).
+ * Inkwell has no paid tiers: the full workspace and every export are free and local.
+ */
 export function PricingSection() {
+  const desktopDownloadUrl = getInkwellDesktopDownloadUrl()
+
   return (
     <section id="pricing" className="bg-parchment dark:bg-panel-dark">
       <div className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-22">
@@ -176,40 +40,37 @@ export function PricingSection() {
             Pricing
           </p>
           <h2 className="mt-3 font-serif text-3xl leading-[1.15] text-ink sm:text-4xl dark:text-ink-dark">
-            Start free. Upgrade when you’re ready.
+            Free. All of it.
           </h2>
           <p className="mt-4 text-base leading-relaxed text-walnut/85 dark:text-ink-dark/80">
-            The full writing workspace stays free and local-first—you can install or open the app and write with no sign-up. Add Basic when you want sync and EPUB ({CLOUD_LIMIT_BASIC_DISPLAY} cloud backup); step up to Pro when you need the full export suite (PDF, DOCX, Markdown, plain text), advanced formatting for print or submissions, and {CLOUD_LIMIT_PRO_DISPLAY} backup. Basic and Pro are one-time purchases and both include lifetime app updates as Inkwell grows. Pro is at intro pricing today ({INKWELL_DISPLAY_PRICE_PRO}); when new purchases move to list price ({INKWELL_DISPLAY_PRICE_PRO_LIST}), anyone who bought Pro at intro keeps lifetime Pro at what they paid—grandfathered. Basic stays {INKWELL_DISPLAY_PRICE_BASIC} for new buyers. Paid tiers include a 30-day refund—see{' '}
-            <a
-              href="/refund"
-              className="font-medium text-ink underline decoration-walnut/35 underline-offset-2 hover:decoration-walnut/55 dark:text-ink-dark dark:decoration-cream/35 dark:hover:decoration-cream/55"
-            >
-              refund policy
-            </a>
-            .
+            Inkwell is free to use—no tiers, no subscription, no account. The full chapter-first
+            writing workspace, formatting previews, and every export format (EPUB, print-ready PDF,
+            DOCX, Markdown, plain text) are included. Your manuscripts live on your device: write in
+            the browser or download the desktop app.
           </p>
         </div>
 
-        <div className="mt-6 grid gap-6 md:grid-cols-2">
-          <PlanCard plan={PLANS.basic} subtle />
-          <PlanCard plan={PLANS.pro} featured />
+        <div className="flex flex-wrap items-center gap-4">
+          <a
+            href="/app#bookshelf"
+            className="inline-flex items-center justify-center rounded-full bg-ink px-7 py-3 text-base font-medium text-parchment shadow-sm transition hover:bg-walnut focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-walnut dark:bg-accent-warm dark:text-panel-dark dark:hover:bg-cream"
+          >
+            Start writing free
+          </a>
+          {desktopDownloadUrl ?
+            <a
+              href={desktopDownloadUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-2 rounded-full border border-walnut/30 px-6 py-3 text-base font-medium text-ink transition hover:border-walnut/60 hover:bg-panel-light-muted/70 dark:border-border-dark dark:text-ink-dark dark:hover:border-accent-warm/45 dark:hover:bg-panel-dark/60"
+            >
+              <Download className="h-4 w-4 shrink-0" aria-hidden />
+              Download for Windows
+            </a>
+          : null}
         </div>
 
-        <p className="mx-auto mt-8 max-w-2xl text-center text-sm font-medium leading-snug text-ink dark:text-ink-dark">
-          Not sure? Start free—upgrade only when you need cloud backup + EPUB (Basic) or print and submission exports (Pro).
-        </p>
-
         <TrustRow />
-
-        <p className="mt-6 text-center text-sm leading-relaxed text-walnut/80 dark:text-ink-dark/72">
-          {pricingCopy.upgradePathLine}{' '}
-          <a
-            href={APP_UPGRADE_HREF.upgrade}
-            className="font-medium text-ink underline decoration-walnut/35 underline-offset-2 hover:decoration-walnut/55 dark:text-ink-dark dark:decoration-cream/35 dark:hover:decoration-cream/55"
-          >
-            Basic → Pro checkout
-          </a>
-        </p>
       </div>
     </section>
   )
