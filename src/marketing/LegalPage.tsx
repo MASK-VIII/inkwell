@@ -134,13 +134,6 @@ export function RefundPage() {
         and write—every export format is included.
       </p>
 
-      <h2>Older paid purchases</h2>
-      <p>
-        If you previously purchased a paid tier under an older version of Inkwell, email{' '}
-        <a href="mailto:support@enterthelimelight.com">support@enterthelimelight.com</a> with your receipt and we will
-        help on a case-by-case basis.
-      </p>
-
       <h2>Statutory rights</h2>
       <p>
         Nothing here limits consumer rights that apply in your country or region where those rights cannot be waived by
