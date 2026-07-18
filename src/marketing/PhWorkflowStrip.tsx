@@ -5,7 +5,7 @@ export function PhWorkflowStrip() {
   const steps = [
     {
       title: 'Write locally',
-      body: 'Chapters, notes, light & dark. Free tier: full workspace, no signup.',
+      body: 'Chapters, notes, light & dark. Free: full workspace, no signup.',
     },
     {
       title: 'Preview layout',

@@ -21,12 +21,6 @@ export type InkwellDesktopBridge = {
   saveLibraryBackup: (buffer: ArrayBuffer) => Promise<{ ok: boolean; path?: string }>
   onMenuAction: (handler: (action: string) => void) => () => void
   onPendingImport: (handler: () => void) => () => void
-  /** Encrypted Supabase session key/value (main process); optional on web. */
-  authStorage?: {
-    getItem: (key: string) => Promise<string | null>
-    setItem: (key: string, value: string) => Promise<void>
-    removeItem: (key: string) => Promise<void>
-  }
   /** Packaged Windows desktop: GitHub Releases auto-update (see docs/DESKTOP.md). */
   updates?: {
     check: () => Promise<

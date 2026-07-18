@@ -1,7 +1,6 @@
 import { type ReactNode } from 'react'
 import { MarketingFooter } from './MarketingFooter'
 import { MarketingNav } from './MarketingNav'
-import { CLOUD_LIMIT_BASIC_DISPLAY, CLOUD_LIMIT_PRO_DISPLAY } from './pricingCopy'
 import { useMarketingDarkMode } from './useMarketingDarkMode'
 import { useMarketingPageHead } from './useMarketingPageHead'
 
@@ -70,32 +69,28 @@ export function PrivacyPage() {
       title="Privacy"
       pageTitle={'Privacy \u2014 Inkwell'}
       canonicalPath="/privacy"
-      metaDescription="Inkwell privacy policy: how we handle manuscripts, account data, cloud sync, and payments as Inkwell evolves. We do not sell your data or train AI on your writing."
-      ogDescription="Read how Inkwell treats local manuscripts vs optional cloud backup, what auth and billing providers see, and what we do not do with your work."
-      lastUpdated="Last updated: May 7, 2026"
+      metaDescription="Inkwell privacy policy: free local-first writing software. Your manuscripts stay on your device; we do not sell your data or train AI on your writing."
+      ogDescription="How Inkwell handles local manuscripts, optional desktop backups, and what we do not do with your work."
+      lastUpdated="Last updated: July 17, 2026"
     >
       <p>
-        This policy describes how Inkwell handles information for Inkwell 1.0 and future updates. We may
-        update it as features evolve; the date at the top reflects the latest revision.
+        This policy describes how Inkwell handles information for the current free, local-first product. We may update
+        it as features evolve; the date at the top reflects the latest revision.
       </p>
 
       <h2>What Inkwell stores</h2>
       <p>
-        Inkwell saves your manuscripts, notes, and settings on your device first (for example in
-        your browser or desktop app storage). If you sign in and turn on cloud sync, your library is
-        packaged and uploaded over HTTPS to private cloud storage tied to your account, under paths
-        scoped to your user id, so it can sync across devices and outlive a single browser profile.
-        Transport uses TLS; files at rest are protected by our hosting provider’s storage practices.
-        Inkwell does not provide end-to-end encryption where only you hold the keys unless we ship
-        that feature explicitly.
+        Inkwell is local-first. Your manuscripts, notes, and settings are saved on your device (in your browser or the
+        desktop app). Export and import tools let you back up or move your library with standard archive files
+        (<code>.inkwell.zip</code>). Inkwell does not require an account and does not upload your writing to our
+        servers as part of normal use.
       </p>
 
-      <h2>Account information</h2>
+      <h2>Website and downloads</h2>
       <p>
-        If you create an account, we rely on our authentication provider to store sign-in identifiers
-        (such as email) and credential material appropriately; Inkwell does not receive your
-        password in plain text. For paid tiers, billing is handled by our payment processor; Inkwell
-        does not store full card numbers.
+        Visiting the marketing site or downloading the desktop installer may involve ordinary web hosting and analytics
+        operated by our hosting providers. That traffic is separate from your manuscript library, which stays on your
+        device.
       </p>
 
       <h2>What we do not do</h2>
@@ -103,6 +98,7 @@ export function PrivacyPage() {
         <li>We do not sell your data.</li>
         <li>We do not train AI models on your manuscripts.</li>
         <li>We do not show ads.</li>
+        <li>We do not require a signup or cloud account to write or export.</li>
       </ul>
 
       <h2>Contact</h2>
@@ -120,45 +116,35 @@ export function PrivacyPage() {
 export function RefundPage() {
   return (
     <LegalPage
-      title="Refund policy"
+      title="Refunds"
       pageTitle={'Refunds \u2014 Inkwell'}
       canonicalPath="/refund"
-      metaDescription="Inkwell refund policy: 30-day full refund on qualifying Basic and Pro purchases. How to request a refund and how Paddle checkout fits in."
-      ogDescription="Basic and Pro include a 30-day refund window for qualifying one-time purchases. Email support with your receipt; reseller (Paddle) steps may apply."
-      lastUpdated="Last updated: May 7, 2026"
+      metaDescription="Inkwell is free local-first writing software. There are no paid purchases or subscriptions to refund."
+      ogDescription="Inkwell is free to use. There are no in-app purchases or subscriptions to refund."
+      lastUpdated="Last updated: July 17, 2026"
     >
       <p>
-        This refund policy applies to qualifying Basic and Pro one-time purchases. It stays in effect
-        unless we post an update here (the date above shows the latest revision).
+        Inkwell is <strong>free</strong> local-first writing software. There are no paid tiers, subscriptions, or
+        in-app purchases.
       </p>
 
-      <h2>Before you purchase</h2>
+      <h2>Nothing to refund</h2>
       <p>
-        Inkwell is digital software. Please review the feature list and pricing on the site before
-        completing a purchase so you know what Basic and Pro unlock.
+        Because Inkwell does not charge for software access, there is nothing to refund for current use. Open the app
+        and write—every export format is included.
       </p>
 
-      <h2>30-day refund window</h2>
+      <h2>Older paid purchases</h2>
       <p>
-        For qualifying one-time purchases of Basic or Pro, you may request a{' '}
-        <strong>full refund within 30 days</strong> of the date of purchase. Refunds apply to the
-        software license only; they do not cover third-party fees or charges outside Paddle’s
-        control.
-      </p>
-
-      <h2>How to request a refund</h2>
-      <p>
-        Email <a href="mailto:support@enterthelimelight.com">support@enterthelimelight.com</a> from the address used for
-        your purchase and include your receipt or transaction reference. Please contact us within the
-        30-day window above.
-        Paid checkout may be processed by our reseller (Paddle); where Paddle handles payment
-        support for your order, their process may apply in addition to this policy.
+        If you previously purchased a paid tier under an older version of Inkwell, email{' '}
+        <a href="mailto:support@enterthelimelight.com">support@enterthelimelight.com</a> with your receipt and we will
+        help on a case-by-case basis.
       </p>
 
       <h2>Statutory rights</h2>
       <p>
-        Nothing here limits consumer rights that apply in your country or region where those rights
-        cannot be waived by contract.
+        Nothing here limits consumer rights that apply in your country or region where those rights cannot be waived by
+        contract.
       </p>
     </LegalPage>
   )
@@ -170,40 +156,44 @@ export function TermsPage() {
       title="Terms of use"
       pageTitle={'Terms \u2014 Inkwell'}
       canonicalPath="/terms"
-      metaDescription="Inkwell terms of use: your rights to your manuscripts, acceptable use, cloud backup limits, and how the product may change as Inkwell evolves."
-      ogDescription="Terms covering product updates, content ownership, acceptable use, and cloud backup limits on Basic and Pro as Inkwell grows."
-      lastUpdated="Last updated: May 7, 2026"
+      metaDescription="Inkwell terms of use: your rights to your manuscripts, acceptable use, and how the free local-first product may change."
+      ogDescription="Terms covering product updates, content ownership, and acceptable use for Inkwell free local-first writing software."
+      lastUpdated="Last updated: July 17, 2026"
     >
       <p>
-        These terms apply to Inkwell 1.0 and future updates. We may update them as the product matures;
+        These terms apply to the current free, local-first Inkwell product. We may update them as the product matures;
         the date at the top reflects the latest revision.
+      </p>
+
+      <h2>The product</h2>
+      <p>
+        Inkwell is free writing software you run in the browser or as a desktop app. Your library stays on your device.
+        There is no account requirement and no paid unlock for exports or formatting features.
       </p>
 
       <h2>Product updates</h2>
       <p>
-        Inkwell is maintained by a solo founder. Features may evolve, and occasional bugs are possible.
-        Please keep your own backups and check the public roadmap for what is planned next.
+        Inkwell is maintained by a solo founder. Features may evolve, and occasional bugs are possible. Please keep
+        your own backups (export archives) and check the public roadmap for what is planned next.
       </p>
 
       <h2>Your work, your rights</h2>
       <p>
-        You own the manuscripts, notes, and other content you create in Inkwell. Using the
-        product does not grant Inkwell any ownership over your writing.
+        You own the manuscripts, notes, and other content you create in Inkwell. Using the product does not grant
+        Inkwell any ownership over your writing.
       </p>
 
       <h2>Acceptable use</h2>
       <p>
-        Please do not use Inkwell to host illegal content, attempt to break security, or abuse
-        the cloud sync service. We reserve the right to suspend accounts that do.
+        Please do not use Inkwell to create or store illegal content, or attempt to break the security of the software
+        or related websites. Abuse of our contact channels or download hosting may result in blocked access to those
+        services.
       </p>
 
-      <h2>Cloud storage</h2>
+      <h2>Local storage and backups</h2>
       <p>
-        Paid tiers that include cloud library backup are subject to per-tier limits on the size of your compressed
-        library backup (currently {CLOUD_LIMIT_BASIC_DISPLAY} on Basic and {CLOUD_LIMIT_PRO_DISPLAY} on Pro). Local
-        writing on your device is not capped by these limits. If you exceed your tier limit, cloud sync uploads may
-        pause until you free space or upgrade; we may adjust limits or fair-use policies with notice as the product
-        matures.
+        Your library size is limited only by your device storage. Clearing browser data can delete a web library.
+        Export <code>.inkwell.zip</code> archives regularly if you rely on Inkwell for important work.
       </p>
 
       <h2>Contact</h2>

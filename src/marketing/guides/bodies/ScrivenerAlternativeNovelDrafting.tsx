@@ -30,7 +30,7 @@ export default function ScrivenerAlternativeNovelDraftingBody() {
       <p>
         <a href="/guides/chapter-first-outlining">Chapter-first outlining</a>,{' '}
         <a href="/guides/local-first-writing-workflow">local-first workflow</a>,{' '}
-        <a href="/guides/one-time-vs-subscription-writing-tools">one-time vs subscription</a>.
+        <a href="/guides/one-time-vs-subscription-writing-tools">free vs subscription tools</a>.
       </p>
 
       <p>

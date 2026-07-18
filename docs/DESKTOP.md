@@ -21,42 +21,16 @@ This document records how the desktop shell is wired, why those choices were mad
 **Approach:**
 
 1. **Production:** Electron registers a privileged scheme **`inkwell`** and `protocol.handle('inkwell', …)` serves files from the Vite `dist/` directory with safe path containment (`path.relative` guard). The window loads **`inkwell://app/index.html`**, so the app origin is stable and same-origin rules match a normal web deployment.
-2. **Development:** Electron loads **`http://localhost:5173`** — the same origin as **`npm run dev`** in the browser — so local projects and Supabase session storage match. Workers and HMR behave like browser dev.
+2. **Development:** Electron loads **`http://localhost:5173`** — the same origin as **`npm run dev`** in the browser. Workers and HMR behave like browser dev.
 
 **Desktop dev performance:** by default, **`npm run dev:desktop`** does **not** auto-open Chromium DevTools (they add a lot of main-thread overhead while typing and using menus). Use **`npm run dev:desktop:debug`** or set **`INKWELL_ELECTRON_DEVTOOLS=1`** on the Electron process when you need the detached DevTools window.
 3. **Vite `base`:** when `INKWELL_DESKTOP=1`, `vite.config.ts` sets `base: './'` so generated asset URLs resolve under `inkwell://app/…` instead of absolute `/…` paths meant for static hosting at domain root.
 
 Entry: `electron/main.cjs`, preload: `electron/preload.cjs`. Renderer integration lives in `src/App.tsx` (menu + pending file open) behind `window.inkwellDesktop` (see `src/inkwell-desktop.d.ts`).
 
-## Sync and accounts (Supabase)
+## Local-first library
 
-When **`VITE_INKWELL_CLOUD_SYNC`** and Supabase public env vars are set in the **renderer** build (same as web), the app uses the shared sync stack in `src/lib/sync/*`. For **session persistence**, the preload exposes `inkwellDesktop.authStorage` (`getItem` / `setItem` / `removeItem` via async IPC). The main process stores a small JSON map encrypted with Electron **`safeStorage`** when the OS supports it (`inkwell:auth-kv-*` handlers in `electron/main.cjs`); otherwise it falls back to UTF-8 plaintext in the user data directory (acceptable only for local dev — prefer a machine with encryption available for real use).
-
-Web builds continue to use normal `localStorage` for Supabase session keys unless you inject a custom storage adapter.
-
-See **`docs/CLOUD_SYNC.md`** for schema, RLS, conflict rules, and the manual test matrix.
-
-### Sign-in screen shows only “Welcome” / offline on desktop
-
-If the packaged app opens to **Welcome** with **Continue to library (offline)** and **no** email or password fields, the **renderer was built without** `VITE_INKWELL_CLOUD_SYNC` and Supabase URL/key. Cloud login is not missing at runtime—it was never compiled in. Fix by setting the variables below in **`.env.local`** (or your CI secrets), then **`npm run build:desktop`** again and reinstall.
-
-If **email and password fields appear** but sign-in never completes or always fails, the build has cloud env (see CI **Verify renderer bundle inlined Supabase env**). On Windows, encrypted auth storage uses main-process IPC; the shell must trust the `inkwell://app/` window. If Electron reports an empty `senderFrame.url` for that protocol, Inkwell falls back to `webContents.getURL()` so `inkwell:auth-kv-*` handlers still run—update to a build that includes that fallback (`electron/main.cjs`).
-
-### Vite env is compile-time for desktop
-
-Copy **`.env.example`** to **`.env.local`** in the repo root and set, at minimum:
-
-- **`VITE_INKWELL_CLOUD_SYNC=1`** (or `true`) to enable the feature gate.
-- **`VITE_SUPABASE_URL`** — the full project URL including **`https://`** (for example `https://xxxx.supabase.co`), as shown in Supabase **Project Settings → API**.
-- **`VITE_SUPABASE_ANON_KEY`** *or* **`VITE_SUPABASE_PUBLISHABLE_KEY`** — one non-empty key from the same settings page.
-
-Then run **`npm run build:desktop`** (or `npm run dev:desktop`) so Vite inlines those `VITE_*` values into the renderer bundle. Editing `.env.local` after a build does **not** change an existing `release/*.exe` until you rebuild. Unsigned CI builds that omit these variables ship with cloud sync effectively off.
-
-### Magic-link redirect (`inkwell://`) and the OS
-
-Packaged desktop loads the UI from **`inkwell://app/`** (see *Custom protocol* above). Magic-link **`emailRedirectTo`** uses that origin so Supabase can redirect back into the app. The installer registers the **`inkwell`** protocol with the OS (`package.json` → `build.protocols`), and **`electron/main.cjs`** calls **`app.setAsDefaultProtocolClient('inkwell')`**, handles **`open-url`** (macOS), and **`second-instance`** argv (Windows/Linux) so callback URLs are loaded in the existing window for PKCE session detection in the renderer.
-
-Add the same redirect URLs under Supabase **Authentication → URL configuration** (for example `inkwell://app/` with any path/query your app uses, plus dev `http://localhost:5173/...` as needed).
+Inkwell desktop is **local-only**: manuscripts and settings live on your device. Use **File → Export** menus or in-app archive export to back up your library. No cloud sign-in or sync is required.
 
 ## Offline UI fonts
 
@@ -64,8 +38,8 @@ Google Fonts were removed from `index.html` and the CSP. **Inter** and **Playfai
 
 ## Native menu and files
 
-- **Application menu** (Electron `Menu.buildFromTemplate`): Import backup, Export book backup, Export full library backup, **Sync library with cloud** (when the renderer handles the `sync-library-now` action), Toggle theme, **Check for updates…** (packaged Windows only), plus standard Edit/View roles.
-- **Keyboard:** `Ctrl/Cmd+O` import, `Ctrl/Cmd+Shift+E` export current book backup, `Ctrl/Cmd+Shift+Y` sync library (same IPC action as menu), `Ctrl/Cmd+Shift+L` toggle theme.
+- **Application menu** (Electron `Menu.buildFromTemplate`): Import backup, Export book backup, Export full library backup, Toggle theme, **Check for updates…** (packaged Windows only), plus standard Edit/View roles.
+- **Keyboard:** `Ctrl/Cmd+O` import, `Ctrl/Cmd+Shift+E` export current book backup, `Ctrl/Cmd+Shift+L` toggle theme.
 - **Save dialogs** write **`.inkwell`** for single-book exports (ZIP payload identical to the in-app archive) so **file association** can target a dedicated extension.
 - **Open on launch / second instance:** command-line paths matching `*.inkwell`, `*.inkwell.zip`, or `inkwell-library-backup.zip` are read in the main process and delivered to the renderer as a pending import (single-instance lock + `second-instance` on Windows).
 
@@ -118,37 +92,31 @@ Use a **matrix** over OS so native binaries are produced on real hosts:
 
 The repository includes `.github/workflows/desktop.yml` as a minimal unsigned matrix build; tighten secrets and signing steps when you are ready to ship.
 
-### GitHub Actions secrets (installers from the website / Releases)
+### GitHub Actions (installers from the website / Releases)
 
-Shipped **Windows** installers are built with **`npm run build:desktop`**, which bakes **Vite** env into the renderer at compile time. If **`VITE_SUPABASE_*`** is missing in CI, users only see the offline **Welcome** screen (no email login).
+Shipped **Windows** installers are built with **`npm run build:desktop`**. No cloud secrets are required — desktop and web builds are local-first.
 
-**Repository secrets** (Settings → Secrets and variables → Actions) — use the **same names and values** as `.env.local` for the web app:
-
-| Secret | Required for release workflow | Notes |
-|--------|-------------------------------|--------|
-| `VITE_SUPABASE_URL` | Yes | Full `https://…supabase.co` project URL |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | One of the two keys | Preferred new key name |
-| `VITE_SUPABASE_ANON_KEY` | **or** publishable above | Legacy anon JWT; either key is enough |
+| Secret | Required | Notes |
+|--------|----------|--------|
 | `VERCEL_DEPLOY_HOOK_URL` | No | Vercel **Deploy Hook** URL; **[`desktop-publish-master.yml`](../.github/workflows/desktop-publish-master.yml)** POSTs after upload so Production can redeploy |
 
-**[`.github/workflows/release-desktop.yml`](../.github/workflows/release-desktop.yml)** and **[`.github/workflows/desktop-publish-master.yml`](../.github/workflows/desktop-publish-master.yml)** set **`VITE_INKWELL_CLOUD_SYNC=1`** for the build and **fail early** if URL or keys are missing, so you do not publish a login-less installer by mistake. Both run **`scripts/verify-desktop-renderer-inlined-supabase.mjs`** after **`vite build`** so the packaged app cannot pass CI if Supabase values were not inlined into **`dist/`**.
+**[`.github/workflows/release-desktop.yml`](../.github/workflows/release-desktop.yml)** and **[`.github/workflows/desktop-publish-master.yml`](../.github/workflows/desktop-publish-master.yml)** build and publish NSIS installers on tag push or every **`master`** push.
 
-**[`.github/workflows/desktop.yml`](../.github/workflows/desktop.yml)** passes the same secrets when present (fork PRs without secrets still produce offline-only artifacts).
+**[`.github/workflows/desktop.yml`](../.github/workflows/desktop.yml)** produces unsigned matrix artifacts for PR smoke tests.
 
 ### Continuous desktop installer (master)
 
-Every push to **`master`** runs **[`.github/workflows/desktop-publish-master.yml`](../.github/workflows/desktop-publish-master.yml)**. It builds **`npm run build:desktop`** with the same **`VITE_*`** secrets as **Release desktop**, runs **`scripts/verify-desktop-renderer-inlined-supabase.mjs`** so a bad Windows env cannot ship an offline-only bundle silently, then either **creates** a GitHub Release for **`v<package.json version>`** (if none exists yet) or **re-uploads** the NSIS file with **`gh release upload … --clobber`**, keeping the asset name **`Inkwell Setup <version>.exe`** aligned with **[`scripts/fetch-desktop-installer-for-vercel.mjs`](../scripts/fetch-desktop-installer-for-vercel.mjs)** (which resolves **`v${version}`** from `package.json`).
+Every push to **`master`** runs **[`.github/workflows/desktop-publish-master.yml`](../.github/workflows/desktop-publish-master.yml)**. It builds **`npm run build:desktop`**, then either **creates** a GitHub Release for **`v<package.json version>`** (if none exists yet) or **re-uploads** the NSIS file with **`gh release upload … --clobber`**, keeping the asset name **`Inkwell Setup <version>.exe`** aligned with **[`scripts/fetch-desktop-installer-for-vercel.mjs`](../scripts/fetch-desktop-installer-for-vercel.mjs)** (which resolves **`v${version}`** from `package.json`).
 
 Requirements:
 
-- The same **repository secrets** in the table above (`VITE_SUPABASE_URL` plus one key). If they are missing, the workflow **stops after the gate step** and skips build/publish (green run with a notice — GitHub does not allow `secrets` in job-level `if`, so this uses a gate step instead).
 - **Settings → Actions → General → Workflow permissions → Read and write** (same as tag releases).
 
-Optional **Actions** secret **`VERCEL_DEPLOY_HOOK_URL`**: a Vercel **Deploy Hook** URL. After the `.exe` is on GitHub, the workflow **POST**s to it so Production can redeploy once the release asset exists (tighter than relying only on the fetch script’s polling when the Windows job finishes after the first Vercel build).
+Optional **Actions** secret **`VERCEL_DEPLOY_HOOK_URL`**: a Vercel **Deploy Hook** URL. After the `.exe` is on GitHub, the workflow **POST**s to it so Production can redeploy once the release asset exists.
 
 Tag-based **[`release-desktop.yml`](../.github/workflows/release-desktop.yml)** stays the path for **`v*`** pushes and **`workflow_dispatch`** with the stricter **tag must match package.json** check.
 
-After adding secrets, run **Release desktop** again (tag or `workflow_dispatch`) **or** rely on **Publish desktop installer (master)** on each **`master`** push; let Vercel production rebuild (or use the deploy hook) if you use **`fetch-desktop-installer-for-vercel.mjs`** so **`/downloads/Inkwell-Setup-latest.exe`** picks up the new binary.
+After a release, let Vercel production rebuild (or use the deploy hook) if you use **`fetch-desktop-installer-for-vercel.mjs`** so **`/downloads/Inkwell-Setup-latest.exe`** picks up the new binary.
 
 ## Vercel same-origin installer (private GitHub repo; no large-file Storage)
 
@@ -177,9 +145,9 @@ Preview deployments **skip** the fetch by default (avoids downloading ~120 MB pe
 
 Make the repository **public**. Anonymous **`/releases/latest/download/…`** works with no PAT and no fetch step. Clear **`VITE_INKWELL_DESKTOP_DOWNLOAD_URL`** on Vercel to use the default URL from **`vite.config.ts`** (same shape as **`npm run print:desktop-download-url`**).
 
-### Optional: host the installer URL elsewhere (e.g. Storage CDN)
+### Optional: host the installer URL elsewhere (CDN)
 
-You can set **`VITE_INKWELL_DESKTOP_DOWNLOAD_URL`** to any **HTTPS** URL that serves the NSIS file (Supabase Storage, R2, etc.). Free Storage tiers often cap object size below a typical Electron installer (~**120 MB**). This repo’s **[`.github/workflows/release-desktop.yml`](../.github/workflows/release-desktop.yml)** publishes **only** to **GitHub Releases**; there is **no** automated Storage upload step. If you previously added GitHub Actions secrets **`SUPABASE_URL`**, **`SUPABASE_SERVICE_ROLE_KEY`**, or variable **`INKWELL_DESKTOP_BUCKET`** only for installer uploads, you can delete them to reduce clutter.
+You can set **`VITE_INKWELL_DESKTOP_DOWNLOAD_URL`** to any **HTTPS** URL that serves the NSIS file (R2, S3, etc.). Some free object-storage tiers cap object size below a typical Electron installer (~**120 MB**). This repo’s **[`.github/workflows/release-desktop.yml`](../.github/workflows/release-desktop.yml)** publishes **only** to **GitHub Releases**.
 
 ## Marketing download URL (website + Vercel)
 
@@ -222,7 +190,7 @@ Workflow **[`.github/workflows/release-desktop.yml`](../.github/workflows/releas
 
 - Link the project to this repo and set **Production branch** to `master` (or whatever you use).
 - Enable **automatic deployments** on push so you never need a manual “Deploy” for step (2).
-- **`VITE_INKWELL_DESKTOP_DOWNLOAD_URL`** is optional: omit it to use the build-time default from `vite.config.ts`; set it to override (same-site **`/downloads/…`**, Supabase, CDN, fork). **`INKWELL_GITHUB_RELEASE_TOKEN`** on Vercel only affects the optional fetch script — never prefix with **`VITE_`** (that would expose it to the browser).
+- **`VITE_INKWELL_DESKTOP_DOWNLOAD_URL`** is optional: omit it to use the build-time default from `vite.config.ts`; set it to override (same-site **`/downloads/…`**, CDN, fork). **`INKWELL_GITHUB_RELEASE_TOKEN`** on Vercel only affects the optional fetch script — never prefix with **`VITE_`** (that would expose it to the browser).
 
 ### Manual publishing (fallback)
 

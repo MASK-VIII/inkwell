@@ -1,18 +1,8 @@
 import { User } from 'lucide-react'
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
-import { isInkwellLocalOnlyMode } from '../lib/localPersonalMode'
 
 export type InkwellProfileMenuProps = {
-  userEmail: string | null
-  cloudSyncConfigured: boolean
-  onSyncNow: () => void
-  onSignOutCloud: () => void | Promise<void>
-  onAppSignOut: () => void
   showLibraryHubLink: boolean
-  /** Cloud sign-in screen; show when sync is configured and there is no cloud session. */
-  onGoToSignIn?: () => void
-  /** When set, opens the Account screen (#account). */
-  onGoToAccount?: () => void
   onGoToLibraryHub: () => void
   menuAlign?: 'left' | 'right'
   menuOpen?: boolean
@@ -21,14 +11,7 @@ export type InkwellProfileMenuProps = {
 }
 
 function InkwellProfileMenuInner({
-  userEmail,
-  cloudSyncConfigured,
-  onSyncNow,
-  onSignOutCloud,
-  onAppSignOut,
   showLibraryHubLink,
-  onGoToSignIn,
-  onGoToAccount,
   onGoToLibraryHub,
   menuAlign = 'right',
   menuOpen: controlledOpen,
@@ -72,7 +55,6 @@ function InkwellProfileMenuInner({
     setOpen(!open)
   }, [onRequestExclusiveOpen, setOpen, open])
 
-  const localOnly = isInkwellLocalOnlyMode()
   const align = menuAlign === 'left' ? 'left-0' : 'right-0'
   const itemClass =
     'block w-full rounded-lg px-3 py-2 text-left text-sm text-ink hover:bg-dust/30 dark:text-ink-dark dark:hover:bg-border-dark/50'
@@ -98,97 +80,26 @@ function InkwellProfileMenuInner({
         >
           <div className="flex gap-3 px-4 pb-3 pt-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-ink to-walnut text-xs font-bold uppercase tracking-[0.12em] text-parchment shadow-sm ring-1 ring-ink/20 dark:text-ink-dark dark:ring-cream/40">
-              {userEmail ? userEmail.slice(0, 1).toUpperCase() : 'IW'}
+              IW
             </div>
             <div className="min-w-0 flex-1 pt-0.5">
               <p className="truncate text-sm font-semibold text-ink dark:text-ink-dark">Inkwell writer</p>
-              <p className="truncate text-xs text-ink/60 dark:text-ink-dark/60">
-                {userEmail ? userEmail
-                : localOnly ? 'Your library lives on this device'
-                : 'Signed in on this device only'}
-              </p>
+              <p className="truncate text-xs text-ink/60 dark:text-ink-dark/60">Your library lives on this device</p>
             </div>
           </div>
           <div className="border-t border-dust/80 dark:border-border-dark" />
           <div className="px-1 py-1">
-            {!localOnly && !userEmail && onGoToSignIn ?
-              <button
-                type="button"
-                role="menuitem"
-                className={`${itemClass} font-medium`}
-                onClick={() => {
-                  close()
-                  onGoToSignIn()
-                }}
-              >
-                Sign in
-              </button>
-            : null}
             {showLibraryHubLink ?
-              <>
-                {!localOnly && onGoToAccount ?
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className={itemClass}
-                    onClick={() => {
-                      close()
-                      onGoToAccount()
-                    }}
-                  >
-                    My account
-                  </button>
-                : null}
-                <button
-                  type="button"
-                  role="menuitem"
-                  className={itemClass}
-                  onClick={() => {
-                    close()
-                    onGoToLibraryHub()
-                  }}
-                >
-                  Bookshelf
-                </button>
-              </>
-            : null}
-            {cloudSyncConfigured && userEmail ?
               <button
                 type="button"
                 role="menuitem"
                 className={itemClass}
                 onClick={() => {
                   close()
-                  onSyncNow()
+                  onGoToLibraryHub()
                 }}
               >
-                Sync library now
-              </button>
-            : null}
-            {cloudSyncConfigured && userEmail ?
-              <button
-                type="button"
-                role="menuitem"
-                className={itemClass}
-                onClick={() => {
-                  close()
-                  void onSignOutCloud()
-                }}
-              >
-                Sign out of cloud only
-              </button>
-            : null}
-            {!localOnly ?
-              <button
-                type="button"
-                role="menuitem"
-                className="block w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-red-700 hover:bg-dust/30 dark:text-red-300 dark:hover:bg-border-dark/50"
-                onClick={() => {
-                  close()
-                  onAppSignOut()
-                }}
-              >
-                Sign out
+                Bookshelf
               </button>
             : null}
           </div>

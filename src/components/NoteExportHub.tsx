@@ -1,9 +1,3 @@
-export type NoteExportAccessProps = {
-  allowProSuite: boolean
-  allowCloudBackup: boolean
-  onUnlockPro: () => void
-}
-
 export type NoteExportHubProps = {
   noteTitle: string
   wordCount: number
@@ -16,9 +10,6 @@ export type NoteExportHubProps = {
   onCopyFormattedHtml: () => void
   onCopyMarkdown: () => void
   onDownloadHtml: () => void
-  onCloudBackupLibrary?: () => void
-  cloudBackupBusy?: boolean
-  noteExportAccess?: NoteExportAccessProps
 }
 
 function readinessRow(label: string, ok: boolean, value: string) {
@@ -54,17 +45,7 @@ export function NoteExportHub({
   onCopyFormattedHtml,
   onCopyMarkdown,
   onDownloadHtml,
-  onCloudBackupLibrary,
-  cloudBackupBusy = false,
-  noteExportAccess,
 }: NoteExportHubProps) {
-  const ne: NoteExportAccessProps =
-    noteExportAccess ?? {
-      allowProSuite: true,
-      allowCloudBackup: true,
-      onUnlockPro: () => {},
-    }
-
   const titleOk = Boolean(noteTitle?.trim()) && noteTitle.trim() !== 'Untitled note'
   const wordsLabel = wordCount === 1 ? '1 word' : `${wordCount.toLocaleString()} words`
 
@@ -112,47 +93,14 @@ export function NoteExportHub({
           Re-upload images manually if they do not appear.
         </p>
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-          <button
-            type="button"
-            onClick={() => {
-              if (!ne.allowProSuite) {
-                ne.onUnlockPro()
-                return
-              }
-              onCopyFormattedHtml()
-            }}
-            className="inkwell-hub-primary"
-          >
+          <button type="button" onClick={onCopyFormattedHtml} className="inkwell-hub-primary">
             Copy formatted HTML for paste
-            {!ne.allowProSuite ? <span className="ml-1 text-[11px] font-normal opacity-80">· Pro</span> : null}
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              if (!ne.allowProSuite) {
-                ne.onUnlockPro()
-                return
-              }
-              onCopyMarkdown()
-            }}
-            className="inkwell-hub-secondary"
-          >
+          <button type="button" onClick={onCopyMarkdown} className="inkwell-hub-secondary">
             Copy Markdown
-            {!ne.allowProSuite ? <span className="ml-1 text-[11px] font-normal opacity-80">· Pro</span> : null}
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              if (!ne.allowProSuite) {
-                ne.onUnlockPro()
-                return
-              }
-              onDownloadHtml()
-            }}
-            className="inkwell-hub-secondary"
-          >
+          <button type="button" onClick={onDownloadHtml} className="inkwell-hub-secondary">
             Download .html
-            {!ne.allowProSuite ? <span className="ml-1 text-[11px] font-normal opacity-80">· Pro</span> : null}
           </button>
         </div>
         <p className="text-xs text-ink/55 dark:text-ink-dark/55">
@@ -166,65 +114,15 @@ export function NoteExportHub({
           Files and backups
         </h2>
         <div className="inkwell-hub-card">
-          <button
-            type="button"
-            onClick={() => {
-              if (!ne.allowProSuite) {
-                ne.onUnlockPro()
-                return
-              }
-              onExportTxt()
-            }}
-            className="inkwell-hub-row-btn"
-          >
+          <button type="button" onClick={onExportTxt} className="inkwell-hub-row-btn">
             Export plain text (.txt)
-            {!ne.allowProSuite ? <span className="ml-1 text-[11px] opacity-80">· Pro</span> : null}
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              if (!ne.allowProSuite) {
-                ne.onUnlockPro()
-                return
-              }
-              onExportProjectArchive()
-            }}
-            className="inkwell-hub-row-btn"
-          >
+          <button type="button" onClick={onExportProjectArchive} className="inkwell-hub-row-btn">
             Export note backup (.inkwell.zip)
-            {!ne.allowProSuite ? <span className="ml-1 text-[11px] opacity-80">· Pro</span> : null}
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              if (!ne.allowProSuite) {
-                ne.onUnlockPro()
-                return
-              }
-              onExportLibraryArchive()
-            }}
-            className="inkwell-hub-row-btn"
-          >
+          <button type="button" onClick={onExportLibraryArchive} className="inkwell-hub-row-btn">
             Export full library (.zip)
-            {!ne.allowProSuite ? <span className="ml-1 text-[11px] opacity-80">· Pro</span> : null}
           </button>
-          {onCloudBackupLibrary ? (
-            <button
-              type="button"
-              onClick={() => {
-                if (!ne.allowCloudBackup) {
-                  ne.onUnlockPro()
-                  return
-                }
-                onCloudBackupLibrary()
-              }}
-              disabled={cloudBackupBusy}
-              className="inkwell-hub-row-btn disabled:opacity-50"
-            >
-              {cloudBackupBusy ? 'Uploading…' : 'Upload full library to cloud'}
-              {!ne.allowCloudBackup ? <span className="ml-1 text-[11px] opacity-80">· Pro</span> : null}
-            </button>
-          ) : null}
           <label className="block">
             <input
               type="file"

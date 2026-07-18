@@ -9,9 +9,10 @@ export default function CloudBackupForManuscriptsBody() {
 
       <h2>What Inkwell means by “library backup”</h2>
       <p>
-        Inkwell can package your entire library—every book, chapter, and note—into a single{' '}
-        <code>.inkwell.zip</code> archive you download to your machine. That archive is a complete, portable copy: keep
-        it in your own cloud drive, an external disk, or both, and import it on any device or browser to restore.
+        Inkwell is local-first—there is no cloud sync built into the app. Instead, you can package your entire
+        library—every book, chapter, and note—into a single <code>.inkwell.zip</code> archive you download to your
+        machine. That archive is a complete, portable copy: keep it in your own cloud drive, an external disk, or both,
+        and import it on any device or browser to restore.
       </p>
 
       <h2>Habits that keep backups boring (in a good way)</h2>

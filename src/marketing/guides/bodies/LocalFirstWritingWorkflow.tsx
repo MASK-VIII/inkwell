@@ -3,15 +3,15 @@ export default function LocalFirstWritingWorkflowBody() {
     <>
       <p>
         <strong>Local-first</strong> means your manuscript’s natural home is the device you are on—not a server you
-        must appease before the next sentence. Cloud becomes an option for sync and backup when you choose it, not a
-        prerequisite to open the app.
+        must appease before the next sentence. Backups are files you export when you choose them, not a login wall
+        before you can open the draft.
       </p>
 
       <h2>Why authors notice</h2>
       <ul>
         <li>Cafés, cabins, and red-eye flights still happen—offline is not an edge case for novels.</li>
         <li>Long projects span months; tools that nag for connectivity add friction on tired days.</li>
-        <li>When you do go online, sync should feel like insurance—not a performance.</li>
+        <li>When you do go online, it should be to publish or back up—not to unlock the blank page.</li>
       </ul>
 
       <h2>A simple workflow map</h2>
@@ -31,7 +31,7 @@ export default function LocalFirstWritingWorkflowBody() {
       <h2>Related guides</h2>
       <p>
         <a href="/guides/cloud-backup-for-manuscripts">Backing up your manuscripts</a>,{' '}
-        <a href="/guides/one-time-vs-subscription-writing-tools">one-time vs subscription tools</a>.
+        <a href="/guides/one-time-vs-subscription-writing-tools">free vs subscription tools</a>.
       </p>
 
       <p>

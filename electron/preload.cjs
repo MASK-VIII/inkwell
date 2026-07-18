@@ -6,11 +6,6 @@ contextBridge.exposeInMainWorld('inkwellDesktop', {
   saveBookBackup: (defaultBase, buffer) =>
     ipcRenderer.invoke('inkwell:save-book-backup', { defaultBase, buffer }),
   saveLibraryBackup: (buffer) => ipcRenderer.invoke('inkwell:save-library-backup', { buffer }),
-  authStorage: {
-    getItem: (key) => ipcRenderer.invoke('inkwell:auth-kv-get', key),
-    setItem: (key, value) => ipcRenderer.invoke('inkwell:auth-kv-set', key, value),
-    removeItem: (key) => ipcRenderer.invoke('inkwell:auth-kv-remove', key),
-  },
   onMenuAction: (handler) => {
     const listener = (_event, action) => {
       if (typeof action === 'string') handler(action)

@@ -43,15 +43,15 @@ export const GUIDES: readonly GuideDef[] = [
     title: 'Why a local-first writing workflow still wins for novels',
     description:
       'Offline is not an edge case for long manuscripts—here is a simple map from draft to export without renting your attention span.',
-    dateModified: '2026-05-07',
+    dateModified: '2026-07-17',
     Body: laz(() => import('./bodies/LocalFirstWritingWorkflow')),
   },
   {
     slug: 'one-time-vs-subscription-writing-tools',
-    title: 'One-time writing software vs subscriptions: how to choose calmly',
+    title: 'Free and one-time writing tools vs subscriptions: how to choose calmly',
     description:
-      'When recurring tools make sense—and when a purchase model matches long revision cycles and local-first drafting.',
-    dateModified: '2026-05-07',
+      'When recurring tools make sense—and when free or local-first software matches long revision cycles.',
+    dateModified: '2026-07-17',
     Body: laz(() => import('./bodies/OneTimeVsSubscriptionWritingTools')),
   },
   {
@@ -67,7 +67,7 @@ export const GUIDES: readonly GuideDef[] = [
     title: 'Backing up your manuscripts (without drama)',
     description:
       'What a library backup is for, how Inkwell packages your whole library as a portable archive, and habits that keep restores boring.',
-    dateModified: '2026-05-07',
+    dateModified: '2026-07-17',
     Body: laz(() => import('./bodies/CloudBackupForManuscripts')),
   },
   {

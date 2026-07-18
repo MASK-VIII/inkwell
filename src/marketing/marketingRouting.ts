@@ -133,9 +133,7 @@ export function shouldRedirectLegacyUserToApp(): boolean {
   const isKnownHash = KNOWN_HASH_PREFIXES.some((prefix) => hash.startsWith(prefix))
   const qs = new URLSearchParams(search)
   const hasProjectQuery = qs.has('p')
-  const checkout = qs.get('checkout')?.trim().toLowerCase()
-  const hasCheckoutQuery = Boolean(checkout && ['basic', 'pro', 'upgrade'].includes(checkout))
-  return isKnownHash || hasProjectQuery || hasCheckoutQuery
+  return isKnownHash || hasProjectQuery
 }
 
 export function redirectLegacyUserToApp(): void {

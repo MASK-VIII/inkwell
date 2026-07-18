@@ -4,25 +4,10 @@
 declare const __INKWELL_DESKTOP_DOWNLOAD_DEFAULT__: string
 
 interface ImportMetaEnv {
-  /** HTTPS endpoint that accepts POST multipart field `archive` (library .zip). */
-  readonly VITE_INKWELL_CLOUD_BACKUP_URL?: string
-  /** Optional Bearer token sent as Authorization (private / self-hosted receivers only). */
-  readonly VITE_INKWELL_CLOUD_BACKUP_KEY?: string
-  /** Explicit opt-in for the legacy unauthenticated backup POST flow (disabled in production by default). */
-  readonly VITE_ENABLE_LEGACY_BACKUP?: string
-  /** When truthy, enables Supabase-backed library sync (requires URL + anon key). */
-  readonly VITE_INKWELL_CLOUD_SYNC?: string
-  /** When truthy, Inkwell runs as a free local-only app: no cloud, no accounts, all exports unlocked. */
-  readonly VITE_INKWELL_LOCAL_ONLY?: string
-  /** HTTPS URL to the Windows desktop installer (e.g. GitHub Release asset). Shown on the sign-in screen in web builds when set. */
+  /** HTTPS URL to the Windows desktop installer (e.g. GitHub Release asset). Shown on the marketing site when set. */
   readonly VITE_INKWELL_DESKTOP_DOWNLOAD_URL?: string
   /** Optional `Owner/repo` for default GitHub latest-download URL when `git remote` is unavailable at build time. */
   readonly VITE_INKWELL_GITHUB_OWNER_REPO?: string
-  readonly VITE_SUPABASE_URL?: string
-  /** Legacy name; same role as publishable key below. */
-  readonly VITE_SUPABASE_ANON_KEY?: string
-  /** Supabase dashboard “Connect” often labels this the publishable key (`sb_publishable_…`). */
-  readonly VITE_SUPABASE_PUBLISHABLE_KEY?: string
 }
 
 interface ImportMeta {

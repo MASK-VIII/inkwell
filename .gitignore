@@ -35,6 +35,7 @@ inkwell-pack/
 !.vscode/extensions.json
 !.vscode/tasks.json
 !.vscode/launch.json
+.cursor/
 .idea
 .DS_Store
 *.suo
@@ -42,5 +43,8 @@ inkwell-pack/
 *.njsproj
 *.sln
 *.sw?
+
+# Personal / non-product files — never publish
+docs/resume/
 
 .vercel

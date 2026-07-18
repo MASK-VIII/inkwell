@@ -1,16 +1,5 @@
 import type { BookMeta } from '../types'
 
-/** When omitted, all export actions are allowed (e.g. dev builds). */
-export type PublishAccessProps = {
-  allowEpub: boolean
-  allowProSuite: boolean
-  allowCloudBackup: boolean
-  allowEbookFormat: boolean
-  allowPrintFormat: boolean
-  onUnlockEpub: () => void
-  onUnlockPro: () => void
-}
-
 export type PublishHubProps = {
   book: BookMeta
   onOpenBookTools: () => void
@@ -24,13 +13,10 @@ export type PublishHubProps = {
   onImportProjectArchive?: (file: File) => void
   onOpenFormatPrint?: () => void
   onOpenFormatEbook?: () => void
-  onCloudBackupLibrary?: () => void
-  cloudBackupBusy?: boolean
   /** True while KDP PDF is being generated (pagination + pdf-lib are CPU-heavy). */
   pdfExportBusy?: boolean
   /** Detailed status while busy (e.g. page render progress). */
   pdfExportLabel?: string
-  publishAccess?: PublishAccessProps
 }
 
 function checklistRow(label: string, ok: boolean, value: string) {
@@ -67,23 +53,9 @@ export function PublishHub({
   onImportProjectArchive,
   onOpenFormatPrint,
   onOpenFormatEbook,
-  onCloudBackupLibrary,
-  cloudBackupBusy = false,
   pdfExportBusy = false,
   pdfExportLabel = '',
-  publishAccess,
 }: PublishHubProps) {
-  const pa: PublishAccessProps =
-    publishAccess ?? {
-      allowEpub: true,
-      allowProSuite: true,
-      allowCloudBackup: true,
-      allowEbookFormat: true,
-      allowPrintFormat: true,
-      onUnlockEpub: () => {},
-      onUnlockPro: () => {},
-    }
-
   const titleOk = Boolean(book.title?.trim())
   const authorOk = Boolean(book.authorName?.trim())
   const langOk = Boolean((book.language ?? '').trim())
@@ -133,45 +105,16 @@ export function PublishHub({
           <button
             type="button"
             disabled={pdfExportBusy}
-            onClick={() => {
-              if (!pa.allowProSuite) {
-                pa.onUnlockPro()
-                return
-              }
-              onExportPdfKdp()
-            }}
+            onClick={onExportPdfKdp}
             className="inkwell-hub-primary disabled:pointer-events-none disabled:opacity-55"
           >
             {pdfExportBusy ? (pdfExportLabel.trim() || 'Preparing PDF…') : 'Export PDF (KDP)'}
-            {!pa.allowProSuite ? <span className="ml-1 text-[11px] font-normal opacity-80">· Pro</span> : null}
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              if (!pa.allowEpub) {
-                pa.onUnlockEpub()
-                return
-              }
-              onExportEpub()
-            }}
-            className="inkwell-hub-secondary"
-          >
+          <button type="button" onClick={onExportEpub} className="inkwell-hub-secondary">
             Export EPUB
-            {!pa.allowEpub ? <span className="ml-1 text-[11px] font-normal opacity-80">· Basic</span> : null}
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              if (!pa.allowProSuite) {
-                pa.onUnlockPro()
-                return
-              }
-              onExportDocx()
-            }}
-            className="inkwell-hub-secondary"
-          >
+          <button type="button" onClick={onExportDocx} className="inkwell-hub-secondary">
             Export DOCX
-            {!pa.allowProSuite ? <span className="ml-1 text-[11px] font-normal opacity-80">· Pro</span> : null}
           </button>
         </div>
         <p className="text-xs text-ink/60 dark:text-ink-dark/60">
@@ -181,35 +124,13 @@ export function PublishHub({
         {(onOpenFormatPrint || onOpenFormatEbook) && (
           <div className="flex flex-wrap gap-2">
             {onOpenFormatPrint ? (
-              <button
-                type="button"
-                onClick={() => {
-                  if (!pa.allowPrintFormat) {
-                    pa.onUnlockPro()
-                    return
-                  }
-                  onOpenFormatPrint()
-                }}
-                className="inkwell-hub-tertiary"
-              >
+              <button type="button" onClick={onOpenFormatPrint} className="inkwell-hub-tertiary">
                 Open print format
-                {!pa.allowPrintFormat ? <span className="ml-1 text-[11px] opacity-80">· Pro</span> : null}
               </button>
             ) : null}
             {onOpenFormatEbook ? (
-              <button
-                type="button"
-                onClick={() => {
-                  if (!pa.allowEbookFormat) {
-                    pa.onUnlockEpub()
-                    return
-                  }
-                  onOpenFormatEbook()
-                }}
-                className="inkwell-hub-tertiary"
-              >
+              <button type="button" onClick={onOpenFormatEbook} className="inkwell-hub-tertiary">
                 Open ebook format
-                {!pa.allowEbookFormat ? <span className="ml-1 text-[11px] opacity-80">· Unlock</span> : null}
               </button>
             ) : null}
           </div>
@@ -230,81 +151,24 @@ export function PublishHub({
                 const f = e.target.files?.[0] ?? null
                 e.currentTarget.value = ''
                 if (!f) return
-                if (!pa.allowProSuite) {
-                  pa.onUnlockPro()
-                  return
-                }
                 onImportDocx(f)
               }}
             />
             <span className="inkwell-hub-dropzone">Import DOCX…</span>
-            {!pa.allowProSuite ? (
-              <span className="mt-1 block text-[11px] text-ink/55 dark:text-ink-dark/55">Requires Inkwell Pro.</span>
-            ) : null}
           </label>
           {onExportTxt ? (
-            <button
-              type="button"
-              onClick={() => {
-                if (!pa.allowProSuite) {
-                  pa.onUnlockPro()
-                  return
-                }
-                onExportTxt()
-              }}
-              className="inkwell-hub-row-btn"
-            >
+            <button type="button" onClick={onExportTxt} className="inkwell-hub-row-btn">
               Export plain text (.txt)
-              {!pa.allowProSuite ? <span className="ml-1 text-[11px] opacity-80">· Pro</span> : null}
             </button>
           ) : null}
           {onExportProjectArchive ? (
-            <button
-              type="button"
-              onClick={() => {
-                if (!pa.allowProSuite) {
-                  pa.onUnlockPro()
-                  return
-                }
-                onExportProjectArchive()
-              }}
-              className="inkwell-hub-row-btn"
-            >
+            <button type="button" onClick={onExportProjectArchive} className="inkwell-hub-row-btn">
               Export book backup (.inkwell.zip)
-              {!pa.allowProSuite ? <span className="ml-1 text-[11px] opacity-80">· Pro</span> : null}
             </button>
           ) : null}
           {onExportLibraryArchive ? (
-            <button
-              type="button"
-              onClick={() => {
-                if (!pa.allowProSuite) {
-                  pa.onUnlockPro()
-                  return
-                }
-                onExportLibraryArchive()
-              }}
-              className="inkwell-hub-row-btn"
-            >
+            <button type="button" onClick={onExportLibraryArchive} className="inkwell-hub-row-btn">
               Export full library (.zip)
-              {!pa.allowProSuite ? <span className="ml-1 text-[11px] opacity-80">· Pro</span> : null}
-            </button>
-          ) : null}
-          {onCloudBackupLibrary ? (
-            <button
-              type="button"
-              onClick={() => {
-                if (!pa.allowCloudBackup) {
-                  pa.onUnlockPro()
-                  return
-                }
-                onCloudBackupLibrary()
-              }}
-              disabled={cloudBackupBusy}
-              className="inkwell-hub-row-btn disabled:opacity-50"
-            >
-              {cloudBackupBusy ? 'Uploading…' : 'Upload full library to cloud'}
-              {!pa.allowCloudBackup ? <span className="ml-1 text-[11px] opacity-80">· Pro</span> : null}
             </button>
           ) : null}
           {onImportProjectArchive ? (

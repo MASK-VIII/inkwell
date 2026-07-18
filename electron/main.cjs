@@ -4,7 +4,7 @@
  * and fetch behave like a normal https origin (avoids fragile `file://` semantics).
  * Development: load the Vite dev server at http://localhost:5173 (same origin as `npm run dev` in the browser).
  */
-const { app, BrowserWindow, Menu, ipcMain, dialog, protocol, safeStorage, session, shell } = require('electron')
+const { app, BrowserWindow, Menu, ipcMain, dialog, protocol, session, shell } = require('electron')
 const path = require('path')
 const fs = require('fs')
 
@@ -17,16 +17,12 @@ let mainWindow = null
 /** @type {{ name: string, buffer: ArrayBuffer } | null} */
 let pendingImportPayload = null
 
-/** @type {string | null} */
-let pendingAuthDeepLink = null
-
 const isDev = !app.isPackaged
 
 /**
  * URL of the frame that sent an IPC message. Prefer `senderFrame.url`; fall back to
  * `webContents.getURL()` because some Electron builds leave `senderFrame.url` empty for
- * custom-protocol documents (`inkwell://app/…`), which would reject all trusted IPC and
- * break Supabase auth storage (sign-in appears to do nothing or errors on every attempt).
+ * custom-protocol documents (`inkwell://app/…`).
  * @param {Electron.IpcMainInvokeEvent | Electron.IpcMainEvent} event
  */
 function senderNavigationUrl(event) {
@@ -59,59 +55,6 @@ function assertTrustedSender(event) {
     e.code = 'ERR_UNTRUSTED_SENDER'
     throw e
   }
-}
-
-/**
- * @param {string} s
- */
-function inkwellUrlFromArgvFragment(s) {
-  const i = s.indexOf('inkwell://')
-  if (i === -1) return null
-  return s.slice(i).trim()
-}
-
-/**
- * @param {string} urlStr
- */
-function isLikelySupabaseAuthCallbackUrl(urlStr) {
-  if (!urlStr || !urlStr.startsWith('inkwell://')) return false
-  try {
-    const u = new URL(urlStr)
-    const probe = `${u.search}${u.hash}`
-    return /(?:^|[?&#])(?:code|error|token_hash|access_token|refresh_token)=/.test(probe)
-  } catch {
-    return false
-  }
-}
-
-/**
- * @param {unknown} candidate
- */
-function bufferAuthDeepLink(candidate) {
-  if (typeof candidate !== 'string') return
-  const url = inkwellUrlFromArgvFragment(candidate)
-  if (!url || !isLikelySupabaseAuthCallbackUrl(url)) return
-  pendingAuthDeepLink = url
-}
-
-/**
- * @param {readonly string[]} argv
- */
-function collectAuthDeepLinksFromArgv(argv) {
-  for (const a of argv) bufferAuthDeepLink(a)
-}
-
-function focusMainWindow() {
-  if (mainWindow?.isMinimized()) mainWindow.restore()
-  mainWindow?.focus()
-}
-
-function deliverAuthDeepLinkIfAny() {
-  const url = pendingAuthDeepLink
-  if (!url || !mainWindow?.webContents) return
-  pendingAuthDeepLink = null
-  void mainWindow.loadURL(url)
-  focusMainWindow()
 }
 
 /**
@@ -214,33 +157,6 @@ function distDir() {
   return path.join(__dirname, '..', 'dist')
 }
 
-function inkwellAuthKvPath() {
-  return path.join(app.getPath('userData'), 'inkwell-supabase-auth.crypt')
-}
-
-function readInkwellAuthKvMap() {
-  const fp = inkwellAuthKvPath()
-  if (!fs.existsSync(fp)) return {}
-  try {
-    const buf = fs.readFileSync(fp)
-    let raw
-    if (safeStorage.isEncryptionAvailable()) raw = safeStorage.decryptString(buf)
-    else raw = buf.toString('utf8')
-    const o = JSON.parse(raw)
-    return o && typeof o === 'object' && !Array.isArray(o) ? o : {}
-  } catch {
-    return {}
-  }
-}
-
-function writeInkwellAuthKvMap(m) {
-  const fp = inkwellAuthKvPath()
-  const raw = JSON.stringify(m)
-  const data = safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(raw) : Buffer.from(raw, 'utf8')
-  fs.mkdirSync(path.dirname(fp), { recursive: true })
-  fs.writeFileSync(fp, data)
-}
-
 function sendPendingImportSignal() {
   if (!mainWindow?.webContents) return
   mainWindow.webContents.send('inkwell-pending-import')
@@ -339,7 +255,7 @@ function setupInkwellAutoUpdater() {
     send({ kind: 'downloaded', version: String(info?.version ?? '') })
   })
 
-  // Defer so first paint + auth/storage are not contending with GitHub on cold start.
+  // Defer so first paint is not contending with GitHub on cold start.
   setTimeout(() => {
     void autoUpdater.checkForUpdates().catch(() => {})
   }, 12_000)
@@ -393,11 +309,6 @@ function buildAppMenu(win) {
         {
           label: 'Export full library backup…',
           click: () => send('export-library-backup'),
-        },
-        {
-          label: 'Sync library with cloud…',
-          accelerator: 'CmdOrCtrl+Shift+Y',
-          click: () => send('sync-library-now'),
         },
         { type: 'separator' },
         {
@@ -514,19 +425,13 @@ function createWindow() {
   buildAppMenu(mainWindow)
 
   if (isDev) {
-    pendingAuthDeepLink = null
     void mainWindow.loadURL(VITE_DEV_URL)
     // Detached DevTools add noticeable overhead; opt in with INKWELL_ELECTRON_DEVTOOLS=1 (see docs/DESKTOP.md).
     if (process.env.INKWELL_ELECTRON_DEVTOOLS === '1') {
       mainWindow.webContents.openDevTools({ mode: 'detach' })
     }
   } else {
-    let startUrl = 'inkwell://app/index.html'
-    if (pendingAuthDeepLink && isLikelySupabaseAuthCallbackUrl(pendingAuthDeepLink)) {
-      startUrl = pendingAuthDeepLink
-      pendingAuthDeepLink = null
-    }
-    void mainWindow.loadURL(startUrl)
+    void mainWindow.loadURL('inkwell://app/index.html')
   }
 
   mainWindow.webContents.on('did-finish-load', () => {
@@ -581,38 +486,6 @@ function registerIpcHandlers() {
     return { ok: true, path: r.filePath }
   })
 
-  ipcMain.handle('inkwell:auth-kv-get', (_event, key) => {
-    assertTrustedSender(_event)
-    if (typeof key !== 'string') return null
-    if (!safeStorage.isEncryptionAvailable() && !isDev) return null
-    const m = readInkwellAuthKvMap()
-    const v = m[key]
-    return typeof v === 'string' ? v : null
-  })
-
-  ipcMain.handle('inkwell:auth-kv-set', (_event, key, value) => {
-    assertTrustedSender(_event)
-    if (typeof key !== 'string') return
-    if (!safeStorage.isEncryptionAvailable() && !isDev) {
-      const e = new Error('Secure storage unavailable')
-      e.code = 'ERR_SECURE_STORAGE_UNAVAILABLE'
-      throw e
-    }
-    const m = readInkwellAuthKvMap()
-    if (value == null) delete m[key]
-    else m[key] = String(value)
-    writeInkwellAuthKvMap(m)
-  })
-
-  ipcMain.handle('inkwell:auth-kv-remove', (_event, key) => {
-    assertTrustedSender(_event)
-    if (typeof key !== 'string') return
-    if (!safeStorage.isEncryptionAvailable() && !isDev) return
-    const m = readInkwellAuthKvMap()
-    delete m[key]
-    writeInkwellAuthKvMap(m)
-  })
-
   ipcMain.handle('inkwell:save-library-backup', async (event, payload) => {
     assertTrustedSender(event)
     const win = BrowserWindow.fromWebContents(event.sender)
@@ -660,19 +533,7 @@ if (!gotLock) {
 } else {
   registerIpcHandlers()
 
-  if (process.platform === 'darwin') {
-    app.on('open-url', (event, url) => {
-      event.preventDefault()
-      bufferAuthDeepLink(url)
-      deliverAuthDeepLinkIfAny()
-    })
-  }
-
   app.on('second-instance', (_event, argv) => {
-    collectAuthDeepLinksFromArgv(argv)
-    if (pendingAuthDeepLink) {
-      deliverAuthDeepLinkIfAny()
-    }
     void queueFirstImportableFromArgv(argv).then(() => {
       sendPendingImportSignal()
       mainWindow?.focus()
@@ -680,21 +541,12 @@ if (!gotLock) {
   })
 
   app.whenReady().then(async () => {
-    if (!isDev) {
-      try {
-        app.setAsDefaultProtocolClient('inkwell')
-      } catch {
-        /* ignore */
-      }
-    }
-
     // Deny sensitive permissions by default. (Inkwell is a local-first editor.)
     session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
       const denied = new Set(['media', 'geolocation', 'notifications', 'midi', 'clipboard-sanitized-write'])
       callback(!denied.has(permission))
     })
 
-    collectAuthDeepLinksFromArgv(process.argv)
     await queueFirstImportableFromArgv(process.argv)
 
     if (!isDev) {

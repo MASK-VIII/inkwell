@@ -1,7 +1,6 @@
-# Build Windows NSIS with Supabase baked in and update GitHub Release v{package.json version}
+# Build Windows NSIS and update GitHub Release v{package.json version}
 # on every push to master — keeps the site download + Vercel fetch path fresh without tagging.
 #
-# Requires repository secrets (same as release-desktop): VITE_SUPABASE_URL + one key.
 # Optional: VERCEL_DEPLOY_HOOK_URL — POST after upload so Production fetches the new .exe.
 name: Publish desktop installer (master)
 
@@ -18,19 +17,6 @@ permissions:
 
 env:
   CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-  VITE_INKWELL_CLOUD_SYNC: '1'
-  VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-  VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
-  VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-  VITE_PADDLE_CLIENT_TOKEN: ${{ secrets.VITE_PADDLE_CLIENT_TOKEN }}
-  VITE_PADDLE_ENVIRONMENT: ${{ secrets.VITE_PADDLE_ENVIRONMENT }}
-  VITE_PADDLE_PRICE_ID_BASIC: ${{ secrets.VITE_PADDLE_PRICE_ID_BASIC }}
-  VITE_PADDLE_PRICE_ID_PRO: ${{ secrets.VITE_PADDLE_PRICE_ID_PRO }}
-  VITE_PADDLE_PRICE_ID_UPGRADE: ${{ secrets.VITE_PADDLE_PRICE_ID_UPGRADE }}
-  VITE_PADDLE_EDGE_CHECKOUT: ${{ secrets.VITE_PADDLE_EDGE_CHECKOUT }}
-  VITE_PADDLE_CHECKOUT_EBOOK_SUITE: ${{ secrets.VITE_PADDLE_CHECKOUT_EBOOK_SUITE }}
-  VITE_PADDLE_CHECKOUT_PRO: ${{ secrets.VITE_PADDLE_CHECKOUT_PRO }}
-  VITE_PADDLE_CHECKOUT_UPGRADE: ${{ secrets.VITE_PADDLE_CHECKOUT_UPGRADE }}
 
 jobs:
   publish-windows-installer:
@@ -38,78 +24,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Job-level `if` cannot use the `secrets` context; gate here and skip remaining steps when secrets are absent.
-      - name: Gate — Supabase secrets required to publish
-        id: gate
-        shell: bash
-        env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-        run: |
-          if [ -n "$VITE_SUPABASE_URL" ] && { [ -n "$VITE_SUPABASE_PUBLISHABLE_KEY" ] || [ -n "$VITE_SUPABASE_ANON_KEY" ]; }; then
-            printf 'publish=true\n' >> "$GITHUB_OUTPUT"
-          else
-            printf 'publish=false\n' >> "$GITHUB_OUTPUT"
-            echo "::notice::Skipping desktop publish — add Actions secrets VITE_SUPABASE_URL and a Supabase key (see docs/DESKTOP.md)."
-          fi
-
       - uses: actions/setup-node@v4
-        if: ${{ steps.gate.outputs.publish == 'true' }}
         with:
           node-version: '22'
           cache: 'npm'
 
       - name: Read package version and product name
-        if: ${{ steps.gate.outputs.publish == 'true' }}
         id: pkg
         shell: bash
         run: |
           VERSION=$(node -p "require('./package.json').version")
           PRODUCT=$(node -p "(require('./package.json').build || {}).productName || 'Inkwell'")
-          # printf avoids CRLF in GITHUB_OUTPUT on windows-latest bash (echo can break paths: Inkwell\r)
           {
             printf 'version=%s\n' "$VERSION"
             printf 'product=%s\n' "$PRODUCT"
           } >> "$GITHUB_OUTPUT"
 
       - name: Install dependencies
-        if: ${{ steps.gate.outputs.publish == 'true' }}
         run: npm ci
 
-      - name: Verify Supabase build secrets
-        if: ${{ steps.gate.outputs.publish == 'true' }}
-        env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-        shell: bash
-        run: |
-          if [ -z "$VITE_SUPABASE_URL" ]; then
-            echo "::error::Missing VITE_SUPABASE_URL"
-            exit 1
-          fi
-          if [ -z "$VITE_SUPABASE_PUBLISHABLE_KEY" ] && [ -z "$VITE_SUPABASE_ANON_KEY" ]; then
-            echo "::error::Missing VITE_SUPABASE_PUBLISHABLE_KEY or VITE_SUPABASE_ANON_KEY"
-            exit 1
-          fi
-
       - name: Build desktop (NSIS)
-        if: ${{ steps.gate.outputs.publish == 'true' }}
         shell: bash
         run: npm run build:desktop
 
-      - name: Verify renderer bundle inlined Supabase env
-        if: ${{ steps.gate.outputs.publish == 'true' }}
-        env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-        shell: bash
-        run: node scripts/verify-desktop-renderer-inlined-supabase.mjs
-
       - name: Verify NSIS installer exists
-        if: ${{ steps.gate.outputs.publish == 'true' }}
         shell: bash
         run: |
           F="release/${{ steps.pkg.outputs.product }} Setup ${{ steps.pkg.outputs.version }}.exe"
@@ -121,7 +59,6 @@ jobs:
           ls -la "$F"
 
       - name: Verify electron-updater metadata (latest.yml)
-        if: ${{ steps.gate.outputs.publish == 'true' }}
         shell: bash
         run: |
           if [ ! -f release/latest.yml ]; then
@@ -131,7 +68,6 @@ jobs:
           fi
 
       - name: Create or update GitHub Release asset
-        if: ${{ steps.gate.outputs.publish == 'true' }}
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -162,7 +98,6 @@ jobs:
           done
 
       - name: Trigger Vercel production deploy (optional)
-        if: ${{ steps.gate.outputs.publish == 'true' }}
         env:
           VERCEL_DEPLOY_HOOK_URL: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
         shell: bash

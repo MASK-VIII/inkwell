@@ -14,17 +14,18 @@ export default function OneTimeVsSubscriptionWritingToolsBody() {
         <li>You value managed services over owning export files locally.</li>
       </ul>
 
-      <h2>When one-time tiers make sense</h2>
+      <h2>When free or one-time tools make sense</h2>
       <ul>
-        <li>You prefer predictable costs for a long novel cycle.</li>
-        <li>You want local-first drafting with exports as a purchase, not a meter.</li>
+        <li>You prefer predictable costs (or none) for a long novel cycle.</li>
+        <li>You want local-first drafting with exports you keep, not a meter.</li>
         <li>You dislike the feeling of “renting access” to your own finish line.</li>
       </ul>
 
-      <h2>How Inkwell prices</h2>
+      <h2>How Inkwell fits</h2>
       <p>
-        Inkwell skips the question entirely: it is <strong>free</strong>. The full writing workspace and
-        every export format are included, with no subscription and no account (<a href="/#faq">FAQ</a>).
+        Inkwell skips the billing question entirely: it is <strong>free</strong>. The full writing workspace and every
+        export format are included, with no subscription, no one-time unlock, and no account (
+        <a href="/#faq">FAQ</a>).
       </p>
 
       <h2>Related guides</h2>
