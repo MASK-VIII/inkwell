@@ -33,11 +33,9 @@ function gitHubOwnerRepoForDownloadLink(): string {
 
 const pkg = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8')) as {
   version?: string
-  build?: { productName?: string }
 }
-const productName = pkg.build?.productName ?? 'Inkwell'
 const appVersion = String(pkg.version ?? '0.0.0')
-const installerFilename = `${productName} Setup ${appVersion}.exe`
+const installerFilename = `Inkwell-Setup-${appVersion}.exe`
 const ownerRepo = gitHubOwnerRepoForDownloadLink()
 /** Vercel production fetches the `.exe` into `public/downloads/`; same-origin avoids anonymous GitHub 404 on private repos. */
 const vercelProductionWeb =

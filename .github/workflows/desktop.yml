@@ -1,12 +1,10 @@
 # Unsigned desktop installers for smoke testing (Windows + macOS).
-# For release signing, see docs/DESKTOP.md and wire repository secrets + CSC env vars.
+# Manual only — does not run on every push/PR.
+# For shipping installers, use "Publish desktop installer" or "Release desktop (Windows)".
 name: Desktop build
 
 on:
-  push:
-    branches: [main, master]
-  pull_request:
-    branches: [main, master]
+  workflow_dispatch:
 
 jobs:
   desktop:
@@ -38,10 +36,11 @@ jobs:
         shell: bash
         run: |
           if [ ! -f release/latest.yml ]; then
-            echo "::error::Missing release/latest.yml — add package.json build.publish (GitHub) for electron-updater."
+            echo "::error::Missing release/latest.yml — electron-updater needs this for Windows auto-update."
             ls -la release/ || true
             exit 1
           fi
+          cat release/latest.yml
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4

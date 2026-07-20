@@ -1,15 +1,14 @@
-# Build Windows NSIS and update GitHub Release v{package.json version}
-# on every push to master — keeps the site download + Vercel fetch path fresh without tagging.
+# Build Windows NSIS and publish GitHub Release v{package.json version}.
+# Manual only — run from Actions when you intentionally ship a desktop build.
 #
 # Optional: VERCEL_DEPLOY_HOOK_URL — POST after upload so Production fetches the new .exe.
-name: Publish desktop installer (master)
+name: Publish desktop installer
 
 on:
-  push:
-    branches: [master]
+  workflow_dispatch:
 
 concurrency:
-  group: desktop-publish-master
+  group: desktop-publish
   cancel-in-progress: true
 
 permissions:
@@ -29,16 +28,13 @@ jobs:
           node-version: '22'
           cache: 'npm'
 
-      - name: Read package version and product name
+      - name: Read package version
         id: pkg
         shell: bash
         run: |
           VERSION=$(node -p "require('./package.json').version")
-          PRODUCT=$(node -p "(require('./package.json').build || {}).productName || 'Inkwell'")
-          {
-            printf 'version=%s\n' "$VERSION"
-            printf 'product=%s\n' "$PRODUCT"
-          } >> "$GITHUB_OUTPUT"
+          printf 'version=%s\n' "$VERSION" >> "$GITHUB_OUTPUT"
+          printf 'installer=Inkwell-Setup-%s.exe\n' "$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Install dependencies
         run: npm ci
@@ -50,7 +46,7 @@ jobs:
       - name: Verify NSIS installer exists
         shell: bash
         run: |
-          F="release/${{ steps.pkg.outputs.product }} Setup ${{ steps.pkg.outputs.version }}.exe"
+          F="release/${{ steps.pkg.outputs.installer }}"
           if [ ! -f "$F" ]; then
             echo "::error::Missing $F — listing release/:"
             ls -la release/ || true
@@ -62,10 +58,12 @@ jobs:
         shell: bash
         run: |
           if [ ! -f release/latest.yml ]; then
-            echo "::error::Missing release/latest.yml — electron-updater needs this on the GitHub release (see package.json build.publish)."
+            echo "::error::Missing release/latest.yml — electron-updater needs this on the GitHub release."
             ls -la release/ || true
             exit 1
           fi
+          echo "--- latest.yml ---"
+          cat release/latest.yml
 
       - name: Create or update GitHub Release asset
         shell: bash
@@ -73,9 +71,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="${{ steps.pkg.outputs.version }}"
-          PRODUCT="${{ steps.pkg.outputs.product }}"
           TAG="v${VERSION}"
-          FILE="release/${PRODUCT} Setup ${VERSION}.exe"
+          FILE="release/${{ steps.pkg.outputs.installer }}"
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Release $TAG exists — uploading installer (--clobber)"
             gh release upload "$TAG" "$FILE" --clobber
@@ -85,11 +82,6 @@ jobs:
               --title "Inkwell ${VERSION}" \
               --generate-notes \
               --latest
-          fi
-          if [ ! -f release/latest.yml ]; then
-            echo "::error::Missing release/latest.yml — electron-updater requires this asset."
-            ls -la release/ || true
-            exit 1
           fi
           gh release upload "$TAG" release/latest.yml --clobber
           shopt -s nullglob

@@ -38,12 +38,14 @@ try {
 const platform = process.platform
 
 if (platform === 'win32') {
-  const setups = files.filter(
-    (f) => f.toLowerCase().startsWith('inkwell setup') && f.toLowerCase().endsWith('.exe')
-  )
+  const setups = files.filter((f) => {
+    const n = f.toLowerCase()
+    if (!n.endsWith('.exe')) return false
+    return n.startsWith('inkwell-setup-') || n.startsWith('inkwell setup')
+  })
   const installPath = await newestPath(setups)
   if (!installPath) {
-    console.error(`No "Inkwell Setup *.exe" found in ${releaseDir}.`)
+    console.error(`No "Inkwell-Setup-*.exe" found in ${releaseDir}.`)
     process.exit(1)
   }
   console.log('')

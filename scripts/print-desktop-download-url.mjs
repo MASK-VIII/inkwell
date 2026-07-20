@@ -1,7 +1,7 @@
 /**
  * Prints the GitHub Releases "latest" asset URL for the Windows NSIS installer.
  * Use this value for VITE_INKWELL_DESKTOP_DOWNLOAD_URL after you publish a release
- * that includes the matching `Inkwell Setup <version>.exe` asset.
+ * that includes the matching `Inkwell-Setup-<version>.exe` asset.
  *
  * Run: node scripts/print-desktop-download-url.mjs
  */
@@ -13,8 +13,7 @@ import { fileURLToPath } from 'node:url'
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
 const version = String(pkg.version ?? '0.0.0')
-const productName = String(pkg.build?.productName ?? pkg.name ?? 'Inkwell')
-const fileBase = `${productName} Setup ${version}.exe`
+const fileBase = `Inkwell-Setup-${version}.exe`
 const encoded = encodeURIComponent(fileBase)
 
 /** @returns {string | null} */
@@ -46,4 +45,5 @@ console.log(url)
 console.log('')
 console.log('Requires a published GitHub Release whose latest tag includes that .exe under Assets.')
 console.log(`Local build output (see package.json build.directories.output): check for "${fileBase}".`)
+console.log('Ship desktop only via Actions → Publish desktop installer (or tag + Release desktop).')
 console.log('')

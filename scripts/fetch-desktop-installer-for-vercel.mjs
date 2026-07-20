@@ -11,6 +11,9 @@
  * Optional: INKWELL_GITHUB_OWNER_REPO or VITE_INKWELL_GITHUB_OWNER_REPO (default: git remote or MASK-VIII/inkwell).
  *
  * Writes: public/downloads/Inkwell-Setup-latest.exe (gitignored)
+ *
+ * Desktop releases are manual (Actions → Publish desktop installer). This script prefers
+ * tag v{package.json version}, then falls back to /releases/latest without a long poll.
  */
 import { execFileSync } from 'node:child_process'
 import { mkdir, writeFile } from 'node:fs/promises'
@@ -22,8 +25,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
 const version = String(pkg.version ?? '0.0.0')
-const productName = String(pkg.build?.productName ?? pkg.name ?? 'Inkwell')
-const assetName = `${productName} Setup ${version}.exe`
+const assetName = `Inkwell-Setup-${version}.exe`
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
@@ -80,22 +82,34 @@ function normalizeInstallerFilename(s) {
   return s.replace(/\s+/g, ' ').trim()
 }
 
-/** True if filename ends with ` Setup <version>.exe` (case-insensitive). Avoids `1.0.0` matching `10.0.0`. */
-function exeEndsWithSetupVersion(name, semver) {
-  const suffix = ` Setup ${semver}.exe`
-  return name.toLowerCase().endsWith(suffix.toLowerCase())
+/** True if filename looks like an Inkwell NSIS setup for this semver. */
+function exeMatchesVersion(name, semver) {
+  const n = name.toLowerCase()
+  const v = semver.toLowerCase()
+  if (n === `inkwell-setup-${v}.exe`) return true
+  if (n.endsWith(` setup ${v}.exe`)) return true
+  if (n === `inkwell.setup.${v}.exe`) return true
+  return false
 }
 
 /**
- * NSIS artifact sometimes ships as `Product.Setup.1.2.3.exe` (dots) instead of `Product Setup 1.2.3.exe` (spaces).
- * @param {string} expectedName e.g. `Inkwell Setup 1.0.0.exe`
+ * NSIS artifact sometimes ships as `Product.Setup.1.2.3.exe` (dots) instead of spaced names.
+ * @param {string} expectedName e.g. `Inkwell-Setup-1.0.0.exe` or legacy spaced form
  */
-function dotSeparatedSetupExeName(expectedName) {
+function alternateNames(expectedName) {
+  const out = new Set([expectedName])
   const m = expectedName.match(/^(.+?)\s+Setup\s+(.+)$/i)
-  if (!m) return null
-  const head = m[1].trim().replace(/\s+/g, '.')
-  const tail = m[2].trim()
-  return `${head}.Setup.${tail}`
+  if (m) {
+    const head = m[1].trim().replace(/\s+/g, '.')
+    out.add(`${head}.Setup.${m[2].trim()}`)
+  }
+  const dash = expectedName.match(/^Inkwell-Setup-(.+)\.exe$/i)
+  if (dash) {
+    out.add(`Inkwell Setup ${dash[1]}.exe`)
+    out.add(`Inkwell.Setup.${dash[1]}.exe`)
+    out.add(`inkwell Setup ${dash[1]}.exe`)
+  }
+  return [...out]
 }
 
 /**
@@ -112,23 +126,21 @@ function pickInstallerAsset(assets, expectedName, semver) {
     return { asset: null, hint: `No .exe in release assets. Saw: ${namesForHint}` }
   }
 
-  let hit = exes.find((a) => a.name === expectedName)
-  if (hit) return { asset: hit, hint: '' }
-
-  hit = exes.find((a) => normalizeInstallerFilename(a.name ?? '') === normalizeInstallerFilename(expectedName))
-  if (hit) return { asset: hit, hint: '' }
-
-  hit = exes.find((a) => (a.name ?? '').toLowerCase() === expectedName.toLowerCase())
-  if (hit) return { asset: hit, hint: '' }
-
-  const dotName = dotSeparatedSetupExeName(expectedName)
-  if (dotName) {
-    hit = exes.find((a) => (a.name ?? '').toLowerCase() === dotName.toLowerCase())
+  for (const name of alternateNames(expectedName)) {
+    let hit = exes.find((a) => a.name === name)
+    if (hit) return { asset: hit, hint: '' }
+    hit = exes.find((a) => normalizeInstallerFilename(a.name ?? '') === normalizeInstallerFilename(name))
+    if (hit) return { asset: hit, hint: '' }
+    hit = exes.find((a) => (a.name ?? '').toLowerCase() === name.toLowerCase())
     if (hit) return { asset: hit, hint: '' }
   }
 
-  const versionHits = exes.filter((a) => exeEndsWithSetupVersion(a.name ?? '', semver))
+  const versionHits = exes.filter((a) => exeMatchesVersion(a.name ?? '', semver))
   if (versionHits.length === 1) return { asset: versionHits[0], hint: '' }
+
+  // Prefer any Inkwell-Setup-*.exe on /releases/latest fallback
+  const setupHits = exes.filter((a) => /^inkwell-setup-.+\.exe$/i.test(a.name ?? ''))
+  if (setupHits.length === 1) return { asset: setupHits[0], hint: '' }
 
   return {
     asset: null,
@@ -201,9 +213,9 @@ async function main() {
   const destDir = join(root, 'public', 'downloads')
   const destFile = join(destDir, 'Inkwell-Setup-latest.exe')
 
-  // Windows desktop CI often runs 8–15+ minutes after master lands; master-publish workflow can overlap Vercel.
-  const maxAttempts = 45
-  const delayMs = 20_000
+  // Desktop publishes are manual — do not wait many minutes for a tag that may not exist yet.
+  const maxAttempts = 3
+  const delayMs = 5_000
 
   /** @type {{ assets?: { name?: string; url?: string }[]; tag_name?: string } | null} */
   let release = null
@@ -213,7 +225,7 @@ async function main() {
     if (res.status === 200 && data && typeof data === 'object' && Array.isArray(data.assets)) {
       if (data.assets.length === 0 && attempt < maxAttempts) {
         console.warn(
-          `[fetch-desktop-installer] release ${tag} exists but has no assets yet (attempt ${attempt}/${maxAttempts}); retrying in ${delayMs / 1000}s…`,
+          `[fetch-desktop-installer] release ${tag} exists but has no assets yet (attempt ${attempt}/${maxAttempts}); retrying…`,
         )
         await sleep(delayMs)
         continue
@@ -223,13 +235,8 @@ async function main() {
     }
     if (res.status === 404 && attempt < maxAttempts) {
       console.warn(
-        `[fetch-desktop-installer] release ${tag} not ready yet (attempt ${attempt}/${maxAttempts}); retrying in ${delayMs / 1000}s…`,
+        `[fetch-desktop-installer] release ${tag} not ready yet (attempt ${attempt}/${maxAttempts}); retrying…`,
       )
-      if (attempt === 1) {
-        console.warn(
-          '[fetch-desktop-installer] hint: tag is created when **Publish desktop installer (master)** or **Release desktop (Windows)** uploads the NSIS asset; this Vercel build will wait up to ~15m then try GET /releases/latest.',
-        )
-      }
       await sleep(delayMs)
       continue
     }
@@ -246,7 +253,9 @@ async function main() {
     if (res.status === 404 && attempt === maxAttempts) {
       break
     }
-    throw new Error(`GitHub releases/tags/${tag} failed: ${res.status} ${msg}`)
+    if (res.status !== 404) {
+      throw new Error(`GitHub releases/tags/${tag} failed: ${res.status} ${msg}`)
+    }
   }
 
   if (!release?.assets?.length) {
@@ -255,6 +264,9 @@ async function main() {
     const { res: lr, data: latestData } = await githubJson(latestUrl, token)
     if (lr.status === 200 && latestData && typeof latestData === 'object' && Array.isArray(latestData.assets)) {
       release = latestData
+      console.warn(
+        `[fetch-desktop-installer] using latest release ${latestData.tag_name ?? '(unknown)'} — run Actions → Publish desktop installer after bumping package.json`,
+      )
     } else if (lr.status === 401 || lr.status === 403) {
       const msg =
         typeof latestData === 'object' && latestData && 'message' in latestData ?
@@ -266,14 +278,14 @@ async function main() {
 
   if (!release?.assets?.length) {
     throw new Error(
-      `No release assets for ${tag} and /releases/latest had no usable assets — run **Release desktop (Windows)** or wait for **Publish desktop installer (master)** on GitHub.`,
+      `No release assets for ${tag} and /releases/latest had no usable assets — run GitHub Actions → Publish desktop installer (or Release desktop) when you intend to ship a desktop build.`,
     )
   }
 
   const { asset, hint } = pickInstallerAsset(release.assets, assetName, version)
   if (!asset?.url) {
     throw new Error(
-      `${hint} — Run GitHub Actions **Release desktop (Windows)** until **Publish GitHub Release** succeeds, ` +
+      `${hint} — Run GitHub Actions → Publish desktop installer until it succeeds, ` +
         `or attach ${JSON.stringify(assetName)} under ${tag} on GitHub.`,
     )
   }
