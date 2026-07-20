@@ -14,7 +14,7 @@ const latestPosts = allPosts.slice(0, 2)
 
 <Base
   title="Enter the Limelight"
-  description="A small studio building Inkwell — a chapter-first writing app for new authors and seasoned novelists — and what comes next."
+  description="A small studio building Inkwell — a chapter-first writing app — and Landmark, a swipe-to-discover guide for cool things nearby."
 >
   <main class="home">
     <section class="hero">
@@ -22,17 +22,19 @@ const latestPosts = allPosts.slice(0, 2)
         <BrandMark size={36} withWordmark={false} />
         <p class="eyebrow hero-eyebrow">Welcome to the Limelight</p>
         <h1 class="display hero-display">
-          The home of <em>Inkwell</em>,<br />and what comes next.
+          The home of <em>Inkwell</em>, <em>Landmark</em>,<br />and what comes next.
         </h1>
         <p class="lede hero-lede">
-          Tools and stories for writers at the start of the climb — and for the
-          ones who never quite stopped climbing.
+          Tools for finishing books — and for finding something worth leaving
+          the desk for.
         </p>
         <div class="hero-actions">
           <a class="btn btn-primary" href="https://inkwell.enterthelimelight.com">
             Open Inkwell
           </a>
-          <a class="btn btn-secondary" href="/inkwell">Tour the app</a>
+          <a class="btn btn-secondary" href="https://landmark.enterthelimelight.com">
+            Open Landmark
+          </a>
         </div>
       </div>
     </section>
@@ -40,8 +42,21 @@ const latestPosts = allPosts.slice(0, 2)
     <hr class="divider-rule" />
 
     <section class="section section-playbill">
-      <div class="container">
-        <InkwellPlaybill />
+      <div class="container playbill-row">
+        <InkwellPlaybill titleId="playbill-inkwell" />
+        <InkwellPlaybill
+          titleId="playbill-landmark"
+          href="https://landmark.enterthelimelight.com"
+          ctaLabel="Open Landmark"
+          title="Landmark"
+          blurb="Swipe to discover cool things nearby — historical spots, food and drink, and hidden gems. Not dating. Just places worth going."
+          bullets={[
+            'Tinder-style discovery for attractions near you',
+            'Historical, food & drink, and hidden gems — filterable by radius',
+            'Save what you love; skip the rest and keep exploring',
+          ]}
+          screenshotSrc={null}
+        />
       </div>
     </section>
 
@@ -144,6 +159,19 @@ const latestPosts = allPosts.slice(0, 2)
     justify-content: center;
     gap: 0.85rem;
     margin-top: 1.75rem;
+  }
+
+  .playbill-row {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: clamp(1.5rem, 4vw, 2.25rem);
+    align-items: stretch;
+  }
+
+  @media (min-width: 900px) {
+    .playbill-row {
+      grid-template-columns: 1fr 1fr;
+    }
   }
 
   .founder {

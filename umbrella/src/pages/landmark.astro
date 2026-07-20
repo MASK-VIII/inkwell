@@ -1,0 +1,165 @@
+---
+import Base from '../layouts/Base.astro'
+import InkwellPlaybill from '../components/InkwellPlaybill.astro'
+
+const sections = [
+  {
+    eyebrow: 'What it is',
+    heading: 'A swipe deck for the real world.',
+    body: `Landmark is discovery without the dating baggage. You set a radius, pick a vibe — historical, food and drink, or hidden gems — and swipe through places near you. Right means save it. Left means skip.`,
+  },
+  {
+    eyebrow: 'Why it exists',
+    heading: 'Because “what should we do?” should feel fun, not like homework.',
+    body: `Maps are great when you already know the destination. Landmark is for when you want something interesting nearby and would rather feel your way there than scroll a ranked list.`,
+  },
+  {
+    eyebrow: 'Who it is for',
+    heading: 'Travelers, locals, and anyone with an afternoon to fill.',
+    body: `Visiting a new city, killing time between meetings, or hunting for a quieter corner of your own neighborhood — Landmark keeps the deck full of places worth leaving the house for.`,
+  },
+] as const
+---
+
+<Base
+  title="Landmark — Enter the Limelight"
+  description="Landmark helps you find cool things to do nearby — historical attractions, food and drink, and hidden gems — with a simple swipe."
+>
+  <main>
+    <section class="page-hero">
+      <div class="container page-hero-inner">
+        <p class="eyebrow">The Limelight Presents</p>
+        <h1 class="display page-hero-title">Landmark</h1>
+        <p class="lede page-hero-lede">
+          Swipe to find cool things nearby — history, food, and hidden gems —
+          then save the ones you actually want to visit.
+        </p>
+        <div class="page-hero-actions">
+          <a class="btn btn-primary" href="https://landmark.enterthelimelight.com">
+            Open Landmark
+          </a>
+          <a class="btn btn-secondary" href="/">Back to the studio</a>
+        </div>
+      </div>
+    </section>
+
+    <hr class="divider-rule" />
+
+    <section class="section section-playbill">
+      <div class="container">
+        <InkwellPlaybill
+          titleId="landmark-playbill"
+          href="https://landmark.enterthelimelight.com"
+          ctaLabel="Start discovering"
+          title="Landmark"
+          blurb="Not dating. Just places. Set your radius, pick a category, and swipe through attractions near you — with more detail a scroll away before you decide."
+          bullets={[
+            'Works wherever you are — location + radius, not a single city list',
+            'Historical, food & drink, and hidden gems',
+            'Save the keepers; skip the rest',
+          ]}
+          screenshotSrc={null}
+        />
+      </div>
+    </section>
+
+    <hr class="divider-rule" />
+
+    <section class="section section-pillars">
+      <div class="container pillars">
+        {
+          sections.map((s) => (
+            <article class="pillar">
+              <p class="eyebrow">{s.eyebrow}</p>
+              <h2 class="pillar-heading">{s.heading}</h2>
+              <p class="pillar-body">{s.body}</p>
+            </article>
+          ))
+        }
+      </div>
+    </section>
+
+    <hr class="divider-rule" />
+
+    <section class="section section-finalcta">
+      <div class="container finalcta">
+        <h2 class="finalcta-heading">Go find something.</h2>
+        <p class="finalcta-body">
+          Landmark is live on the web. Open it, allow location, and start
+          swiping — the deck fills from places near you.
+        </p>
+        <a class="btn btn-primary" href="https://landmark.enterthelimelight.com">
+          Open Landmark
+        </a>
+      </div>
+    </section>
+  </main>
+</Base>
+
+<style>
+  .page-hero {
+    padding: clamp(3.5rem, 10vw, 6rem) 0 clamp(2rem, 5vw, 3.5rem);
+  }
+
+  .page-hero-inner {
+    text-align: center;
+    max-width: 40rem;
+    margin: 0 auto;
+  }
+
+  .page-hero-title {
+    margin: 0.75rem 0 1rem;
+  }
+
+  .page-hero-lede {
+    margin: 0 auto;
+  }
+
+  .page-hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.85rem;
+    margin-top: 1.75rem;
+  }
+
+  .pillars {
+    display: grid;
+    gap: clamp(2rem, 5vw, 3rem);
+    max-width: 40rem;
+    margin: 0 auto;
+  }
+
+  .pillar-heading {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: clamp(1.5rem, 3vw, 2rem);
+    line-height: 1.2;
+    margin: 0.75rem 0;
+    color: var(--color-cream);
+  }
+
+  .pillar-body {
+    color: var(--color-cream-dim);
+    margin: 0;
+  }
+
+  .finalcta {
+    text-align: center;
+    max-width: 32rem;
+    margin: 0 auto;
+  }
+
+  .finalcta-heading {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: clamp(1.75rem, 4vw, 2.5rem);
+    margin: 0 0 1rem;
+    color: var(--color-cream);
+  }
+
+  .finalcta-body {
+    color: var(--color-cream-dim);
+    margin: 0 0 1.75rem;
+  }
+</style>
