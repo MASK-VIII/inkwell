@@ -1,44 +1,67 @@
 ---
 import Base from '../layouts/Base.astro'
 import InkwellPlaybill from '../components/InkwellPlaybill.astro'
+import { faqJsonLd, landmarkSoftwareJsonLd } from '../lib/seo'
 
 const sections = [
   {
     eyebrow: 'What it is',
-    heading: 'A swipe deck for the real world.',
-    body: `Landmark is discovery without the dating baggage. You set a radius, pick a vibe — historical, food and drink, or hidden gems — and swipe through places near you. Right means save it. Left means skip.`,
+    heading: 'A swipe deck for things to do nearby.',
+    body: `Landmark is discovery without the dating baggage. Set a radius, pick a vibe — historical attractions, food and drink, or hidden gems — and swipe through places near you. Right means save it. Left means skip.`,
   },
   {
-    eyebrow: 'Why it exists',
-    heading: 'Because “what should we do?” should feel fun, not like homework.',
-    body: `Maps are great when you already know the destination. Landmark is for when you want something interesting nearby and would rather feel your way there than scroll a ranked list.`,
+    eyebrow: 'Why swipe',
+    heading: 'Because ranked lists bury the interesting option.',
+    body: `Maps win when you already know the pin. Landmark wins when you want something cool within walking or driving distance and would rather decide place-by-place than scroll another top-ten roundup.`,
   },
   {
     eyebrow: 'Who it is for',
-    heading: 'Travelers, locals, and anyone with an afternoon to fill.',
-    body: `Visiting a new city, killing time between meetings, or hunting for a quieter corner of your own neighborhood — Landmark keeps the deck full of places worth leaving the house for.`,
+    heading: 'Travelers, locals, and anyone with an open afternoon.',
+    body: `New city, between meetings, or hunting a quieter corner of your own neighborhood — Landmark fills a deck from your location so “what should we do?” feels like a game, not homework.`,
   },
 ] as const
+
+const faqs = [
+  {
+    question: 'Is Landmark a dating app?',
+    answer:
+      'No. Landmark is for places — historical spots, food and drink, and hidden gems near you. Swipe right to save a place, not a person.',
+  },
+  {
+    question: 'How does Landmark find places?',
+    answer:
+      'Landmark uses your location and a radius you choose, then shows nearby attractions you can filter by category and save as you swipe.',
+  },
+  {
+    question: 'Where can I use Landmark?',
+    answer:
+      'Anywhere you open the web app. Results are based on your current area and radius, not a single-city guidebook.',
+  },
+]
 ---
 
 <Base
-  title="Landmark — Enter the Limelight"
-  description="Landmark helps you find cool things to do nearby — historical attractions, food and drink, and hidden gems — with a simple swipe."
+  title="Landmark — Swipe to discover things to do nearby | Enter the Limelight"
+  description="Landmark helps you find cool things to do nearby with a simple swipe: historical attractions, food and drink, and hidden gems inside your radius. Save favorites; skip the rest."
+  keywords="Landmark app, things to do nearby, swipe to discover, historical attractions, hidden gems, food and drink near me, travel discovery app, local attractions"
+  jsonLd={[landmarkSoftwareJsonLd(), faqJsonLd(faqs)]}
 >
   <main>
     <section class="page-hero">
       <div class="container page-hero-inner">
-        <p class="eyebrow">The Limelight Presents</p>
+        <p class="eyebrow">Swipe to discover nearby</p>
         <h1 class="display page-hero-title">Landmark</h1>
         <p class="lede page-hero-lede">
-          Swipe to find cool things nearby — history, food, and hidden gems —
-          then save the ones you actually want to visit.
+          Find historical spots, food and drink, and hidden gems near you —
+          one card at a time. Save what earns a right swipe.
         </p>
         <div class="page-hero-actions">
           <a class="btn btn-primary" href="https://landmark.enterthelimelight.com">
             Open Landmark
           </a>
-          <a class="btn btn-secondary" href="/">Back to the studio</a>
+          <a class="btn btn-secondary" href="/journal/swipe-to-discover-with-landmark">
+            How it works
+          </a>
         </div>
       </div>
     </section>
@@ -54,7 +77,7 @@ const sections = [
           title="Landmark"
           blurb="Not dating. Just places. Set your radius, pick a category, and swipe through attractions near you — with more detail a scroll away before you decide."
           bullets={[
-            'Works wherever you are — location + radius, not a single city list',
+            'Works wherever you are — location + radius, not a static city list',
             'Historical, food & drink, and hidden gems',
             'Save the keepers; skip the rest',
           ]}
@@ -81,12 +104,55 @@ const sections = [
 
     <hr class="divider-rule" />
 
+    <section class="section section-detail" aria-labelledby="landmark-detail">
+      <div class="container detail">
+        <h2 id="landmark-detail" class="detail-heading">
+          Categories that match how people actually explore
+        </h2>
+        <p>
+          Use <strong>Historical</strong> when you want museums, monuments, and
+          heritage. Use <strong>Food &amp; drink</strong> when the afternoon
+          needs a table. Use <strong>Hidden gems</strong> when you want the
+          quieter find — viewpoints, gardens, galleries — that ranked lists often
+          skip. Or leave the filter on All and let the deck surprise you.
+        </p>
+        <p>
+          Full walkthrough:
+          <a href="/journal/swipe-to-discover-with-landmark">
+            Swipe to discover cool things nearby with Landmark
+          </a>
+          .
+        </p>
+      </div>
+    </section>
+
+    <hr class="divider-rule" />
+
+    <section class="section section-faq" aria-labelledby="landmark-faq">
+      <div class="container faq">
+        <p class="eyebrow">FAQ</p>
+        <h2 id="landmark-faq" class="faq-title">Landmark questions</h2>
+        <dl class="faq-list">
+          {
+            faqs.map((faq) => (
+              <div class="faq-item">
+                <dt>{faq.question}</dt>
+                <dd>{faq.answer}</dd>
+              </div>
+            ))
+          }
+        </dl>
+      </div>
+    </section>
+
+    <hr class="divider-rule" />
+
     <section class="section section-finalcta">
       <div class="container finalcta">
         <h2 class="finalcta-heading">Go find something.</h2>
         <p class="finalcta-body">
-          Landmark is live on the web. Open it, allow location, and start
-          swiping — the deck fills from places near you.
+          Landmark is live on the web. Open it, allow location, set a radius, and
+          start swiping.
         </p>
         <a class="btn btn-primary" href="https://landmark.enterthelimelight.com">
           Open Landmark
@@ -125,23 +191,98 @@ const sections = [
 
   .pillars {
     display: grid;
-    gap: clamp(2rem, 5vw, 3rem);
-    max-width: 40rem;
-    margin: 0 auto;
+    gap: clamp(1.5rem, 4vw, 2.5rem);
+    grid-template-columns: 1fr;
+  }
+
+  .pillar {
+    border: 1px solid var(--rule-gold);
+    background: var(--color-stage-elevated);
+    border-radius: var(--radius);
+    padding: clamp(1.5rem, 4vw, 2.25rem);
   }
 
   .pillar-heading {
     font-family: var(--font-display);
     font-weight: 400;
-    font-size: clamp(1.5rem, 3vw, 2rem);
+    font-size: clamp(1.4rem, 2.6vw, 1.8rem);
     line-height: 1.2;
-    margin: 0.75rem 0;
     color: var(--color-cream);
+    margin: 0.5rem 0 0.75rem;
   }
 
   .pillar-body {
     color: var(--color-cream-dim);
     margin: 0;
+    line-height: 1.65;
+  }
+
+  @media (min-width: 760px) {
+    .pillars {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+
+  .detail {
+    max-width: 40rem;
+    margin: 0 auto;
+  }
+
+  .detail-heading {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: clamp(1.65rem, 3vw, 2.2rem);
+    margin: 0 0 1rem;
+    color: var(--color-cream);
+  }
+
+  .detail p {
+    color: var(--color-cream-dim);
+    line-height: 1.7;
+  }
+
+  .detail strong {
+    color: var(--color-cream);
+  }
+
+  .detail a {
+    color: var(--color-gold-bright);
+  }
+
+  .faq {
+    max-width: 40rem;
+    margin: 0 auto;
+  }
+
+  .faq-title {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: clamp(1.65rem, 3vw, 2.25rem);
+    margin: 0.75rem 0 1.5rem;
+    color: var(--color-cream);
+  }
+
+  .faq-list {
+    margin: 0;
+  }
+
+  .faq-item {
+    border-top: 1px solid var(--rule-gold);
+    padding: 1.1rem 0;
+  }
+
+  .faq-item dt {
+    font-family: var(--font-sans);
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--color-cream);
+    margin-bottom: 0.45rem;
+  }
+
+  .faq-item dd {
+    margin: 0;
+    color: var(--color-cream-dim);
+    line-height: 1.6;
   }
 
   .finalcta {

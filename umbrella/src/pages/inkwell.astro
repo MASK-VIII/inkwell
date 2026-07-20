@@ -1,45 +1,66 @@
 ---
 import Base from '../layouts/Base.astro'
 import InkwellPlaybill from '../components/InkwellPlaybill.astro'
+import { faqJsonLd, inkwellSoftwareJsonLd } from '../lib/seo'
 
 const sections = [
   {
     eyebrow: 'What it is',
-    heading: 'A chapter-first writing app for new and seasoned authors.',
-    body: `Inkwell is a manuscript-shaped editor. You write chapters, not files. You see your book as a book — a spine of chapters with everything else (notes, drafts, research) hanging off it — instead of as a tangle of documents you have to keep track of in your head.`,
+    heading: 'Free local-first writing software for novels.',
+    body: `Inkwell is a manuscript-shaped editor. You write chapters, not files. You see your book as a spine of chapters — with notes, drafts, and research hanging off it — instead of as a tangle of documents you have to keep track of in your head.`,
   },
   {
-    eyebrow: 'Why it exists',
-    heading: 'Because the existing tools forgot the writer just starting out.',
-    body: `Most writing software is built for people who have already written several books. Inkwell is built for the chapter you have not finished yet — and it stays useful all the way to the tenth book and the twentieth print run.`,
+    eyebrow: 'Why it is free',
+    heading: 'No account. No subscription. No export paywall.',
+    body: `We removed cloud sync and billing from the product so the core job stays clear: finish the manuscript. EPUB, print-ready PDF, DOCX, Markdown, and plain text exports are unlocked. Your library stays on your device.`,
   },
   {
     eyebrow: 'Who it is for',
     heading: 'Anyone trying to finish a manuscript.',
-    body: `New authors who need a runway, working novelists who want a single calm place to write, and self-publishers who care about the printed book at the end. If a chapter is the unit of your work, Inkwell will fit your hand.`,
+    body: `New authors who need a runway, working novelists who want a calm chapter spine, and self-publishers who care about the printed book at the end. If a chapter is the unit of your work, Inkwell will fit your hand.`,
   },
 ] as const
+
+const faqs = [
+  {
+    question: 'Is Inkwell really free?',
+    answer:
+      'Yes. Inkwell is free writing software with no subscription. You can draft and export without creating an account or paying to unlock formats.',
+  },
+  {
+    question: 'Does Inkwell sync to the cloud?',
+    answer:
+      'No. Inkwell is local-first. Manuscripts stay in the browser or Windows desktop app. Use portable .inkwell.zip backups when you want a file you control.',
+  },
+  {
+    question: 'What can I export from Inkwell?',
+    answer:
+      'Inkwell exports EPUB, print-ready PDF, DOCX, Markdown, and plain text — unlocked for free.',
+  },
+]
 ---
 
 <Base
-  title="Inkwell — Enter the Limelight"
-  description="Inkwell is a chapter-first writing app for new and seasoned authors: offline-first, calm, and shaped like a manuscript."
+  title="Inkwell — Free local-first novel writing software | Enter the Limelight"
+  description="Inkwell is free chapter-first writing software for novels: local-only manuscripts, no account required, and unlocked EPUB, print-ready PDF, DOCX, and Markdown exports."
+  keywords="Inkwell, free novel writing software, local-first writing app, chapter-first editor, EPUB export, print-ready PDF, offline writing software, self-publishing tools"
+  jsonLd={[inkwellSoftwareJsonLd(), faqJsonLd(faqs)]}
 >
   <main>
     <section class="page-hero">
       <div class="container page-hero-inner">
-        <p class="eyebrow">The Limelight Presents</p>
+        <p class="eyebrow">Free writing software for novels</p>
         <h1 class="display page-hero-title">Inkwell</h1>
         <p class="lede page-hero-lede">
-          A chapter-first writing app — calm, offline-by-default, and shaped
-          like the book you're trying to finish.
+          Chapter-first drafting, local-only manuscripts, and unlocked publishing
+          exports — without a subscription or signup wall.
         </p>
         <div class="page-hero-actions">
           <a class="btn btn-primary" href="https://inkwell.enterthelimelight.com">
-            Open Inkwell
+            Open Inkwell free
           </a>
-          <a class="btn btn-secondary" href="https://inkwell.enterthelimelight.com/buy">
-            See pricing
+          <a class="btn btn-secondary" href="/journal/inkwell-is-free-and-local-first">
+            Why it is free
           </a>
         </div>
       </div>
@@ -71,13 +92,55 @@ const sections = [
 
     <hr class="divider-rule" />
 
+    <section class="section section-detail" aria-labelledby="inkwell-detail">
+      <div class="container detail">
+        <h2 id="inkwell-detail" class="detail-heading">
+          Built like a book — owned like a file
+        </h2>
+        <p>
+          Most writing apps optimize for accounts, sync, and upgrades. Inkwell
+          optimizes for the next chapter. Start in the browser, keep working
+          offline-friendly, and export when the draft earns a trip to KDP or
+          another retailer. Prefer a desktop install? Use the Windows build from
+          GitHub Releases.
+        </p>
+        <p>
+          Read the studio note:
+          <a href="/journal/inkwell-is-free-and-local-first">
+            Inkwell is free and local-first
+          </a>
+          .
+        </p>
+      </div>
+    </section>
+
+    <hr class="divider-rule" />
+
+    <section class="section section-faq" aria-labelledby="inkwell-faq">
+      <div class="container faq">
+        <p class="eyebrow">FAQ</p>
+        <h2 id="inkwell-faq" class="faq-title">Inkwell questions</h2>
+        <dl class="faq-list">
+          {
+            faqs.map((faq) => (
+              <div class="faq-item">
+                <dt>{faq.question}</dt>
+                <dd>{faq.answer}</dd>
+              </div>
+            ))
+          }
+        </dl>
+      </div>
+    </section>
+
+    <hr class="divider-rule" />
+
     <section class="section section-finalcta">
       <div class="container finalcta">
         <h2 class="finalcta-heading">Ready when you are.</h2>
         <p class="finalcta-body">
-          Inkwell runs in your browser, works offline, and never asks for an
-          account before you start writing. Your manuscript stays on your
-          machine until you decide otherwise.
+          Inkwell runs in your browser, works without an account, and never asks
+          you to pay before you can export the book you wrote.
         </p>
         <a class="btn btn-primary" href="https://inkwell.enterthelimelight.com">
           Open Inkwell
@@ -149,6 +212,64 @@ const sections = [
     .pillars {
       grid-template-columns: repeat(3, 1fr);
     }
+  }
+
+  .detail {
+    max-width: 40rem;
+    margin: 0 auto;
+  }
+
+  .detail-heading {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: clamp(1.65rem, 3vw, 2.2rem);
+    margin: 0 0 1rem;
+    color: var(--color-cream);
+  }
+
+  .detail p {
+    color: var(--color-cream-dim);
+    line-height: 1.7;
+  }
+
+  .detail a {
+    color: var(--color-gold-bright);
+  }
+
+  .faq {
+    max-width: 40rem;
+    margin: 0 auto;
+  }
+
+  .faq-title {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: clamp(1.65rem, 3vw, 2.25rem);
+    margin: 0.75rem 0 1.5rem;
+    color: var(--color-cream);
+  }
+
+  .faq-list {
+    margin: 0;
+  }
+
+  .faq-item {
+    border-top: 1px solid var(--rule-gold);
+    padding: 1.1rem 0;
+  }
+
+  .faq-item dt {
+    font-family: var(--font-sans);
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--color-cream);
+    margin-bottom: 0.45rem;
+  }
+
+  .faq-item dd {
+    margin: 0;
+    color: var(--color-cream-dim);
+    line-height: 1.6;
   }
 
   .finalcta {

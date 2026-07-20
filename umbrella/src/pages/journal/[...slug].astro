@@ -2,6 +2,7 @@
 import { getCollection, type CollectionEntry } from 'astro:content'
 import Base from '../../layouts/Base.astro'
 import SubscribeCard from '../../components/SubscribeCard.astro'
+import { articleJsonLd } from '../../lib/seo'
 
 export async function getStaticPaths() {
   const posts = await getCollection('journal', ({ data }) => !data.draft)
@@ -22,9 +23,26 @@ const dateFmt = new Intl.DateTimeFormat('en-US', {
   day: 'numeric',
 }).format(post.data.pubDate)
 const isoDate = post.data.pubDate.toISOString()
+const canonicalURL = new URL(`/journal/${post.slug}`, Astro.site).toString()
+const modified = post.data.updatedDate ?? post.data.pubDate
 ---
 
-<Base title={`${post.data.title} — Limelight Journal`} description={post.data.description}>
+<Base
+  title={`${post.data.title} | Limelight Journal`}
+  description={post.data.description}
+  ogType="article"
+  publishedTime={post.data.pubDate}
+  modifiedTime={modified}
+  keywords={post.data.tags.join(', ')}
+  jsonLd={articleJsonLd({
+    title: post.data.title,
+    description: post.data.description,
+    url: canonicalURL,
+    datePublished: post.data.pubDate,
+    dateModified: modified,
+    tags: post.data.tags,
+  })}
+>
   <main>
     <article class="post">
       <header class="post-head container">

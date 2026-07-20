@@ -8,13 +8,32 @@ interface Props {
   description: string
   ogImage?: string
   noHeader?: boolean
+  /** Open Graph type — use article for journal posts */
+  ogType?: 'website' | 'article'
+  keywords?: string
+  jsonLd?: Record<string, unknown> | Record<string, unknown>[]
+  publishedTime?: Date
+  modifiedTime?: Date
 }
 
-const { title, description, ogImage, noHeader = false } = Astro.props as Props
+const {
+  title,
+  description,
+  ogImage,
+  noHeader = false,
+  ogType = 'website',
+  keywords,
+  jsonLd,
+  publishedTime,
+  modifiedTime,
+} = Astro.props as Props
+
 const canonicalURL = new URL(Astro.url.pathname, Astro.site).toString()
 const ogImageURL = ogImage
   ? new URL(ogImage, Astro.site).toString()
   : new URL('/og-default.png', Astro.site).toString()
+
+const jsonLdBlocks = jsonLd ? (Array.isArray(jsonLd) ? jsonLd : [jsonLd]) : []
 ---
 
 <!doctype html>
@@ -23,18 +42,32 @@ const ogImageURL = ogImage
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#0d0a09" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="canonical" href={canonicalURL} />
 
     <title>{title}</title>
     <meta name="description" content={description} />
+    {keywords && <meta name="keywords" content={keywords} />}
+    <meta name="author" content="Steven Spacek Jr." />
 
-    <meta property="og:type" content="website" />
+    <meta property="og:type" content={ogType} />
+    <meta property="og:locale" content="en_US" />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonicalURL} />
     <meta property="og:site_name" content="Enter the Limelight" />
     <meta property="og:image" content={ogImageURL} />
+    {
+      ogType === 'article' && publishedTime && (
+        <meta property="article:published_time" content={publishedTime.toISOString()} />
+      )
+    }
+    {
+      ogType === 'article' && modifiedTime && (
+        <meta property="article:modified_time" content={modifiedTime.toISOString()} />
+      )
+    }
 
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={title} />
@@ -42,6 +75,12 @@ const ogImageURL = ogImage
     <meta name="twitter:image" content={ogImageURL} />
 
     <link rel="alternate" type="application/rss+xml" title="Limelight Journal" href="/journal/rss.xml" />
+
+    {
+      jsonLdBlocks.map((block) => (
+        <script type="application/ld+json" set:html={JSON.stringify(block)} />
+      ))
+    }
   </head>
   <body>
     {!noHeader && <Header />}

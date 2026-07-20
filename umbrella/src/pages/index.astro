@@ -5,16 +5,49 @@ import BrandMark from '../components/BrandMark.astro'
 import InkwellPlaybill from '../components/InkwellPlaybill.astro'
 import JournalCard from '../components/JournalCard.astro'
 import SubscribeCard from '../components/SubscribeCard.astro'
+import {
+  faqJsonLd,
+  inkwellSoftwareJsonLd,
+  landmarkSoftwareJsonLd,
+  organizationJsonLd,
+  websiteJsonLd,
+} from '../lib/seo'
 
 const allPosts = (await getCollection('journal', ({ data }) => !data.draft)).sort(
   (a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf(),
 )
-const latestPosts = allPosts.slice(0, 2)
+const latestPosts = allPosts.slice(0, 3)
+
+const faqs = [
+  {
+    question: 'What products does Enter the Limelight make?',
+    answer:
+      'Enter the Limelight builds Inkwell, free local-first novel writing software, and Landmark, a swipe-to-discover web app for finding cool things nearby.',
+  },
+  {
+    question: 'Is Inkwell free?',
+    answer:
+      'Yes. Inkwell is free writing software with unlocked EPUB, print-ready PDF, DOCX, and Markdown exports. There is no subscription and no account required to start.',
+  },
+  {
+    question: 'What is Landmark?',
+    answer:
+      'Landmark is a web app for discovering historical attractions, food and drink, and hidden gems near you. Swipe right to save a place, left to skip, with a customizable search radius.',
+  },
+]
 ---
 
 <Base
-  title="Enter the Limelight"
-  description="A small studio building Inkwell — a chapter-first writing app — and Landmark, a swipe-to-discover guide for cool things nearby."
+  title="Enter the Limelight — Inkwell writing software & Landmark discovery app"
+  description="Independent studio behind Inkwell (free local-first novel writing software) and Landmark (swipe to discover historical spots, food, and hidden gems nearby)."
+  keywords="Enter the Limelight, Inkwell writing software, free novel writing app, local-first writing software, Landmark app, swipe to discover attractions, things to do nearby"
+  jsonLd={[
+    organizationJsonLd(),
+    websiteJsonLd(),
+    inkwellSoftwareJsonLd(),
+    landmarkSoftwareJsonLd(),
+    faqJsonLd(faqs),
+  ]}
 >
   <main class="home">
     <section class="hero">
@@ -22,15 +55,16 @@ const latestPosts = allPosts.slice(0, 2)
         <BrandMark size={36} withWordmark={false} />
         <p class="eyebrow hero-eyebrow">Welcome to the Limelight</p>
         <h1 class="display hero-display">
-          The home of <em>Inkwell</em>, <em>Landmark</em>,<br />and what comes next.
+          Free tools for finishing books — and finding places worth leaving the desk.
         </h1>
         <p class="lede hero-lede">
-          Tools for finishing books — and for finding something worth leaving
-          the desk for.
+          <strong>Inkwell</strong> is free, local-first writing software for novels.
+          <strong>Landmark</strong> helps you swipe to discover cool things nearby.
+          Both from a small independent studio.
         </p>
         <div class="hero-actions">
           <a class="btn btn-primary" href="https://inkwell.enterthelimelight.com">
-            Open Inkwell
+            Open Inkwell free
           </a>
           <a class="btn btn-secondary" href="https://landmark.enterthelimelight.com">
             Open Landmark
@@ -41,22 +75,69 @@ const latestPosts = allPosts.slice(0, 2)
 
     <hr class="divider-rule" />
 
-    <section class="section section-playbill">
+    <section class="section section-playbill" aria-label="Limelight products">
+      <div class="container playbill-intro">
+        <p class="eyebrow">The Limelight presents</p>
+        <h2 class="playbill-intro-title">Two products. One studio.</h2>
+        <p class="playbill-intro-body">
+          Write the manuscript at home. Discover the afternoon outside. Start with
+          either — neither asks you to rent your attention forever.
+        </p>
+      </div>
       <div class="container playbill-row">
-        <InkwellPlaybill titleId="playbill-inkwell" />
+        <InkwellPlaybill titleId="playbill-inkwell" ctaLabel="Start writing free" />
         <InkwellPlaybill
           titleId="playbill-landmark"
           href="https://landmark.enterthelimelight.com"
-          ctaLabel="Open Landmark"
+          ctaLabel="Start discovering"
           title="Landmark"
-          blurb="Swipe to discover cool things nearby — historical spots, food and drink, and hidden gems. Not dating. Just places worth going."
+          blurb="Swipe to discover cool things nearby — historical attractions, food and drink, and hidden gems within your radius. Not dating. Just places worth going."
           bullets={[
-            'Tinder-style discovery for attractions near you',
-            'Historical, food & drink, and hidden gems — filterable by radius',
-            'Save what you love; skip the rest and keep exploring',
+            'Tinder-style discovery for attractions near your location',
+            'Filter historical spots, food & drink, or hidden gems by radius',
+            'Save what you swipe right on; skip the rest and keep exploring',
           ]}
           screenshotSrc={null}
         />
+      </div>
+    </section>
+
+    <hr class="divider-rule" />
+
+    <section class="section section-seo" aria-labelledby="studio-detail-heading">
+      <div class="container seo-grid">
+        <article class="seo-block">
+          <h2 id="studio-detail-heading" class="seo-heading">
+            Inkwell: free novel writing software that stays on your device
+          </h2>
+          <p>
+            Inkwell is chapter-first writing software for authors who want a
+            manuscript-shaped editor instead of a tangle of documents. Draft
+            offline-friendly, keep the library local, and export publishing-ready
+            files without unlocking a paid tier.
+            <a href="/inkwell">Tour Inkwell</a>
+            ·
+            <a href="https://inkwell.enterthelimelight.com">Open the app</a>
+            ·
+            <a href="/journal/inkwell-is-free-and-local-first">Read the announcement</a>
+          </p>
+        </article>
+        <article class="seo-block">
+          <h2 class="seo-heading">
+            Landmark: swipe to find things to do nearby
+          </h2>
+          <p>
+            Landmark turns “what should we do?” into a deck of nearby places —
+            history, food, and hidden gems — with a radius you control. Swipe
+            right to save, left to skip, and scroll any card for more detail
+            before you decide.
+            <a href="/landmark">Tour Landmark</a>
+            ·
+            <a href="https://landmark.enterthelimelight.com">Open the app</a>
+            ·
+            <a href="/journal/swipe-to-discover-with-landmark">Read the guide</a>
+          </p>
+        </article>
       </div>
     </section>
 
@@ -66,12 +147,13 @@ const latestPosts = allPosts.slice(0, 2)
       <div class="container founder">
         <p class="eyebrow">From the studio</p>
         <h2 class="founder-heading">
-          One person, building tools for the books they wish existed.
+          One person, building tools people can actually own.
         </h2>
         <p class="founder-body">
-          Inkwell is the writing app I needed when I was just starting out — and
-          the one I still want now that I'm not. The Limelight studio is where
-          that work happens, in the open, one chapter at a time.
+          Inkwell is the writing app I needed when I was just starting out — free
+          and local-first so the manuscript stays yours. Landmark is for the hours
+          when the book can wait and the neighborhood should not. The Limelight
+          journal is where that work stays public.
         </p>
         <p class="founder-cta">
           <a href="/about">Read the founder's note &rarr;</a>
@@ -87,7 +169,7 @@ const latestPosts = allPosts.slice(0, 2)
             <div class="container journal-section">
               <header class="journal-section-head">
                 <p class="eyebrow">From the journal</p>
-                <h2 class="journal-section-title">Letters from the studio</h2>
+                <h2 class="journal-section-title">Guides and studio notes</h2>
                 <a class="journal-section-more" href="/journal">
                   All posts &rarr;
                 </a>
@@ -108,6 +190,25 @@ const latestPosts = allPosts.slice(0, 2)
         </>
       )
     }
+
+    <hr class="divider-rule" />
+
+    <section class="section section-faq" aria-labelledby="faq-heading">
+      <div class="container faq">
+        <p class="eyebrow">FAQ</p>
+        <h2 id="faq-heading" class="faq-title">Quick answers</h2>
+        <dl class="faq-list">
+          {
+            faqs.map((faq) => (
+              <div class="faq-item">
+                <dt>{faq.question}</dt>
+                <dd>{faq.answer}</dd>
+              </div>
+            ))
+          }
+        </dl>
+      </div>
+    </section>
 
     <hr class="divider-rule" />
 
@@ -142,15 +243,16 @@ const latestPosts = allPosts.slice(0, 2)
 
   .hero-display {
     margin-top: 0.5rem;
-  }
-
-  .hero-display em {
-    font-style: italic;
-    color: var(--color-blood-glow);
+    max-width: 18ch;
   }
 
   .hero-lede {
     margin-top: 0.5rem;
+  }
+
+  .hero-lede strong {
+    color: var(--color-cream);
+    font-weight: 600;
   }
 
   .hero-actions {
@@ -159,6 +261,25 @@ const latestPosts = allPosts.slice(0, 2)
     justify-content: center;
     gap: 0.85rem;
     margin-top: 1.75rem;
+  }
+
+  .playbill-intro {
+    text-align: center;
+    max-width: 36rem;
+    margin: 0 auto 2rem;
+  }
+
+  .playbill-intro-title {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: clamp(1.75rem, 3.5vw, 2.4rem);
+    margin: 0.75rem 0;
+    color: var(--color-cream);
+  }
+
+  .playbill-intro-body {
+    color: var(--color-cream-dim);
+    margin: 0;
   }
 
   .playbill-row {
@@ -172,6 +293,41 @@ const latestPosts = allPosts.slice(0, 2)
     .playbill-row {
       grid-template-columns: 1fr 1fr;
     }
+  }
+
+  .seo-grid {
+    display: grid;
+    gap: clamp(1.5rem, 4vw, 2.5rem);
+  }
+
+  @media (min-width: 800px) {
+    .seo-grid {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+
+  .seo-block {
+    border-top: 1px solid var(--rule-gold);
+    padding-top: 1.25rem;
+  }
+
+  .seo-heading {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: clamp(1.35rem, 2.5vw, 1.7rem);
+    line-height: 1.25;
+    margin: 0 0 0.85rem;
+    color: var(--color-cream);
+  }
+
+  .seo-block p {
+    color: var(--color-cream-dim);
+    margin: 0;
+    line-height: 1.65;
+  }
+
+  .seo-block a {
+    color: var(--color-gold-bright);
   }
 
   .founder {
@@ -240,6 +396,42 @@ const latestPosts = allPosts.slice(0, 2)
 
   .journal-section-list > :first-child {
     border-top: 1px solid var(--rule-gold-strong);
+  }
+
+  .faq {
+    max-width: 40rem;
+    margin: 0 auto;
+  }
+
+  .faq-title {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: clamp(1.65rem, 3vw, 2.25rem);
+    margin: 0.75rem 0 1.5rem;
+    color: var(--color-cream);
+  }
+
+  .faq-list {
+    margin: 0;
+  }
+
+  .faq-item {
+    border-top: 1px solid var(--rule-gold);
+    padding: 1.1rem 0;
+  }
+
+  .faq-item dt {
+    font-family: var(--font-sans);
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--color-cream);
+    margin-bottom: 0.45rem;
+  }
+
+  .faq-item dd {
+    margin: 0;
+    color: var(--color-cream-dim);
+    line-height: 1.6;
   }
 
   @media (max-width: 540px) {
