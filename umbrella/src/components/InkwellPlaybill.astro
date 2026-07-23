@@ -8,6 +8,8 @@ interface Props {
   bullets?: readonly string[]
   screenshotSrc?: string | null
   screenshotAlt?: string
+  /** Landscape workspace shot (default) or tall phone UI. */
+  stageVariant?: 'wide' | 'phone'
   titleId?: string
 }
 
@@ -24,10 +26,14 @@ const {
   ],
   screenshotSrc = '/marketing/writing-page-dark.png',
   screenshotAlt = 'Inkwell writing workspace — chapter list, manuscript canvas, and editorial toolbars',
+  stageVariant = 'wide',
   titleId = 'playbill-title',
 } = Astro.props as Props
 
 const showStage = Boolean(screenshotSrc)
+const isPhone = stageVariant === 'phone'
+const imgWidth = isPhone ? 473 : 1280
+const imgHeight = isPhone ? 1024 : 800
 ---
 
 <section class="playbill" aria-labelledby={titleId}>
@@ -42,13 +48,13 @@ const showStage = Boolean(screenshotSrc)
 
     {
       showStage && (
-        <figure class="playbill-stage">
+        <figure class:list={['playbill-stage', isPhone && 'playbill-stage-phone']}>
           <img
             src={screenshotSrc}
             alt={screenshotAlt}
             class="playbill-stage-img"
-            width="1280"
-            height="800"
+            width={imgWidth}
+            height={imgHeight}
             loading="lazy"
             decoding="async"
           />
@@ -179,6 +185,17 @@ const showStage = Boolean(screenshotSrc)
     height: 100%;
     object-fit: cover;
     object-position: 50% 16%;
+  }
+
+  .playbill-stage-phone {
+    max-width: 15.5rem;
+    aspect-ratio: 9 / 19.5;
+    border-radius: 1.25rem;
+  }
+
+  .playbill-stage-phone .playbill-stage-img {
+    object-fit: cover;
+    object-position: 50% 0%;
   }
 
   .playbill-stage-glow {
